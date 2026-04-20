@@ -148,13 +148,13 @@ FORMATO DE MANTENIMIENTO
 ### Fase 1 — Core (PRIORIDAD MÁXIMA)
 - [x] Arquitectura, stack, estructura de BD y formatos definidos
 - [x] CLAUDE.md creado
-- [x] schema.prisma completo
-- [x] Estructura de carpetas del proyecto
-- [ ] schema.sql completo
-- [ ] Autenticación JWT con roles
-- [ ] CRUD aeronaves y modelos
+- [x] schema.prisma completo (todos los modelos, enums, relaciones, mapeos snake_case)
+- [x] Estructura de carpetas del proyecto (frontend + backend + database + docs)
+- [x] Autenticación JWT con roles (login, me, verifyToken, requireRole)
+- [x] CRUD aeronaves y modelos (GET/POST/PUT/DELETE con manejo de errores Prisma)
+- [ ] schema.sql completo (opcional — Prisma migrate lo genera automáticamente)
 - [ ] Módulo Órdenes de Mantenimiento
-  - [ ] Plantillas en DB
+  - [ ] Plantillas en DB (CRUD formatos + secciones + puntos de inspección)
   - [ ] Crear O/T desde plantilla
   - [ ] Flujo paso a paso móvil
   - [ ] Captura de fotos por punto
@@ -193,15 +193,57 @@ FORMATO DE MANTENIMIENTO
 - Confirmar si se necesita modo offline
 - Confirmar si `ref_doc_correctivo` es solo texto o también permite adjuntar PDF
 
-## Estado del Proyecto — Última actualización: Sesión 2
-### Completado en Sesión 2
-- CLAUDE.md creado
-- schema.prisma completo (todos los modelos, enums, relaciones)
-- Estructura de carpetas del proyecto creada
-- package.json de backend (Node.js + Express + Prisma + JWT + bcrypt)
-- package.json de frontend (React + Vite + TailwindCSS)
+## Estado del Proyecto — Última actualización: Sesión 2 (~13% total)
 
-### Siguiente paso
-- Crear schema.sql como referencia
-- Setup de Prisma (datasource, generate)
-- Autenticación JWT: rutas /auth/login, /auth/me, middleware de roles
+### Completado (backend — 0% frontend)
+| Archivo | Descripción |
+|---------|-------------|
+| `CLAUDE.md` | Contexto completo del proyecto |
+| `backend/prisma/schema.prisma` | Todos los modelos, enums y relaciones |
+| `backend/prisma/seed.js` | 3 usuarios de prueba + modelo Cessna 172S + aeronave XB-ABC |
+| `backend/src/index.js` | Express app: cors, json, rutas montadas |
+| `backend/src/lib/prisma.js` | Singleton PrismaClient compartido |
+| `backend/src/middleware/auth.js` | `verifyToken` + `requireRole(roles)` |
+| `backend/src/routes/auth.js` | POST /api/auth/login · GET /api/auth/me |
+| `backend/src/routes/modelos.js` | GET / · GET :id · POST · PUT |
+| `backend/src/routes/aeronaves.js` | GET / · GET :id · POST · PUT · DELETE |
+| `backend/src/controllers/authController.js` | login, me |
+| `backend/src/controllers/modelosController.js` | listar, obtener, crear, actualizar |
+| `backend/src/controllers/aeronavesController.js` | listar, obtener, crear, actualizar, desactivar |
+| `backend/src/services/authService.js` | findUserByEmail, validatePassword, generateToken, updateLastAccess, hashPassword |
+| `backend/src/services/modelosService.js` | listar, obtener, crear, actualizar |
+| `backend/src/services/aeronavesService.js` | listar, obtener, crear, actualizar, desactivarAeronave (baja lógica) |
+| `backend/package.json` | type=module, scripts npm run dev/db:migrate/db:seed |
+| `frontend/package.json` | React + Vite + TailwindCSS + Zustand + PWA |
+| `frontend/vite.config.js` | PWA manifest + proxy /api → localhost:3000 |
+| `backend/.env.example` | Variables: DATABASE_URL, JWT_SECRET, PORT, STORAGE_PROVIDER, CORS_ORIGIN |
+
+### Reglas de autorización implementadas
+- `GET /api/modelos` y `GET /api/aeronaves` → cualquier rol autenticado
+- `POST / PUT / DELETE` en modelos y aeronaves → solo `supervisor`
+- `POST /api/auth/login` → público
+- `GET /api/auth/me` → cualquier rol autenticado
+
+### Usuarios de prueba (seed)
+| Email | Password | Rol |
+|-------|----------|-----|
+| tecnico@aeromx.com | aeromx123 | tecnico |
+| ingeniero@aeromx.com | aeromx123 | ingeniero |
+| supervisor@aeromx.com | aeromx123 | supervisor |
+
+### Para levantar el backend (cuando haya DB)
+```bash
+cd aeromx/backend
+cp .env.example .env          # editar DATABASE_URL con tu PostgreSQL
+npm install
+npm run db:migrate            # crea tablas via Prisma
+npm run db:seed               # carga usuarios y aeronave de prueba
+npm run dev                   # servidor en http://localhost:3000
+```
+
+### Siguiente paso — Módulo Órdenes de Trabajo (Fase 1, bloque más grande)
+1. **CRUD Plantillas**: rutas `/api/formatos` — crear formato, secciones y puntos de inspección
+2. **Crear O/T**: `POST /api/ordenes` — genera O/T desde plantilla con todos los `resultados_puntos`
+3. **Flujo de pasos**: `PATCH /api/ordenes/:id/puntos/:puntoId` — actualizar estado/observación/foto
+4. **Firmas**: endpoint para firmar paso crítico y cierre de O/T
+5. **PDF**: generación al cerrar la O/T
