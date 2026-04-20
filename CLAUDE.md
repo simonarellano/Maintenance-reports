@@ -153,13 +153,13 @@ FORMATO DE MANTENIMIENTO
 - [x] Autenticación JWT con roles (login, me, verifyToken, requireRole)
 - [x] CRUD aeronaves y modelos (GET/POST/PUT/DELETE con manejo de errores Prisma)
 - [ ] schema.sql completo (opcional — Prisma migrate lo genera automáticamente)
-- [ ] Módulo Órdenes de Mantenimiento
-  - [ ] Plantillas en DB (CRUD formatos + secciones + puntos de inspección)
-  - [ ] Crear O/T desde plantilla
-  - [ ] Flujo paso a paso móvil
-  - [ ] Captura de fotos por punto
-  - [ ] Firma digital (por paso crítico + cierre)
-  - [ ] Generación de PDF al cerrar
+- [x] Módulo Órdenes de Mantenimiento (backend completo)
+  - [x] Plantillas en DB (CRUD formatos + secciones + puntos de inspección)
+  - [x] Crear O/T desde plantilla (genera resultados_puntos filtrando exclusiones por modelo)
+  - [x] Flujo paso a paso (PATCH estado, observación, completado con validaciones de negocio)
+  - [x] Captura de fotos por punto (multer disk storage, 10MB, solo imágenes)
+  - [x] Firma digital (por paso crítico individual + doble firma al cierre)
+  - [x] Generación de PDF al cerrar (pdfkit, streaming directo)
 
 ### Fase 2 — Operaciones
 - [ ] Dashboard de flota
@@ -193,7 +193,7 @@ FORMATO DE MANTENIMIENTO
 - Confirmar si se necesita modo offline
 - Confirmar si `ref_doc_correctivo` es solo texto o también permite adjuntar PDF
 
-## Estado del Proyecto — Última actualización: Sesión 2 (~13% total)
+## Estado del Proyecto — Última actualización: Sesión 3 (~35% total)
 
 ### Completado (backend — 0% frontend)
 | Archivo | Descripción |
@@ -201,28 +201,74 @@ FORMATO DE MANTENIMIENTO
 | `CLAUDE.md` | Contexto completo del proyecto |
 | `backend/prisma/schema.prisma` | Todos los modelos, enums y relaciones |
 | `backend/prisma/seed.js` | 3 usuarios de prueba + modelo Cessna 172S + aeronave XB-ABC |
-| `backend/src/index.js` | Express app: cors, json, rutas montadas |
+| `backend/src/index.js` | Express app: cors, json, static /uploads, rutas, error handler global |
 | `backend/src/lib/prisma.js` | Singleton PrismaClient compartido |
 | `backend/src/middleware/auth.js` | `verifyToken` + `requireRole(roles)` |
 | `backend/src/routes/auth.js` | POST /api/auth/login · GET /api/auth/me |
 | `backend/src/routes/modelos.js` | GET / · GET :id · POST · PUT |
 | `backend/src/routes/aeronaves.js` | GET / · GET :id · POST · PUT · DELETE |
+| `backend/src/routes/formatos.js` | CRUD formatos + secciones + puntos de inspección |
+| `backend/src/routes/ordenes.js` | CRUD O/T + pasos + fotos + cierre + PDF |
 | `backend/src/controllers/authController.js` | login, me |
 | `backend/src/controllers/modelosController.js` | listar, obtener, crear, actualizar |
 | `backend/src/controllers/aeronavesController.js` | listar, obtener, crear, actualizar, desactivar |
+| `backend/src/controllers/formatosController.js` | CRUD formatos, secciones, puntos |
+| `backend/src/controllers/ordenesController.js` | CRUD O/T, resultados, fotos, cierre, PDF |
 | `backend/src/services/authService.js` | findUserByEmail, validatePassword, generateToken, updateLastAccess, hashPassword |
 | `backend/src/services/modelosService.js` | listar, obtener, crear, actualizar |
 | `backend/src/services/aeronavesService.js` | listar, obtener, crear, actualizar, desactivarAeronave (baja lógica) |
-| `backend/package.json` | type=module, scripts npm run dev/db:migrate/db:seed |
+| `backend/src/services/formatosService.js` | listar, obtener, crear, actualizar, desactivar formatos · crearSeccion, actualizarSeccion, eliminarSeccion · crearPunto, actualizarPunto, eliminarPunto |
+| `backend/src/services/ordenesService.js` | generarNumeroOT (OT-YYYYMMDD-XXXX) · listar/obtener/crear O/T · actualizarEstado · actualizarResultado · firmarResultado · agregarFoto/eliminarFoto · crearOActualizarCierre · firmarCierre (cierra O/T cuando ambas firmas presentes) · verificarPuntosCompletos |
+| `backend/package.json` | type=module, pdfkit añadido, scripts dev/migrate/seed |
 | `frontend/package.json` | React + Vite + TailwindCSS + Zustand + PWA |
 | `frontend/vite.config.js` | PWA manifest + proxy /api → localhost:3000 |
 | `backend/.env.example` | Variables: DATABASE_URL, JWT_SECRET, PORT, STORAGE_PROVIDER, CORS_ORIGIN |
 
-### Reglas de autorización implementadas
-- `GET /api/modelos` y `GET /api/aeronaves` → cualquier rol autenticado
-- `POST / PUT / DELETE` en modelos y aeronaves → solo `supervisor`
-- `POST /api/auth/login` → público
-- `GET /api/auth/me` → cualquier rol autenticado
+### API completa — Endpoints implementados
+| Método | Ruta | Auth | Descripción |
+|--------|------|------|-------------|
+| POST | /api/auth/login | público | Login, retorna JWT |
+| GET | /api/auth/me | cualquier rol | Usuario actual |
+| GET | /api/modelos | autenticado | Listar modelos |
+| GET | /api/modelos/:id | autenticado | Detalle modelo |
+| POST | /api/modelos | supervisor | Crear modelo |
+| PUT | /api/modelos/:id | supervisor | Actualizar modelo |
+| GET | /api/aeronaves | autenticado | Listar aeronaves |
+| GET | /api/aeronaves/:id | autenticado | Detalle aeronave |
+| POST | /api/aeronaves | supervisor | Crear aeronave |
+| PUT | /api/aeronaves/:id | supervisor | Actualizar aeronave |
+| DELETE | /api/aeronaves/:id | supervisor | Desactivar aeronave (soft) |
+| GET | /api/formatos | autenticado | Listar formatos |
+| GET | /api/formatos/:id | autenticado | Formato con secciones y puntos |
+| POST | /api/formatos | supervisor | Crear formato |
+| PUT | /api/formatos/:id | supervisor | Actualizar formato |
+| DELETE | /api/formatos/:id | supervisor | Desactivar formato |
+| POST | /api/formatos/:id/secciones | supervisor | Agregar sección |
+| PUT | /api/formatos/:id/secciones/:seccionId | supervisor | Actualizar sección |
+| DELETE | /api/formatos/:id/secciones/:seccionId | supervisor | Eliminar sección |
+| POST | /api/formatos/:id/secciones/:seccionId/puntos | supervisor | Agregar punto |
+| PUT | /api/formatos/:id/secciones/:seccionId/puntos/:puntoId | supervisor | Actualizar punto |
+| DELETE | /api/formatos/:id/secciones/:seccionId/puntos/:puntoId | supervisor | Eliminar punto |
+| GET | /api/ordenes | autenticado | Listar O/T (filtros: estado, aeronaveId, tecnicoId) |
+| GET | /api/ordenes/:id | autenticado | O/T con resultados, fotos y cierre |
+| POST | /api/ordenes | autenticado | Crear O/T desde plantilla |
+| PATCH | /api/ordenes/:id/estado | supervisor\|ingeniero | Cambiar estado de O/T |
+| PATCH | /api/ordenes/:id/puntos/:resultadoId | autenticado | Actualizar resultado (estado/obs/completado) |
+| POST | /api/ordenes/:id/puntos/:resultadoId/firmar | autenticado | Firmar punto crítico |
+| POST | /api/ordenes/:id/puntos/:resultadoId/fotos | autenticado | Subir foto (multipart, max 10MB) |
+| DELETE | /api/ordenes/:id/puntos/:resultadoId/fotos/:fotoId | autenticado | Eliminar foto |
+| POST | /api/ordenes/:id/cierre | autenticado | Crear/actualizar datos de cierre |
+| POST | /api/ordenes/:id/cierre/firmar | autenticado | Firmar cierre (tecnico/ingeniero o supervisor) |
+| GET | /api/ordenes/:id/pdf | autenticado | Descargar PDF de la O/T |
+
+### Reglas de negocio implementadas
+- `observacion` obligatoria cuando `estadoResultado = correcto_con_danos | requiere_atencion`
+- Solo puntos con `esCritico = true` se pueden firmar individualmente
+- El punto debe estar `completado = true` antes de poder firmar
+- No se puede iniciar cierre sin que todos los puntos estén completados
+- `refDocCorrectivo` obligatorio cuando `seEncontroDefecto = true`
+- O/T pasa a `cerrada` automáticamente cuando ambas firmas del cierre están presentes
+- Puntos excluidos por modelo de aeronave no se incluyen al crear la O/T
 
 ### Usuarios de prueba (seed)
 | Email | Password | Rol |
@@ -235,15 +281,15 @@ FORMATO DE MANTENIMIENTO
 ```bash
 cd aeromx/backend
 cp .env.example .env          # editar DATABASE_URL con tu PostgreSQL
-npm install
+npm install                   # incluye pdfkit nuevo
 npm run db:migrate            # crea tablas via Prisma
 npm run db:seed               # carga usuarios y aeronave de prueba
 npm run dev                   # servidor en http://localhost:3000
 ```
 
-### Siguiente paso — Módulo Órdenes de Trabajo (Fase 1, bloque más grande)
-1. **CRUD Plantillas**: rutas `/api/formatos` — crear formato, secciones y puntos de inspección
-2. **Crear O/T**: `POST /api/ordenes` — genera O/T desde plantilla con todos los `resultados_puntos`
-3. **Flujo de pasos**: `PATCH /api/ordenes/:id/puntos/:puntoId` — actualizar estado/observación/foto
-4. **Firmas**: endpoint para firmar paso crítico y cierre de O/T
-5. **PDF**: generación al cerrar la O/T
+### Siguiente paso — Frontend (Fase 1, último bloque)
+1. **Login screen**: formulario, llamada a `/api/auth/login`, guardar token en Zustand
+2. **Dashboard**: lista de O/T propias, estado, aeronave, fecha
+3. **Crear O/T**: seleccionar formato + aeronave, llenar encabezado
+4. **Flujo de inspección móvil**: pantalla por sección → puntos con radio (bueno/daños/etc.) + obs + cámara
+5. **Cierre y firma**: pantalla de resumen → firma digital (canvas) → PDF preview/descarga
