@@ -28,5 +28,9 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "type": "module",
+  "prisma": {
+    "seed": "node prisma/seed.js"
   }
 }
