@@ -131,15 +131,16 @@ model SeccionFormato {
 }
 
 model PuntoInspeccion {
-  id              String   @id @default(uuid())
-  seccionId       String   @map("seccion_id")
-  nombreComponente String  @map("nombre_componente")
-  categoria       String?
-  descripcion     String?
-  esCritico       Boolean  @default(false) @map("es_critico")
-  fotoRequerida   Boolean  @default(false) @map("foto_requerida")
-  orden           Int
-  createdAt       DateTime @default(now()) @map("created_at")
+  id               String   @id @default(uuid())
+  seccionId        String   @map("seccion_id")
+  nombreComponente String   @map("nombre_componente")
+  categoria        String?
+  descripcion      String?
+  referenciaUrl    String?  @map("referencia_url")
+  esCritico        Boolean  @default(false) @map("es_critico")
+  fotoRequerida    Boolean  @default(false) @map("foto_requerida")
+  orden            Int
+  createdAt        DateTime @default(now()) @map("created_at")
 
   // Relaciones
   seccion          SeccionFormato           @relation(fields: [seccionId], references: [id])
