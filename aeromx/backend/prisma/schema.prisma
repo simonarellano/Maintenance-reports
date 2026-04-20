@@ -1,0 +1,264 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum Rol {
+  tecnico
+  ingeniero
+  supervisor
+}
+
+enum EstadoOT {
+  borrador
+  en_proceso
+  pendiente_firma
+  cerrada
+}
+
+enum EstadoResultado {
+  bueno
+  correcto_con_danos
+  requiere_atencion
+  no_aplica
+}
+
+// ─────────────────────────────────────────────
+// BLOQUE 1 — Usuarios y Flota
+// ─────────────────────────────────────────────
+
+model Usuario {
+  id           String    @id @default(uuid())
+  nombre       String
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  rol          Rol
+  licenciaNum  String?   @map("licencia_num")
+  telefono     String?
+  activo       Boolean   @default(true)
+  ultimoAcceso DateTime? @map("ultimo_acceso")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  // Relaciones
+  ordenesComoTecnico    OrdenTrabajo[]    @relation("TecnicoOT")
+  ordenesComoSupervisor OrdenTrabajo[]    @relation("SupervisorOT")
+  firmasPorPaso         ResultadoPunto[]  @relation("FirmaPaso")
+  fotosSubidas          FotoInspeccion[]  @relation("FotoSubida")
+  cierresTecnico        CierreOT[]        @relation("CierreTecnico")
+  cierresSupervisor     CierreOT[]        @relation("CierreSupervisor")
+
+  @@map("usuarios")
+}
+
+model ModeloAeronave {
+  id          String    @id @default(uuid())
+  nombre      String    @unique
+  fabricante  String?
+  descripcion String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  // Relaciones
+  aeronaves        Aeronave[]
+  puntosExcluidos  PuntoExcluidoPorModelo[]
+
+  @@map("modelos_aeronave")
+}
+
+model Aeronave {
+  id            String   @id @default(uuid())
+  modeloId      String   @map("modelo_id")
+  matricula     String   @unique
+  numeroSerie   String?  @map("numero_serie")
+  horasTotales  Float    @default(0) @map("horas_totales")
+  horasMotorDer Float    @default(0) @map("horas_motor_der")
+  horasMotorIzq Float    @default(0) @map("horas_motor_izq")
+  activa        Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relaciones
+  modelo        ModeloAeronave @relation(fields: [modeloId], references: [id])
+  ordenes       OrdenTrabajo[]
+
+  @@map("aeronaves")
+}
+
+// ─────────────────────────────────────────────
+// BLOQUE 2 — Plantillas de Formatos
+// ─────────────────────────────────────────────
+
+model Formato {
+  id            String    @id @default(uuid())
+  nombre        String
+  version       String
+  fechaVersion  DateTime  @map("fecha_version")
+  objetivo      String?
+  instrucciones String?
+  definiciones  String?
+  activo        Boolean   @default(true)
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  // Relaciones
+  secciones     SeccionFormato[]
+  ordenes       OrdenTrabajo[]
+
+  @@map("formatos")
+}
+
+model SeccionFormato {
+  id          String   @id @default(uuid())
+  formatoId   String   @map("formato_id")
+  nombre      String
+  descripcion String?
+  orden       Int
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  // Relaciones
+  formato   Formato            @relation(fields: [formatoId], references: [id])
+  puntos    PuntoInspeccion[]
+
+  @@map("secciones_formato")
+}
+
+model PuntoInspeccion {
+  id              String   @id @default(uuid())
+  seccionId       String   @map("seccion_id")
+  nombreComponente String  @map("nombre_componente")
+  categoria       String?
+  descripcion     String?
+  esCritico       Boolean  @default(false) @map("es_critico")
+  fotoRequerida   Boolean  @default(false) @map("foto_requerida")
+  orden           Int
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  // Relaciones
+  seccion          SeccionFormato           @relation(fields: [seccionId], references: [id])
+  puntosExcluidos  PuntoExcluidoPorModelo[]
+  resultados       ResultadoPunto[]
+
+  @@map("puntos_inspeccion")
+}
+
+// Tabla de exclusiones: si existe un registro, ese punto NO aparece para ese modelo
+model PuntoExcluidoPorModelo {
+  puntoId  String  @map("punto_id")
+  modeloId String  @map("modelo_id")
+  motivo   String?
+
+  // Relaciones
+  punto  PuntoInspeccion @relation(fields: [puntoId], references: [id])
+  modelo ModeloAeronave  @relation(fields: [modeloId], references: [id])
+
+  @@id([puntoId, modeloId])
+  @@map("puntos_excluidos_por_modelo")
+}
+
+// ─────────────────────────────────────────────
+// BLOQUE 3 — Órdenes de Trabajo
+// ─────────────────────────────────────────────
+
+model OrdenTrabajo {
+  id             String    @id @default(uuid())
+  numeroOt       String    @unique @map("numero_ot")
+  formatoId      String    @map("formato_id")
+  aeronaveId     String    @map("aeronave_id")
+  tecnicoId      String    @map("tecnico_id")
+  supervisorId   String    @map("supervisor_id")
+  cliente        String?
+  ordenServicio  String?   @map("orden_servicio")
+  horasAlMomento Float     @default(0) @map("horas_al_momento")
+  horasMotorDer  Float     @default(0) @map("horas_motor_der")
+  horasMotorIzq  Float     @default(0) @map("horas_motor_izq")
+  estado         EstadoOT  @default(borrador)
+  fechaInicio    DateTime? @map("fecha_inicio")
+  fechaCierre    DateTime? @map("fecha_cierre")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  // Relaciones
+  formato    Formato          @relation(fields: [formatoId], references: [id])
+  aeronave   Aeronave         @relation(fields: [aeronaveId], references: [id])
+  tecnico    Usuario          @relation("TecnicoOT", fields: [tecnicoId], references: [id])
+  supervisor Usuario          @relation("SupervisorOT", fields: [supervisorId], references: [id])
+  resultados ResultadoPunto[]
+  cierre     CierreOT?
+
+  @@map("ordenes_trabajo")
+}
+
+model ResultadoPunto {
+  id              String          @id @default(uuid())
+  ordenId         String          @map("orden_id")
+  puntoId         String          @map("punto_id")
+  estadoResultado EstadoResultado @map("estado_resultado")
+  // Obligatoria cuando estado = correcto_con_danos o requiere_atencion
+  observacion     String?
+  firmadoPor      String?         @map("firmado_por")
+  fechaFirma      DateTime?       @map("fecha_firma")
+  completado      Boolean         @default(false)
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  // Relaciones
+  orden    OrdenTrabajo     @relation(fields: [ordenId], references: [id])
+  punto    PuntoInspeccion  @relation(fields: [puntoId], references: [id])
+  firmante Usuario?         @relation("FirmaPaso", fields: [firmadoPor], references: [id])
+  fotos    FotoInspeccion[]
+
+  @@unique([ordenId, puntoId])
+  @@map("resultados_puntos")
+}
+
+model FotoInspeccion {
+  id            String    @id @default(uuid())
+  resultadoId   String    @map("resultado_id")
+  urlArchivo    String    @map("url_archivo")
+  nombreArchivo String    @map("nombre_archivo")
+  tamanoBytes   Int?      @map("tamano_bytes")
+  subidaPor     String    @map("subida_por")
+  fechaCaptura  DateTime? @map("fecha_captura")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  // Relaciones
+  resultado ResultadoPunto @relation(fields: [resultadoId], references: [id])
+  usuario   Usuario        @relation("FotoSubida", fields: [subidaPor], references: [id])
+
+  @@map("fotos_inspeccion")
+}
+
+// ─────────────────────────────────────────────
+// BLOQUE 4 — Cierre
+// ─────────────────────────────────────────────
+
+model CierreOT {
+  ordenId                String    @map("orden_id")
+  seEncontroDefecto      Boolean   @map("se_encontro_defecto")
+  // Obligatorio si seEncontroDefecto = true
+  refDocCorrectivo       String?   @map("ref_doc_correctivo")
+  observacionesGenerales String?   @map("observaciones_generales")
+  firmaTecnicoId         String?   @map("firma_tecnico_id")
+  fechaFirmaTecnico      DateTime? @map("fecha_firma_tecnico")
+  firmaSupervisorId      String?   @map("firma_supervisor_id")
+  fechaFirmaSupervisor   DateTime? @map("fecha_firma_supervisor")
+  // Foto de firma física escaneada (opcional)
+  firmaFisicaUrl         String?   @map("firma_fisica_url")
+  createdAt              DateTime  @default(now()) @map("created_at")
+
+  // Relaciones — 1:1 con OrdenTrabajo
+  orden     OrdenTrabajo @relation(fields: [ordenId], references: [id])
+  tecnico   Usuario?     @relation("CierreTecnico", fields: [firmaTecnicoId], references: [id])
+  supervisor Usuario?    @relation("CierreSupervisor", fields: [firmaSupervisorId], references: [id])
+
+  @@id([ordenId])
+  @@map("cierre_ot")
+}
