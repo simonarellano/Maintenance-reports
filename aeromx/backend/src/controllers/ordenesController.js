@@ -18,11 +18,14 @@ export async function obtener(req, res) {
 }
 
 export async function crear(req, res) {
-  const { formatoId, aeronaveId, tecnicoId, supervisorId, cliente, ordenServicio,
+  const { formatoId, aeronaveId, supervisorId, cliente, ordenServicio,
     horasAlMomento, horasMotorDer, horasMotorIzq } = req.body
 
-  if (!formatoId || !aeronaveId || !tecnicoId || !supervisorId) {
-    return res.status(400).json({ error: 'formatoId, aeronaveId, tecnicoId y supervisorId son requeridos' })
+  // El técnico es el usuario autenticado
+  const tecnicoId = req.user.sub
+
+  if (!formatoId || !aeronaveId) {
+    return res.status(400).json({ error: 'formatoId y aeronaveId son requeridos' })
   }
 
   try {
@@ -33,7 +36,7 @@ export async function crear(req, res) {
     res.status(201).json(orden)
   } catch (e) {
     if (e.code === 'NOT_FOUND') return res.status(404).json({ error: e.message })
-    if (e.code === 'P2003') return res.status(400).json({ error: 'Una o más referencias (técnico, supervisor, etc.) no existen' })
+    if (e.code === 'P2003') return res.status(400).json({ error: 'Una o más referencias no existen' })
     throw e
   }
 }
