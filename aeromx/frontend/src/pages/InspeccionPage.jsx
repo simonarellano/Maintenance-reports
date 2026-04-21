@@ -152,48 +152,94 @@ export default function InspeccionPage() {
 
         {/* Encabezado de la O/T */}
         <div className="bg-white rounded-lg shadow-lg p-6 mb-4">
-          <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-4">
-            O/T {orden.numeroOt}
-          </h2>
+          <div className="flex justify-between items-start flex-wrap gap-3 mb-4">
+            <div>
+              <h2 className="text-2xl md:text-3xl font-bold text-gray-800">
+                O/T {orden.numeroOt}
+              </h2>
+              <p className="text-sm text-gray-500 mt-1">
+                📅 Recepción: {orden.createdAt
+                  ? new Date(orden.createdAt).toLocaleDateString('es-MX', {
+                      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+                    })
+                  : '—'}
+              </p>
+            </div>
+            <span className={`px-3 py-1 rounded-full text-xs font-bold border capitalize ${
+              orden.estado === 'cerrada' ? 'bg-green-100 text-green-800 border-green-300' :
+              orden.estado === 'pendiente_firma' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
+              orden.estado === 'en_proceso' ? 'bg-blue-100 text-blue-800 border-blue-300' :
+              'bg-gray-100 text-gray-800 border-gray-300'
+            }`}>
+              {orden.estado?.replace(/_/g, ' ')}
+            </span>
+          </div>
+
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <div>
-              <p className="text-gray-500">Aeronave</p>
+              <p className="text-gray-500 text-xs uppercase tracking-wide">Aeronave</p>
               <p className="font-semibold">{orden.aeronave?.matricula}</p>
             </div>
             <div>
-              <p className="text-gray-500">Modelo</p>
+              <p className="text-gray-500 text-xs uppercase tracking-wide">Modelo</p>
               <p className="font-semibold">{orden.aeronave?.modelo?.nombre}</p>
             </div>
             <div>
-              <p className="text-gray-500">Formato</p>
+              <p className="text-gray-500 text-xs uppercase tracking-wide">Formato</p>
               <p className="font-semibold">{orden.formato?.nombre}</p>
             </div>
             <div>
-              <p className="text-gray-500">Estado</p>
-              <p className="font-semibold capitalize">{orden.estado?.replace(/_/g, ' ')}</p>
-            </div>
-            <div>
-              <p className="text-gray-500">Técnico</p>
+              <p className="text-gray-500 text-xs uppercase tracking-wide">Técnico</p>
               <p className="font-semibold">{orden.tecnico?.nombre}</p>
             </div>
-            {orden.supervisor && (
-              <div>
-                <p className="text-gray-500">Supervisor</p>
-                <p className="font-semibold">{orden.supervisor?.nombre}</p>
-              </div>
-            )}
+            <div>
+              <p className="text-gray-500 text-xs uppercase tracking-wide">Supervisor</p>
+              <p className="font-semibold">{orden.supervisor?.nombre || 'Sin asignar'}</p>
+            </div>
             {orden.cliente && (
               <div>
-                <p className="text-gray-500">Cliente</p>
+                <p className="text-gray-500 text-xs uppercase tracking-wide">Cliente</p>
                 <p className="font-semibold">{orden.cliente}</p>
               </div>
             )}
             {orden.ordenServicio && (
               <div>
-                <p className="text-gray-500">Orden de servicio</p>
+                <p className="text-gray-500 text-xs uppercase tracking-wide">Orden servicio</p>
                 <p className="font-semibold">{orden.ordenServicio}</p>
               </div>
             )}
+            <div>
+              <p className="text-gray-500 text-xs uppercase tracking-wide">Fecha inicio</p>
+              <p className="font-semibold">
+                {orden.fechaInicio
+                  ? new Date(orden.fechaInicio).toLocaleDateString('es-MX')
+                  : 'Sin iniciar'}
+              </p>
+            </div>
+            {orden.fechaCierre && (
+              <div>
+                <p className="text-gray-500 text-xs uppercase tracking-wide">Fecha cierre</p>
+                <p className="font-semibold text-green-700">
+                  {new Date(orden.fechaCierre).toLocaleDateString('es-MX')}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Horas de vuelo */}
+          <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-gray-200">
+            <div className="bg-blue-50 border border-blue-200 rounded p-2 text-center">
+              <p className="text-xs text-blue-700 font-semibold uppercase">Horas totales</p>
+              <p className="font-bold text-blue-900 text-lg">{orden.horasAlMomento ?? 0} h</p>
+            </div>
+            <div className="bg-blue-50 border border-blue-200 rounded p-2 text-center">
+              <p className="text-xs text-blue-700 font-semibold uppercase">Motor Der.</p>
+              <p className="font-bold text-blue-900 text-lg">{orden.horasMotorDer ?? 0} h</p>
+            </div>
+            <div className="bg-blue-50 border border-blue-200 rounded p-2 text-center">
+              <p className="text-xs text-blue-700 font-semibold uppercase">Motor Izq.</p>
+              <p className="font-bold text-blue-900 text-lg">{orden.horasMotorIzq ?? 0} h</p>
+            </div>
           </div>
         </div>
 

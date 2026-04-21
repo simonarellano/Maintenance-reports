@@ -68,12 +68,18 @@ export async function actualizarResultado(req, res, next) {
     const resultado = await svc.obtenerResultado(ordenId, resultadoId)
     if (!resultado) return res.status(404).json({ error: 'Resultado no encontrado' })
 
-    // Regla de negocio: observación obligatoria cuando hay daños o requiere atención
-    const estadoFinal = estadoResultado ?? resultado.estadoResultado
-    if (ESTADOS_OBS_OBLIGATORIA.includes(estadoFinal)) {
-      const obsFinal = observacion ?? resultado.observacion
-      if (!obsFinal?.trim()) {
-        return res.status(400).json({ error: 'observacion es obligatoria para este estado' })
+    // Regla de negocio: observación obligatoria SOLO al marcar como completado
+    // con estado que requiera justificación. Cambios de estado sin completar son libres.
+    const completandoAhora = completado === true
+    if (completandoAhora) {
+      const estadoFinal = estadoResultado ?? resultado.estadoResultado
+      if (ESTADOS_OBS_OBLIGATORIA.includes(estadoFinal)) {
+        const obsFinal = observacion ?? resultado.observacion
+        if (!obsFinal?.trim()) {
+          return res.status(400).json({
+            error: 'La observación es obligatoria para marcar como completado con daños o requiere atención',
+          })
+        }
       }
     }
 
@@ -185,113 +191,401 @@ export async function firmarCierre(req, res, next) {
 
 // ─── PDF ────────────────────────────────────────────────────────────────────
 
+const COMPANY = {
+  nombre: 'AEROMX',
+  lema: 'Sistema de Gestión de Mantenimiento Aeronáutico',
+  direccion: 'Aeropuerto Internacional · México',
+  telefono: '+52 (55) 0000-0000',
+  email: 'mantenimiento@aeromx.com',
+}
+
+const COLOR = {
+  primary: '#0b3d91',   // azul aeronáutico
+  accent:  '#cc0000',   // rojo acento
+  light:   '#eef3fb',
+  gray:    '#6b7280',
+  dark:    '#111827',
+  border:  '#cbd5e1',
+}
+
+const ESTADO_LABELS_PDF = {
+  bueno:              'BUENO',
+  correcto_con_danos: 'CON DAÑOS',
+  requiere_atencion:  'REQUIERE ATENCIÓN',
+  no_aplica:          'N/A',
+}
+
+const fmtFecha = (d) => d ? new Date(d).toLocaleDateString('es-MX', { year: 'numeric', month: '2-digit', day: '2-digit' }) : '—'
+const fmtHora  = (d) => d ? new Date(d).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '—'
+const fmtFechaHora = (d) => d ? `${fmtFecha(d)} ${fmtHora(d)}` : '—'
+
 export async function generarPDF(req, res, next) {
   try {
-  const orden = await svc.obtenerOrden(req.params.id)
-  if (!orden) return res.status(404).json({ error: 'Orden no encontrada' })
+    const orden = await svc.obtenerOrden(req.params.id)
+    if (!orden) return res.status(404).json({ error: 'Orden no encontrada' })
 
-  const { default: PDFDocument } = await import('pdfkit')
+    const { default: PDFDocument } = await import('pdfkit')
+    const doc = new PDFDocument({
+      margin: 40,
+      size: 'LETTER',
+      bufferPages: true,
+      info: {
+        Title:    `Orden de Mantenimiento ${orden.numeroOt}`,
+        Author:   COMPANY.nombre,
+        Subject:  `Mantenimiento ${orden.aeronave.matricula}`,
+        Keywords: 'mantenimiento, aeronáutico, aeromx',
+      },
+    })
 
-  const doc = new PDFDocument({ margin: 40, size: 'LETTER' })
-  res.setHeader('Content-Type', 'application/pdf')
-  res.setHeader('Content-Disposition', `attachment; filename="OT-${orden.numeroOt}.pdf"`)
-  doc.pipe(res)
+    res.setHeader('Content-Type', 'application/pdf')
+    res.setHeader('Content-Disposition', `attachment; filename="OT-${orden.numeroOt}.pdf"`)
+    doc.pipe(res)
 
-  // ── Encabezado ──
-  doc.fontSize(20).font('Helvetica-Bold')
-    .text('AEROMX', { align: 'center' })
-  doc.fontSize(14).font('Helvetica-Bold')
-    .text('ORDEN DE TRABAJO DE MANTENIMIENTO', { align: 'center' })
-  doc.fontSize(12).font('Helvetica')
-    .text(orden.numeroOt, { align: 'center' })
+    const PAGE_W = doc.page.width
+    const M = 40
+    const CONTENT_W = PAGE_W - M * 2
 
-  // Línea separadora
-  doc.moveTo(40, doc.y).lineTo(555, doc.y).stroke()
-  doc.moveDown(0.3)
+    // Numeración de páginas — se recorre al final con bufferPages
+    let pageNumber = 1
 
-  // ── Datos generales ──
-  doc.fontSize(10).font('Helvetica-Bold').text('INFORMACIÓN GENERAL')
-  doc.fontSize(9).font('Helvetica')
-  doc.text(`Formato: ${orden.formato.nombre} v${orden.formato.version}`)
-  doc.text(`Aeronave: ${orden.aeronave.matricula} (${orden.aeronave.modelo.nombre})`)
-  doc.text(`Técnico: ${orden.tecnico.nombre}${orden.tecnico.licenciaNum ? ` | Lic. ${orden.tecnico.licenciaNum}` : ''}`)
-  if (orden.supervisor) doc.text(`Supervisor: ${orden.supervisor.nombre}`)
-  if (orden.cliente) doc.text(`Cliente: ${orden.cliente}`)
-  if (orden.ordenServicio) doc.text(`Orden de Servicio: ${orden.ordenServicio}`)
-  doc.fontSize(9).text(`Horas: Total ${orden.horasAlMomento} | Motor Der. ${orden.horasMotorDer} | Motor Izq. ${orden.horasMotorIzq}`)
-  doc.text(`Estado: ${orden.estado.replace(/_/g, ' ').toUpperCase()}`)
-  if (orden.fechaInicio) doc.text(`Inicio: ${new Date(orden.fechaInicio).toLocaleDateString('es-MX')}`)
-  if (orden.fechaCierre) doc.text(`Cierre: ${new Date(orden.fechaCierre).toLocaleDateString('es-MX')}`)
-  doc.moveDown(0.3)
+    // ═══════════════════════════════════════════════════════════════════════
+    // ENCABEZADO con banda de color
+    // ═══════════════════════════════════════════════════════════════════════
+    drawHeader(doc, orden, M, CONTENT_W)
 
-  // Línea separadora
-  doc.moveTo(40, doc.y).lineTo(555, doc.y).stroke()
-  doc.moveDown(0.3)
+    // ═══════════════════════════════════════════════════════════════════════
+    // BLOQUE 1 — Datos generales
+    // ═══════════════════════════════════════════════════════════════════════
+    sectionTitle(doc, '1. DATOS GENERALES DEL SERVICIO', M, CONTENT_W)
 
-  // ── Secciones e inspección ──
-  doc.fontSize(10).font('Helvetica-Bold').text('RESULTADOS DE INSPECCIÓN')
-  doc.fontSize(9).font('Helvetica')
-  const resultadosPorPunto = Object.fromEntries(orden.resultados.map(r => [r.puntoId, r]))
+    const fechaCreacion = orden.createdAt ? fmtFechaHora(orden.createdAt) : '—'
+    const fechaInicio   = orden.fechaInicio ? fmtFechaHora(orden.fechaInicio) : '—'
+    const fechaCierre   = orden.fechaCierre ? fmtFechaHora(orden.fechaCierre) : 'Pendiente'
 
-  let puntosCompletos = 0
-  let totalPuntos = 0
+    drawKVGrid(doc, [
+      ['N.º Orden',           orden.numeroOt],
+      ['Formato',             `${orden.formato.nombre} · v${orden.formato.version}`],
+      ['Cliente',             orden.cliente || '—'],
+      ['Orden de servicio',   orden.ordenServicio || '—'],
+      ['Fecha de recepción',  fechaCreacion],
+      ['Fecha de inicio',     fechaInicio],
+      ['Fecha de cierre',     fechaCierre],
+      ['Estado',              orden.estado.replace(/_/g, ' ').toUpperCase()],
+    ], M, CONTENT_W)
 
-  for (const seccion of orden.formato.secciones) {
-    doc.moveDown(0.2)
-    doc.font('Helvetica-Bold').fontSize(10).text(`► ${seccion.nombre.toUpperCase()}`)
-    doc.font('Helvetica').fontSize(9)
+    // ═══════════════════════════════════════════════════════════════════════
+    // BLOQUE 2 — Aeronave
+    // ═══════════════════════════════════════════════════════════════════════
+    sectionTitle(doc, '2. DATOS DE LA AERONAVE', M, CONTENT_W)
 
-    for (const punto of seccion.puntos) {
-      const r = resultadosPorPunto[punto.id]
-      if (!r) continue
-      totalPuntos++
-      if (r.completado) puntosCompletos++
+    drawKVGrid(doc, [
+      ['Matrícula',       orden.aeronave.matricula],
+      ['Modelo',          orden.aeronave.modelo?.nombre || '—'],
+      ['Fabricante',      orden.aeronave.modelo?.fabricante || '—'],
+      ['N.º de serie',    orden.aeronave.numeroSerie || '—'],
+      ['Horas totales',   `${orden.horasAlMomento} h`],
+      ['Horas Motor Der.', `${orden.horasMotorDer} h`],
+      ['Horas Motor Izq.', `${orden.horasMotorIzq} h`],
+      ['Fecha medición',  fechaInicio !== '—' ? fechaInicio : fechaCreacion],
+    ], M, CONTENT_W)
 
-      const estado = r.estadoResultado.replace(/_/g, ' ').toUpperCase()
-      const critico = punto.esCritico ? ' [CRÍTICO]' : ''
-      const firma = r.firmadoPor ? ` ✓ ${r.firmante?.nombre ?? 'Firmado'}` : ''
-      const completado = r.completado ? '✓' : '○'
-      doc.text(`  ${completado} ${punto.nombreComponente}${critico}: ${estado}${firma}`)
-      if (r.observacion) doc.text(`      ► ${r.observacion}`, { indent: 30, fontSize: 8 })
-      if (r.fotos.length > 0) doc.text(`      Fotos: ${r.fotos.length}`, { indent: 30, fontSize: 8, color: '#0066cc' })
+    // ═══════════════════════════════════════════════════════════════════════
+    // BLOQUE 3 — Personal responsable
+    // ═══════════════════════════════════════════════════════════════════════
+    sectionTitle(doc, '3. PERSONAL RESPONSABLE', M, CONTENT_W)
+
+    drawKVGrid(doc, [
+      ['Técnico / Ingeniero', orden.tecnico?.nombre || '—'],
+      ['Rol',                 (orden.tecnico?.rol || '').toUpperCase() || '—'],
+      ['Licencia',            orden.tecnico?.licenciaNum || '—'],
+      ['Supervisor',          orden.supervisor?.nombre || 'No asignado'],
+      ['Rol supervisor',      (orden.supervisor?.rol || '').toUpperCase() || '—'],
+      ['Licencia supervisor', orden.supervisor?.licenciaNum || '—'],
+    ], M, CONTENT_W)
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // BLOQUE 4 — Trabajos realizados (la lista)
+    // ═══════════════════════════════════════════════════════════════════════
+    sectionTitle(doc, '4. TRABAJOS REALIZADOS', M, CONTENT_W)
+
+    const resultadosPorPunto = Object.fromEntries(orden.resultados.map(r => [r.puntoId, r]))
+    let totalPuntos = 0
+    let completados = 0
+
+    for (const seccion of orden.formato.secciones) {
+      // Header de sección
+      doc.moveDown(0.2)
+      ensureSpace(doc, 60)
+      const secY = doc.y
+      doc.rect(M, secY, CONTENT_W, 18).fill(COLOR.primary)
+      doc.fillColor('#fff').font('Helvetica-Bold').fontSize(10)
+        .text(seccion.nombre.toUpperCase(), M + 8, secY + 5, { width: CONTENT_W - 16, lineBreak: false })
+      doc.fillColor(COLOR.dark)
+      doc.y = secY + 22
+
+      // Tabla de puntos: # | Componente | Descripción | Estado | Obs | Firma
+      const cols = [
+        { w: 22,  label: '#'           },
+        { w: 140, label: 'COMPONENTE'  },
+        { w: 180, label: 'DESCRIPCIÓN' },
+        { w: 75,  label: 'CONDICIÓN'   },
+        { w: 55,  label: 'FIRMA'       },
+        { w: 43,  label: 'FOTOS'       },
+      ]
+      drawTableHeader(doc, cols, M)
+
+      let idx = 1
+      for (const punto of seccion.puntos) {
+        const r = resultadosPorPunto[punto.id]
+        if (!r) continue
+        totalPuntos++
+        if (r.completado) completados++
+
+        drawTableRow(doc, cols, M, [
+          String(idx++),
+          `${punto.nombreComponente}${punto.esCritico ? ' ★' : ''}`,
+          punto.descripcion || '—',
+          ESTADO_LABELS_PDF[r.estadoResultado] || r.estadoResultado,
+          r.firmadoPor ? (r.firmante?.nombre || 'Firmado') : '—',
+          String(r.fotos?.length || 0),
+        ], r)
+      }
     }
-  }
-  doc.moveDown(0.3)
 
-  // Línea separadora
-  doc.moveTo(40, doc.y).lineTo(555, doc.y).stroke()
-  doc.moveDown(0.2)
-
-  // ── Resumen ──
-  doc.fontSize(10).font('Helvetica-Bold').text('RESUMEN')
-  doc.fontSize(9).font('Helvetica')
-  doc.text(`Puntos completados: ${puntosCompletos} / ${totalPuntos}`)
-
-  // ── Cierre ──
-  if (orden.cierre) {
     doc.moveDown(0.3)
-    doc.fontSize(10).font('Helvetica-Bold').text('CIERRE Y FIRMAS')
-    doc.fontSize(9).font('Helvetica')
-    doc.text(`¿Se encontró defecto?: ${orden.cierre.seEncontroDefecto ? 'Sí' : 'No'}`)
-    if (orden.cierre.refDocCorrectivo) doc.text(`Documento correctivo: ${orden.cierre.refDocCorrectivo}`)
-    if (orden.cierre.observacionesGenerales) doc.text(`Observaciones: ${orden.cierre.observacionesGenerales}`)
-    doc.moveDown(0.2)
-    if (orden.cierre.tecnico) {
-      doc.text(`✓ Firma Técnico/Ingeniero: ${orden.cierre.tecnico.nombre}`)
-      if (orden.cierre.fechaFirmaTecnico) doc.text(`  ${new Date(orden.cierre.fechaFirmaTecnico).toLocaleString('es-MX')}`, { fontSize: 8 })
+    ensureSpace(doc, 40)
+    doc.font('Helvetica-Oblique').fontSize(8).fillColor(COLOR.gray)
+      .text('★ = Punto crítico — requiere firma individual del técnico.', M, doc.y)
+    doc.fillColor(COLOR.dark)
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // BLOQUE 5 — Observaciones y defectos
+    // ═══════════════════════════════════════════════════════════════════════
+    if (orden.cierre) {
+      sectionTitle(doc, '5. DICTAMEN Y OBSERVACIONES GENERALES', M, CONTENT_W)
+
+      const c = orden.cierre
+      drawKVGrid(doc, [
+        ['Puntos ejecutados',     `${completados} de ${totalPuntos}`],
+        ['¿Se encontró defecto?', c.seEncontroDefecto ? 'SÍ' : 'NO'],
+        ['Doc. correctivo',       c.refDocCorrectivo || '—'],
+      ], M, CONTENT_W)
+
+      if (c.observacionesGenerales) {
+        ensureSpace(doc, 60)
+        doc.font('Helvetica-Bold').fontSize(9).fillColor(COLOR.dark)
+          .text('Observaciones:', M, doc.y + 4)
+        doc.font('Helvetica').fontSize(9)
+          .text(c.observacionesGenerales, M, doc.y + 2, { width: CONTENT_W, align: 'justify' })
+      }
     }
-    if (orden.cierre.supervisor) {
-      doc.text(`✓ Firma Supervisor: ${orden.cierre.supervisor.nombre}`)
-      if (orden.cierre.fechaFirmaSupervisor) doc.text(`  ${new Date(orden.cierre.fechaFirmaSupervisor).toLocaleString('es-MX')}`, { fontSize: 8 })
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // BLOQUE 6 — Firmas
+    // ═══════════════════════════════════════════════════════════════════════
+    sectionTitle(doc, '6. FIRMAS DE CONFORMIDAD', M, CONTENT_W)
+    drawFirmas(doc, orden, M, CONTENT_W)
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Pie + numeración en todas las páginas
+    // ═══════════════════════════════════════════════════════════════════════
+    const pages = doc.bufferedPageRange()
+    for (let i = 0; i < pages.count; i++) {
+      doc.switchToPage(i)
+      drawFooter(doc, orden, i + 1, pages.count, M, CONTENT_W)
+    }
+
+    doc.end()
+  } catch (e) { next(e) }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Helpers de dibujo del PDF
+// ────────────────────────────────────────────────────────────────────────────
+
+function drawHeader(doc, orden, M, W) {
+  // Banda azul superior
+  doc.rect(0, 0, doc.page.width, 70).fill(COLOR.primary)
+
+  // Logo / nombre de compañía
+  doc.fillColor('#fff').font('Helvetica-Bold').fontSize(22)
+    .text(COMPANY.nombre, M, 18)
+  doc.font('Helvetica').fontSize(9)
+    .text(COMPANY.lema, M, 44)
+
+  // Datos de contacto (columna derecha)
+  doc.fontSize(8).fillColor('#e2e8f0')
+    .text(COMPANY.direccion, M, 18, { width: W, align: 'right' })
+    .text(`${COMPANY.telefono} · ${COMPANY.email}`, M, 32, { width: W, align: 'right' })
+
+  // Título del documento
+  doc.fillColor(COLOR.dark)
+  doc.y = 82
+  doc.font('Helvetica-Bold').fontSize(14)
+    .text('ORDEN DE TRABAJO DE MANTENIMIENTO', M, doc.y, { width: W, align: 'center' })
+
+  // N.º OT en recuadro destacado
+  const boxY = doc.y + 4
+  doc.rect(M, boxY, W, 26).fill(COLOR.light).stroke(COLOR.primary)
+  doc.fillColor(COLOR.primary).font('Helvetica-Bold').fontSize(13)
+    .text(`N.º ${orden.numeroOt}`, M, boxY + 7, { width: W, align: 'center' })
+  doc.fillColor(COLOR.dark)
+  doc.y = boxY + 34
+}
+
+function sectionTitle(doc, txt, M, W) {
+  ensureSpace(doc, 40)
+  doc.moveDown(0.4)
+  const titleY = doc.y
+  doc.rect(M, titleY, W, 18).fill(COLOR.light)
+  doc.fillColor(COLOR.primary).font('Helvetica-Bold').fontSize(11)
+    .text(txt, M + 8, titleY + 4, { width: W - 16, lineBreak: false })
+  doc.fillColor(COLOR.dark)
+  doc.y = titleY + 22
+}
+
+function drawKVGrid(doc, pairs, M, W) {
+  const colW = W / 2
+  const rowH = 18
+  let gridY = doc.y
+
+  for (let i = 0; i < pairs.length; i++) {
+    const col = i % 2
+    const row = Math.floor(i / 2)
+    const x = M + col * colW
+    const y = gridY + row * rowH
+
+    if (row === 0 && col === 0) ensureSpace(doc, pairs.length / 2 * rowH + 20)
+
+    doc.rect(x, y, colW, rowH).stroke(COLOR.border)
+    doc.font('Helvetica-Bold').fontSize(8).fillColor(COLOR.gray)
+      .text(pairs[i][0].toUpperCase(), x + 6, y + 3, { width: colW - 12, lineBreak: false })
+    doc.font('Helvetica').fontSize(9).fillColor(COLOR.dark)
+      .text(String(pairs[i][1]), x + 6, y + 8, { width: colW - 12, ellipsis: true, height: 10 })
+  }
+  const rows = Math.ceil(pairs.length / 2)
+  doc.y = gridY + rows * rowH + 6
+}
+
+function drawTableHeader(doc, cols, M) {
+  ensureSpace(doc, 40)
+  const headerY = doc.y
+  const totalW = cols.reduce((a, c) => a + c.w, 0)
+  doc.rect(M, headerY, totalW, 16).fill(COLOR.dark)
+
+  let x = M
+  for (const c of cols) {
+    doc.fillColor('#fff').font('Helvetica-Bold').fontSize(8)
+      .text(c.label, x + 4, headerY + 4, { width: c.w - 8, lineBreak: false })
+    x += c.w
+  }
+  doc.fillColor(COLOR.dark)
+  doc.y = headerY + 20
+}
+
+function drawTableRow(doc, cols, M, values, r) {
+  const heights = values.map((v, i) => doc.heightOfString(String(v), { width: cols[i].w - 8 }))
+  const baseH = Math.max(16, Math.max(...heights) + 6)
+  const obsH = r?.observacion ? doc.heightOfString(`Obs: ${r.observacion}`, { width: cols.reduce((a, c) => a + c.w, 0) - 20 }) + 4 : 0
+  const rowH = baseH + obsH
+  const totalW = cols.reduce((a, c) => a + c.w, 0)
+
+  ensureSpace(doc, rowH + 10)
+  const rowY = doc.y
+
+  // Fondo ligero si requiere atención
+  if (r?.estadoResultado === 'requiere_atencion') {
+    doc.rect(M, rowY, totalW, rowH).fill('#fff4f4')
+  } else if (r?.estadoResultado === 'correcto_con_danos') {
+    doc.rect(M, rowY, totalW, rowH).fill('#fffbea')
+  } else if (r?.completado) {
+    doc.rect(M, rowY, totalW, rowH).fill('#f7fbf7')
+  }
+
+  let x = M
+  doc.fillColor(COLOR.dark).font('Helvetica').fontSize(8)
+  for (let i = 0; i < cols.length; i++) {
+    doc.rect(x, rowY, cols[i].w, rowH).stroke(COLOR.border)
+    doc.text(String(values[i]), x + 4, rowY + 4, { width: cols[i].w - 8 })
+    x += cols[i].w
+  }
+
+  if (r?.observacion) {
+    doc.font('Helvetica-Oblique').fontSize(8).fillColor(COLOR.accent)
+      .text(`Obs: ${r.observacion}`, M + 4, rowY + baseH, { width: totalW - 20 })
+    doc.fillColor(COLOR.dark)
+  }
+
+  doc.y = rowY + rowH
+}
+
+function drawFirmas(doc, orden, M, W) {
+  ensureSpace(doc, 140)
+  const c = orden.cierre
+  const boxW = (W - 20) / 2
+  const startY = doc.y + 6
+
+  const firmaBox = (x, y, titulo, nombre, fecha, rol, licencia) => {
+    doc.rect(x, y, boxW, 100).stroke(COLOR.border)
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(COLOR.primary)
+      .text(titulo, x + 6, y + 6, { width: boxW - 12, lineBreak: false })
+
+    // Línea de firma
+    doc.moveTo(x + 10, y + 60).lineTo(x + boxW - 10, y + 60).stroke(COLOR.dark)
+    doc.font('Helvetica').fontSize(9).fillColor(COLOR.dark)
+      .text(nombre || '____________________________', x + 6, y + 65, { width: boxW - 12, align: 'center' })
+    doc.fontSize(8).fillColor(COLOR.gray)
+      .text(rol || '', x + 6, y + 78, { width: boxW - 12, align: 'center', lineBreak: false })
+      .text(licencia ? `Lic. ${licencia}` : '', x + 6, y + 88, { width: boxW - 12, align: 'center', lineBreak: false })
+
+    if (fecha) {
+      doc.fontSize(7).fillColor(COLOR.gray)
+        .text(`Firmado: ${fmtFechaHora(fecha)}`, x + 6, y + 42, { width: boxW - 12, align: 'center', lineBreak: false })
+    }
+    if (nombre) {
+      doc.fontSize(14).fillColor(COLOR.primary).font('Helvetica-Oblique')
+        .text('✓ Firmado', x + 6, y + 22, { width: boxW - 12, align: 'center', lineBreak: false })
+      doc.fillColor(COLOR.dark)
     }
   }
 
-  // Pie de página
-  doc.moveDown(1)
-  doc.fontSize(8).font('Helvetica').fillColor('#999')
-    .text('Documento generado digitalmente por AeroMX', { align: 'center' })
-    .text(`Fecha de emisión: ${new Date().toLocaleString('es-MX')}`, { align: 'center' })
+  firmaBox(
+    M, startY,
+    'TÉCNICO / INGENIERO',
+    c?.tecnico?.nombre || orden.tecnico?.nombre,
+    c?.fechaFirmaTecnico,
+    (orden.tecnico?.rol || '').toUpperCase(),
+    orden.tecnico?.licenciaNum,
+  )
 
-  doc.end()
-  } catch (e) { next(e) }
+  firmaBox(
+    M + boxW + 20, startY,
+    'SUPERVISOR',
+    c?.supervisor?.nombre || orden.supervisor?.nombre,
+    c?.fechaFirmaSupervisor,
+    (orden.supervisor?.rol || '').toUpperCase(),
+    orden.supervisor?.licenciaNum,
+  )
+
+  doc.y = startY + 110
+}
+
+function drawFooter(doc, orden, pageNum, totalPages, M, W) {
+  const y = doc.page.height - 30
+  doc.moveTo(M, y).lineTo(M + W, y).stroke(COLOR.border)
+  doc.font('Helvetica').fontSize(7).fillColor(COLOR.gray)
+    .text(
+      `${COMPANY.nombre} · O/T ${orden.numeroOt} · Generado ${fmtFechaHora(new Date())}`,
+      M, y + 4, { width: W, align: 'left', lineBreak: false },
+    )
+    .text(`Página ${pageNum} de ${totalPages}`, M, y + 4, { width: W, align: 'right', lineBreak: false })
+  doc.fillColor(COLOR.dark)
+}
+
+// Si no queda espacio en la página, inserta salto
+function ensureSpace(doc, needed) {
+  const bottom = doc.page.height - 50
+  if (doc.y + needed > bottom) {
+    doc.addPage()
+  }
 }

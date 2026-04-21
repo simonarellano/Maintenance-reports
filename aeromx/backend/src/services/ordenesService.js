@@ -12,13 +12,13 @@ async function generarNumeroOT() {
 
 // ─── Órdenes de Trabajo ─────────────────────────────────────────────────────
 
-export function listarOrdenes(filtros = {}) {
+export async function listarOrdenes(filtros = {}) {
   const where = {}
   if (filtros.estado) where.estado = filtros.estado
   if (filtros.aeronaveId) where.aeronaveId = filtros.aeronaveId
   if (filtros.tecnicoId) where.tecnicoId = filtros.tecnicoId
 
-  return prisma.ordenTrabajo.findMany({
+  const ordenes = await prisma.ordenTrabajo.findMany({
     where,
     orderBy: { createdAt: 'desc' },
     include: {
@@ -28,9 +28,13 @@ export function listarOrdenes(filtros = {}) {
       },
       tecnico: { select: { id: true, nombre: true, rol: true } },
       supervisor: { select: { id: true, nombre: true, rol: true } },
+      resultados: { select: { id: true, completado: true } },
       _count: { select: { resultados: true } },
     },
   })
+
+  // Devolver los resultados "aplanados" — el frontend solo necesita saber cuáles están completados
+  return ordenes
 }
 
 export function obtenerOrden(id) {
