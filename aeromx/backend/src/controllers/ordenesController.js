@@ -5,23 +5,26 @@ const ESTADOS_OBS_OBLIGATORIA = ['correcto_con_danos', 'requiere_atencion']
 
 // ─── Órdenes de Trabajo ─────────────────────────────────────────────────────
 
-export async function listar(req, res) {
-  const { estado, aeronaveId, tecnicoId } = req.query
-  const ordenes = await svc.listarOrdenes({ estado, aeronaveId, tecnicoId })
-  res.json(ordenes)
+export async function listar(req, res, next) {
+  try {
+    const { estado, aeronaveId, tecnicoId } = req.query
+    const ordenes = await svc.listarOrdenes({ estado, aeronaveId, tecnicoId })
+    res.json(ordenes)
+  } catch (e) { next(e) }
 }
 
-export async function obtener(req, res) {
-  const orden = await svc.obtenerOrden(req.params.id)
-  if (!orden) return res.status(404).json({ error: 'Orden no encontrada' })
-  res.json(orden)
+export async function obtener(req, res, next) {
+  try {
+    const orden = await svc.obtenerOrden(req.params.id)
+    if (!orden) return res.status(404).json({ error: 'Orden no encontrada' })
+    res.json(orden)
+  } catch (e) { next(e) }
 }
 
-export async function crear(req, res) {
+export async function crear(req, res, next) {
   const { formatoId, aeronaveId, supervisorId, cliente, ordenServicio,
     horasAlMomento, horasMotorDer, horasMotorIzq } = req.body
 
-  // El técnico es el usuario autenticado
   const tecnicoId = req.user.sub
 
   if (!formatoId || !aeronaveId) {
@@ -37,11 +40,11 @@ export async function crear(req, res) {
   } catch (e) {
     if (e.code === 'NOT_FOUND') return res.status(404).json({ error: e.message })
     if (e.code === 'P2003') return res.status(400).json({ error: 'Una o más referencias no existen' })
-    throw e
+    next(e)
   }
 }
 
-export async function actualizarEstado(req, res) {
+export async function actualizarEstado(req, res, next) {
   const { estado } = req.body
   if (!ESTADOS_VALIDOS.includes(estado)) {
     return res.status(400).json({ error: `estado debe ser uno de: ${ESTADOS_VALIDOS.join(', ')}` })
@@ -51,132 +54,139 @@ export async function actualizarEstado(req, res) {
     res.json(orden)
   } catch (e) {
     if (e.code === 'P2025') return res.status(404).json({ error: 'Orden no encontrada' })
-    throw e
+    next(e)
   }
 }
 
 // ─── Resultados de Puntos ───────────────────────────────────────────────────
 
-export async function actualizarResultado(req, res) {
-  const { estadoResultado, observacion, completado } = req.body
-  const { id: ordenId, resultadoId } = req.params
+export async function actualizarResultado(req, res, next) {
+  try {
+    const { estadoResultado, observacion, completado } = req.body
+    const { id: ordenId, resultadoId } = req.params
 
-  const resultado = await svc.obtenerResultado(ordenId, resultadoId)
-  if (!resultado) return res.status(404).json({ error: 'Resultado no encontrado' })
+    const resultado = await svc.obtenerResultado(ordenId, resultadoId)
+    if (!resultado) return res.status(404).json({ error: 'Resultado no encontrado' })
 
-  // Regla de negocio: observación obligatoria cuando hay daños o requiere atención
-  const estadoFinal = estadoResultado ?? resultado.estadoResultado
-  if (ESTADOS_OBS_OBLIGATORIA.includes(estadoFinal)) {
-    const obsFinal = observacion ?? resultado.observacion
-    if (!obsFinal?.trim()) {
-      return res.status(400).json({ error: 'observacion es obligatoria para este estado' })
+    // Regla de negocio: observación obligatoria cuando hay daños o requiere atención
+    const estadoFinal = estadoResultado ?? resultado.estadoResultado
+    if (ESTADOS_OBS_OBLIGATORIA.includes(estadoFinal)) {
+      const obsFinal = observacion ?? resultado.observacion
+      if (!obsFinal?.trim()) {
+        return res.status(400).json({ error: 'observacion es obligatoria para este estado' })
+      }
     }
-  }
 
-  const actualizado = await svc.actualizarResultado(resultadoId, { estadoResultado, observacion, completado })
-  res.json(actualizado)
+    const actualizado = await svc.actualizarResultado(resultadoId, { estadoResultado, observacion, completado })
+    res.json(actualizado)
+  } catch (e) { next(e) }
 }
 
-export async function firmarResultado(req, res) {
-  const { id: ordenId, resultadoId } = req.params
+export async function firmarResultado(req, res, next) {
+  try {
+    const { id: ordenId, resultadoId } = req.params
 
-  const resultado = await svc.obtenerResultado(ordenId, resultadoId)
-  if (!resultado) return res.status(404).json({ error: 'Resultado no encontrado' })
-  if (!resultado.punto.esCritico) {
-    return res.status(400).json({ error: 'Solo los puntos críticos requieren firma individual' })
-  }
-  if (!resultado.completado) {
-    return res.status(400).json({ error: 'El punto debe estar completado antes de firmar' })
-  }
+    const resultado = await svc.obtenerResultado(ordenId, resultadoId)
+    if (!resultado) return res.status(404).json({ error: 'Resultado no encontrado' })
+    if (!resultado.punto.esCritico) {
+      return res.status(400).json({ error: 'Solo los puntos críticos requieren firma individual' })
+    }
+    if (!resultado.completado) {
+      return res.status(400).json({ error: 'El punto debe estar completado antes de firmar' })
+    }
 
-  const firmado = await svc.firmarResultado(resultadoId, req.user.sub)
-  res.json(firmado)
+    const firmado = await svc.firmarResultado(resultadoId, req.user.sub)
+    res.json(firmado)
+  } catch (e) { next(e) }
 }
 
 // ─── Fotos ──────────────────────────────────────────────────────────────────
 
-export async function subirFoto(req, res) {
-  const { id: ordenId, resultadoId } = req.params
+export async function subirFoto(req, res, next) {
+  try {
+    const { id: ordenId, resultadoId } = req.params
 
-  const resultado = await svc.obtenerResultado(ordenId, resultadoId)
-  if (!resultado) return res.status(404).json({ error: 'Resultado no encontrado' })
-  if (!req.file) return res.status(400).json({ error: 'No se recibió archivo' })
+    const resultado = await svc.obtenerResultado(ordenId, resultadoId)
+    if (!resultado) return res.status(404).json({ error: 'Resultado no encontrado' })
+    if (!req.file) return res.status(400).json({ error: 'No se recibió archivo' })
 
-  const fechaCaptura = req.body.fechaCaptura ? new Date(req.body.fechaCaptura) : null
-  const foto = await svc.agregarFoto(resultadoId, {
-    urlArchivo: `/uploads/${req.file.filename}`,
-    nombreArchivo: req.file.originalname,
-    tamanoBytes: req.file.size,
-    subidaPor: req.user.sub,
-    fechaCaptura,
-  })
-  res.status(201).json(foto)
+    const fechaCaptura = req.body.fechaCaptura ? new Date(req.body.fechaCaptura) : null
+    const foto = await svc.agregarFoto(resultadoId, {
+      urlArchivo: `/uploads/${req.file.filename}`,
+      nombreArchivo: req.file.originalname,
+      tamanoBytes: req.file.size,
+      subidaPor: req.user.sub,
+      fechaCaptura,
+    })
+    res.status(201).json(foto)
+  } catch (e) { next(e) }
 }
 
-export async function eliminarFoto(req, res) {
-  const foto = await svc.obtenerFoto(req.params.fotoId)
-  if (!foto) return res.status(404).json({ error: 'Foto no encontrada' })
-
+export async function eliminarFoto(req, res, next) {
   try {
+    const foto = await svc.obtenerFoto(req.params.fotoId)
+    if (!foto) return res.status(404).json({ error: 'Foto no encontrada' })
     await svc.eliminarFoto(req.params.fotoId)
     res.status(204).send()
   } catch (e) {
     if (e.code === 'P2025') return res.status(404).json({ error: 'Foto no encontrada' })
-    throw e
+    next(e)
   }
 }
 
 // ─── Cierre ─────────────────────────────────────────────────────────────────
 
-export async function gestionarCierre(req, res) {
-  const { id: ordenId } = req.params
-  const { seEncontroDefecto, refDocCorrectivo, observacionesGenerales } = req.body
+export async function gestionarCierre(req, res, next) {
+  try {
+    const { id: ordenId } = req.params
+    const { seEncontroDefecto, refDocCorrectivo, observacionesGenerales } = req.body
 
-  const orden = await svc.obtenerOrden(ordenId)
-  if (!orden) return res.status(404).json({ error: 'Orden no encontrada' })
-  if (orden.estado === 'cerrada') return res.status(400).json({ error: 'La orden ya está cerrada' })
+    const orden = await svc.obtenerOrden(ordenId)
+    if (!orden) return res.status(404).json({ error: 'Orden no encontrada' })
+    if (orden.estado === 'cerrada') return res.status(400).json({ error: 'La orden ya está cerrada' })
 
-  // Todos los puntos deben estar completados antes de iniciar cierre
-  const { completo, total, completados } = await svc.verificarPuntosCompletos(ordenId)
-  if (!completo) {
-    return res.status(400).json({
-      error: `No se puede cerrar: ${completados}/${total} puntos completados`,
+    const { completo, total, completados } = await svc.verificarPuntosCompletos(ordenId)
+    if (!completo) {
+      return res.status(400).json({
+        error: `No se puede cerrar: ${completados}/${total} puntos completados`,
+      })
+    }
+
+    if (seEncontroDefecto && !refDocCorrectivo?.trim()) {
+      return res.status(400).json({ error: 'refDocCorrectivo es requerido cuando se encontró defecto' })
+    }
+
+    if (orden.estado === 'en_proceso') {
+      await svc.actualizarEstadoOrden(ordenId, 'pendiente_firma')
+    }
+
+    const cierre = await svc.crearOActualizarCierre(ordenId, {
+      seEncontroDefecto: seEncontroDefecto ?? false,
+      refDocCorrectivo,
+      observacionesGenerales,
     })
-  }
-
-  // Validación de negocio: ref. doc. obligatoria cuando se encontró defecto
-  if (seEncontroDefecto && !refDocCorrectivo?.trim()) {
-    return res.status(400).json({ error: 'refDocCorrectivo es requerido cuando se encontró defecto' })
-  }
-
-  // Avanzar estado a pendiente_firma si aún está en proceso
-  if (orden.estado === 'en_proceso') {
-    await svc.actualizarEstadoOrden(ordenId, 'pendiente_firma')
-  }
-
-  const cierre = await svc.crearOActualizarCierre(ordenId, {
-    seEncontroDefecto: seEncontroDefecto ?? false,
-    refDocCorrectivo,
-    observacionesGenerales,
-  })
-  res.json(cierre)
+    res.json(cierre)
+  } catch (e) { next(e) }
 }
 
-export async function firmarCierre(req, res) {
-  const { id: ordenId } = req.params
+export async function firmarCierre(req, res, next) {
+  try {
+    const { id: ordenId } = req.params
 
-  const orden = await svc.obtenerOrden(ordenId)
-  if (!orden) return res.status(404).json({ error: 'Orden no encontrada' })
-  if (!orden.cierre) return res.status(400).json({ error: 'Debe crear el cierre antes de firmar' })
-  if (orden.estado === 'cerrada') return res.status(400).json({ error: 'La orden ya está cerrada' })
+    const orden = await svc.obtenerOrden(ordenId)
+    if (!orden) return res.status(404).json({ error: 'Orden no encontrada' })
+    if (!orden.cierre) return res.status(400).json({ error: 'Debe crear el cierre antes de firmar' })
+    if (orden.estado === 'cerrada') return res.status(400).json({ error: 'La orden ya está cerrada' })
 
-  const cierre = await svc.firmarCierre(ordenId, req.user.sub, req.user.rol)
-  res.json(cierre)
+    const cierre = await svc.firmarCierre(ordenId, req.user.sub, req.user.rol)
+    res.json(cierre)
+  } catch (e) { next(e) }
 }
 
 // ─── PDF ────────────────────────────────────────────────────────────────────
 
-export async function generarPDF(req, res) {
+export async function generarPDF(req, res, next) {
+  try {
   const orden = await svc.obtenerOrden(req.params.id)
   if (!orden) return res.status(404).json({ error: 'Orden no encontrada' })
 
@@ -250,4 +260,5 @@ export async function generarPDF(req, res) {
   }
 
   doc.end()
+  } catch (e) { next(e) }
 }

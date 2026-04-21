@@ -174,7 +174,7 @@ model OrdenTrabajo {
   formatoId      String    @map("formato_id")
   aeronaveId     String    @map("aeronave_id")
   tecnicoId      String    @map("tecnico_id")
-  supervisorId   String    @map("supervisor_id")
+  supervisorId   String?   @map("supervisor_id")
   cliente        String?
   ordenServicio  String?   @map("orden_servicio")
   horasAlMomento Float     @default(0) @map("horas_al_momento")
@@ -190,7 +190,7 @@ model OrdenTrabajo {
   formato    Formato          @relation(fields: [formatoId], references: [id])
   aeronave   Aeronave         @relation(fields: [aeronaveId], references: [id])
   tecnico    Usuario          @relation("TecnicoOT", fields: [tecnicoId], references: [id])
-  supervisor Usuario          @relation("SupervisorOT", fields: [supervisorId], references: [id])
+  supervisor Usuario?         @relation("SupervisorOT", fields: [supervisorId], references: [id])
   resultados ResultadoPunto[]
   cierre     CierreOT?
 

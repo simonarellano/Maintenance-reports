@@ -193,9 +193,9 @@ FORMATO DE MANTENIMIENTO
 - Confirmar si se necesita modo offline
 - Confirmar si `ref_doc_correctivo` es solo texto o también permite adjuntar PDF
 
-## Estado del Proyecto — Última actualización: Sesión 3 (~35% total)
+## Estado del Proyecto — Última actualización: Sesión 4 (~50% total)
 
-### Completado (backend — 0% frontend)
+### Completado (backend 100% + frontend funcional)
 | Archivo | Descripción |
 |---------|-------------|
 | `CLAUDE.md` | Contexto completo del proyecto |
@@ -223,6 +223,14 @@ FORMATO DE MANTENIMIENTO
 | `frontend/package.json` | React + Vite + TailwindCSS + Zustand + PWA |
 | `frontend/vite.config.js` | PWA manifest + proxy /api → localhost:3000 |
 | `backend/.env.example` | Variables: DATABASE_URL, JWT_SECRET, PORT, STORAGE_PROVIDER, CORS_ORIGIN |
+| `backend/.env` | Configurado para desarrollo local (Postgres en Docker, MinIO local) |
+| `aeromx/docker-compose.yml` | Postgres 16 + MinIO — levantar con `docker compose up -d` |
+| `frontend/src/App.jsx` | React Router con future flags v7 configurados |
+| `frontend/src/pages/LoginPage.jsx` | Login funcional con JWT |
+| `frontend/src/pages/DashboardPage.jsx` | Lista de O/T del usuario |
+| `frontend/src/pages/CrearOTPage.jsx` | Crear O/T desde plantilla — **funcional** |
+| `frontend/src/pages/InspeccionPage.jsx` | Flujo de inspección por punto |
+| `frontend/src/pages/CierreOTPage.jsx` | Cierre y firma de O/T |
 
 ### API completa — Endpoints implementados
 | Método | Ruta | Auth | Descripción |
@@ -277,19 +285,45 @@ FORMATO DE MANTENIMIENTO
 | ingeniero@aeromx.com | aeromx123 | ingeniero |
 | supervisor@aeromx.com | aeromx123 | supervisor |
 
-### Para levantar el backend (cuando haya DB)
+### Para levantar en desarrollo local (primera vez)
 ```bash
+# 1. Clonar el repo
+git clone <url-del-repo>
+
+# 2. Configurar variables de entorno
 cd aeromx/backend
-cp .env.example .env          # editar DATABASE_URL con tu PostgreSQL
-npm install                   # incluye pdfkit nuevo
-npm run db:migrate            # crea tablas via Prisma
-npm run db:seed               # carga usuarios y aeronave de prueba
-npm run dev                   # servidor en http://localhost:3000
+cp .env.example .env
+# El .env.example ya tiene los valores correctos para Docker local — no necesita edición
+
+# 3. Infraestructura
+cd ..
+docker compose up -d          # levanta Postgres:5432 + MinIO:9000/9001
+
+# 4. Backend
+cd backend
+npm install
+npx prisma migrate deploy     # aplica migraciones (usa deploy en máquina nueva, no dev)
+npm run db:seed               # carga usuarios de prueba + aeronave XB-ABC + puntos Mantenimiento Menor
+npm run dev                   # API en http://localhost:3000
+
+# 5. Frontend (otra terminal)
+cd aeromx/frontend
+npm install
+npm run dev                   # UI en http://localhost:5173
 ```
 
-### Siguiente paso — Frontend (Fase 1, último bloque)
-1. **Login screen**: formulario, llamada a `/api/auth/login`, guardar token en Zustand
-2. **Dashboard**: lista de O/T propias, estado, aeronave, fecha
-3. **Crear O/T**: seleccionar formato + aeronave, llenar encabezado
-4. **Flujo de inspección móvil**: pantalla por sección → puntos con radio (bueno/daños/etc.) + obs + cámara
-5. **Cierre y firma**: pantalla de resumen → firma digital (canvas) → PDF preview/descarga
+> **De la segunda vez en adelante**: solo `docker compose up -d` + `npm run dev` en backend y frontend.
+
+> **Diferencia `migrate dev` vs `migrate deploy`**: usar `dev` en tu máquina de desarrollo (crea migraciones nuevas), usar `deploy` en máquina nueva o producción (solo aplica las existentes).
+
+### Bugs corregidos en Sesión 4
+- `supervisorId` era `String` no-nullable en schema pero el frontend no lo envía → cambiado a `String?` + relación `supervisor?` opcional + migración aplicada
+- `ordenesController.js`: todos los handlers async sin `try/catch` ni `next` → corregido (Express 4 no captura async errors automáticamente)
+- `ordenesService.crearOrden`: usaba shorthand de FK (`formatoId`) que el cliente Prisma no aceptaba → cambiado a sintaxis `connect` explícita para todas las relaciones
+- `frontend/App.jsx`: warnings de React Router v7 future flags → agregados `v7_startTransition` y `v7_relativeSplatPath`
+
+### Siguiente paso — Sesión 5
+1. **Flujo de inspección**: probar y pulir `InspeccionPage` — radio buttons por punto, observación condicional, cámara
+2. **Cierre y firma**: probar `CierreOTPage` — firma digital con canvas, doble firma
+3. **Dashboard**: filtros por estado, refresh automático
+4. **UX móvil**: probar en celular/tablet (PWA), ajustar touch targets
