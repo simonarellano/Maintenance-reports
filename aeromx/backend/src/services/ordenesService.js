@@ -50,7 +50,7 @@ export function obtenerOrden(id) {
       supervisor: { select: { id: true, nombre: true, rol: true, licenciaNum: true } },
       resultados: {
         include: {
-          punto: true,
+          punto: { include: { seccion: true } },
           firmante: { select: { id: true, nombre: true } },
           fotos: true,
         },
