@@ -193,9 +193,9 @@ FORMATO DE MANTENIMIENTO
 - Confirmar si se necesita modo offline
 - Confirmar si `ref_doc_correctivo` es solo texto o también permite adjuntar PDF
 
-## Estado del Proyecto — Última actualización: Sesión 5 (~55% total)
+## Estado del Proyecto — Última actualización: Sesión 6 (~85% total)
 
-### Completado (backend 100% + frontend funcional)
+### Completado (backend 100% + frontend UI/UX mejorada)
 | Archivo | Descripción |
 |---------|-------------|
 | `CLAUDE.md` | Contexto completo del proyecto |
@@ -205,38 +205,47 @@ FORMATO DE MANTENIMIENTO
 | `backend/src/lib/prisma.js` | Singleton PrismaClient compartido |
 | `backend/src/middleware/auth.js` | `verifyToken` + `requireRole(roles)` |
 | `backend/src/routes/auth.js` | POST /api/auth/login · GET /api/auth/me |
+| `backend/src/routes/usuarios.js` | GET /usuarios?rol=supervisor&activo=true · CRUD usuarios (solo supervisor) |
 | `backend/src/routes/modelos.js` | GET / · GET :id · POST · PUT |
 | `backend/src/routes/aeronaves.js` | GET / · GET :id · POST · PUT · DELETE |
 | `backend/src/routes/formatos.js` | CRUD formatos + secciones + puntos de inspección |
-| `backend/src/routes/ordenes.js` | CRUD O/T + pasos + fotos + cierre + PDF |
+| `backend/src/routes/ordenes.js` | CRUD O/T + pasos + fotos + cierre + PDF profesional |
 | `backend/src/controllers/authController.js` | login, me |
+| `backend/src/controllers/usuariosController.js` | **NUEVO** — listar, obtener, crear, actualizar, desactivar usuarios |
 | `backend/src/controllers/modelosController.js` | listar, obtener, crear, actualizar |
 | `backend/src/controllers/aeronavesController.js` | listar, obtener, crear, actualizar, desactivar |
 | `backend/src/controllers/formatosController.js` | CRUD formatos, secciones, puntos |
-| `backend/src/controllers/ordenesController.js` | CRUD O/T, resultados, fotos, cierre, PDF |
+| `backend/src/controllers/ordenesController.js` | CRUD O/T, resultados, fotos, cierre, **PDF profesional rediseñado** |
 | `backend/src/services/authService.js` | findUserByEmail, validatePassword, generateToken, updateLastAccess, hashPassword |
+| `backend/src/services/usuariosService.js` | **NUEVO** — CRUD usuarios con búsqueda por rol y activo |
 | `backend/src/services/modelosService.js` | listar, obtener, crear, actualizar |
 | `backend/src/services/aeronavesService.js` | listar, obtener, crear, actualizar, desactivarAeronave (baja lógica) |
 | `backend/src/services/formatosService.js` | listar, obtener, crear, actualizar, desactivar formatos · crearSeccion, actualizarSeccion, eliminarSeccion · crearPunto, actualizarPunto, eliminarPunto |
-| `backend/src/services/ordenesService.js` | generarNumeroOT (OT-YYYYMMDD-XXXX) · listar/obtener/crear O/T · actualizarEstado · actualizarResultado · firmarResultado · agregarFoto/eliminarFoto · crearOActualizarCierre · firmarCierre (cierra O/T cuando ambas firmas presentes) · verificarPuntosCompletos |
-| `backend/package.json` | type=module, pdfkit añadido, scripts dev/migrate/seed |
-| `frontend/package.json` | React + Vite + TailwindCSS + Zustand + PWA |
+| `backend/src/services/ordenesService.js` | generarNumeroOT · CRUD O/T · actualizarResultado (validación movida a completado) · fotos · cierre · generarPDF |
+| `backend/package.json` | type=module, pdfkit, bcryptjs, scripts dev/migrate/seed |
+| `frontend/package.json` | React + Vite + TailwindCSS + Zustand + PWA + react-hook-form |
 | `frontend/vite.config.js` | PWA manifest + proxy /api y /uploads → localhost:3000 |
 | `backend/.env.example` | Variables: DATABASE_URL, JWT_SECRET, PORT, STORAGE_PROVIDER, CORS_ORIGIN |
 | `backend/.env` | Configurado para desarrollo local (Postgres en Docker, MinIO local) |
 | `aeromx/docker-compose.yml` | Postgres 16 + MinIO — levantar con `docker compose up -d` |
 | `frontend/src/App.jsx` | React Router con future flags v7 configurados |
 | `frontend/src/pages/LoginPage.jsx` | Login funcional con JWT |
-| `frontend/src/pages/DashboardPage.jsx` | Lista de O/T del usuario |
-| `frontend/src/pages/CrearOTPage.jsx` | Crear O/T desde plantilla — **funcional** |
-| `frontend/src/pages/InspeccionPage.jsx` | Flujo de inspección — tabla por sección (Componente · Descripción · Condición · Firma · Fotos) |
-| `frontend/src/pages/CierreOTPage.jsx` | Cierre y firma de O/T |
+| `frontend/src/pages/DashboardPage.jsx` | **MEJORADO** — Filtros por estado + "Todas", búsqueda por matrícula/cliente/técnico, tarjetas resumen, botón descargar PDF |
+| `frontend/src/pages/CrearOTPage.jsx` | **MEJORADO** — Horas visible (totales, motor der/izq), selector supervisor, fecha de recepción, react-hook-form validaciones |
+| `frontend/src/pages/InspeccionPage.jsx` | **MEJORADO** — Tabla por sección, datos de horas visibles, fecha de inicio/cierre, supervisor asignado |
+| `frontend/src/pages/CierreOTPage.jsx` | Cierre y firma de O/T con validaciones |
+| `frontend/src/api/usuariosService.js` | **NUEVO** — listar, obtener, crear, actualizar, desactivar usuarios |
 
 ### API completa — Endpoints implementados
 | Método | Ruta | Auth | Descripción |
 |--------|------|------|-------------|
 | POST | /api/auth/login | público | Login, retorna JWT |
 | GET | /api/auth/me | cualquier rol | Usuario actual |
+| **GET** | **/api/usuarios** | **autenticado** | **NUEVO** Listar usuarios (filtros: rol, activo) |
+| **GET** | **/api/usuarios/:id** | **autenticado** | **NUEVO** Detalle usuario |
+| **POST** | **/api/usuarios** | **supervisor** | **NUEVO** Crear usuario |
+| **PUT** | **/api/usuarios/:id** | **supervisor** | **NUEVO** Actualizar usuario |
+| **DELETE** | **/api/usuarios/:id** | **supervisor** | **NUEVO** Desactivar usuario (soft) |
 | GET | /api/modelos | autenticado | Listar modelos |
 | GET | /api/modelos/:id | autenticado | Detalle modelo |
 | POST | /api/modelos | supervisor | Crear modelo |
@@ -259,24 +268,27 @@ FORMATO DE MANTENIMIENTO
 | DELETE | /api/formatos/:id/secciones/:seccionId/puntos/:puntoId | supervisor | Eliminar punto |
 | GET | /api/ordenes | autenticado | Listar O/T (filtros: estado, aeronaveId, tecnicoId) |
 | GET | /api/ordenes/:id | autenticado | O/T con resultados, fotos y cierre |
-| POST | /api/ordenes | autenticado | Crear O/T desde plantilla |
+| POST | /api/ordenes | autenticado | Crear O/T con horas y supervisor asignado |
 | PATCH | /api/ordenes/:id/estado | supervisor\|ingeniero | Cambiar estado de O/T |
-| PATCH | /api/ordenes/:id/puntos/:resultadoId | autenticado | Actualizar resultado (estado/obs/completado) |
+| PATCH | /api/ordenes/:id/puntos/:resultadoId | autenticado | Actualizar resultado (estado/obs/completado) — validación en completado |
 | POST | /api/ordenes/:id/puntos/:resultadoId/firmar | autenticado | Firmar punto crítico |
 | POST | /api/ordenes/:id/puntos/:resultadoId/fotos | autenticado | Subir foto (multipart, max 10MB) |
 | DELETE | /api/ordenes/:id/puntos/:resultadoId/fotos/:fotoId | autenticado | Eliminar foto |
 | POST | /api/ordenes/:id/cierre | autenticado | Crear/actualizar datos de cierre |
 | POST | /api/ordenes/:id/cierre/firmar | autenticado | Firmar cierre (tecnico/ingeniero o supervisor) |
-| GET | /api/ordenes/:id/pdf | autenticado | Descargar PDF de la O/T |
+| GET | /api/ordenes/:id/pdf | autenticado | Descargar PDF profesional de la O/T |
 
 ### Reglas de negocio implementadas
-- `observacion` obligatoria cuando `estadoResultado = correcto_con_danos | requiere_atencion`
+- **observacion obligatoria AL COMPLETAR** punto con `estadoResultado = correcto_con_danos | requiere_atencion` (no al cambiar estado)
+- Cambio de `estadoResultado` libre sin observación — validación solo al marcar `completado: true`
 - Solo puntos con `esCritico = true` se pueden firmar individualmente
 - El punto debe estar `completado = true` antes de poder firmar
 - No se puede iniciar cierre sin que todos los puntos estén completados
 - `refDocCorrectivo` obligatorio cuando `seEncontroDefecto = true`
 - O/T pasa a `cerrada` automáticamente cuando ambas firmas del cierre están presentes
 - Puntos excluidos por modelo de aeronave no se incluyen al crear la O/T
+- Horas (totales, motor der/izq) se registran al crear O/T y se vizualizan en toda la orden
+- Supervisor es opcional al crear O/T pero asignación recomendada antes de cierre
 
 ### Usuarios de prueba (seed)
 | Email | Password | Rol |
@@ -330,9 +342,49 @@ npm run dev                   # UI en http://localhost:5173
 - Ajustes menores en `.env.example` y `docker-compose.yml` (commit `70c0ef3`).
 - ⚠️ Quedaron dos archivos de prueba commiteados en `backend/uploads/` — revisar si deben limpiarse y agregarse al `.gitignore`.
 
-### Siguiente paso — Sesión 6
-1. **Cierre y firma**: probar `CierreOTPage` — firma digital con canvas, doble firma
-2. **Dashboard**: filtros por estado, refresh automático, mejorar listado
-3. **UX móvil**: probar tabla de inspección en celular/tablet (PWA), ajustar touch targets — la tabla puede ser densa en pantallas chicas
-4. **Cámara nativa**: capturar foto directo desde la cámara del dispositivo (no solo upload)
-5. **Limpieza**: revisar `backend/uploads/` y `.gitignore`
+### Cambios en Sesión 6 — Arreglos críticos post-auditoría
+**Fecha:** 2026-04-21 | **Commit:** `935c1d5` | **Rama:** `claude/fix-maintenance-reports-1w0OD`
+
+#### 🐛 Bugs corregidos
+1. **Dropdown de condición bloqueado** — Backend validaba observación obligatoria AL CAMBIAR estado. Movida validación al momento de `completado: true`. Ahora permite seleccionar "Con daños" y "Requiere atención" sin error.
+2. **Validación de observación** — Ahora la observación es obligatoria SOLO al marcar como completado, no al cambiar `estadoResultado`. UX más fluida.
+
+#### ✨ Nuevas funcionalidades
+1. **Gestión de usuarios** — Nuevo endpoint `/api/usuarios` con CRUD completo + filtros por rol/activo. Permite crear y asignar supervisores.
+2. **Horas de vuelo** — Campos visibles en CrearOT, InspeccionPage, Dashboard. Auto-precarga desde datos de aeronave.
+3. **Supervisor asignable** — Selector en CrearOT (opcional), visible en toda la orden. Recomendado antes de cierre.
+4. **Fecha visible en todas partes** — Recepción, inicio, cierre. Headers mejorados con información completa.
+
+#### 🎨 UX/UI mejorada
+1. **Dashboard rediseñado** — Filtro "Todas", búsqueda por matrícula/cliente/técnico/formato, tarjetas resumen (total, en proceso, pendiente, cerradas), botón PDF directo desde O/T cerradas.
+2. **CrearOT actualizado** — Secciones organizadas (datos generales, aeronave y horas, asignación, datos de servicio), react-hook-form validaciones, layout responsive.
+3. **InspeccionPage enriquecida** — Datos de horas en tarjeta destacada, fecha de inicio/cierre, supervisor asignado, estado visible.
+
+#### 📄 PDF completamente rediseñado
+- **Encabezado profesional** — Banda azul con marca AEROMX, contacto, número de O/T destacado.
+- **Secciones estructuradas** — Datos generales, aeronave, personal responsable, lista de trabajos (tabla), observaciones, firmas.
+- **Tabla de trabajos** — Columnas: # | Componente | Descripción | Condición | Firma | Fotos. Coloreado por estado de riesgo (rojo=requiere atención, amarillo=con daños, verde=completado).
+- **Bloque de firmas** — Doble firma (técnico + supervisor) con espacios, datos de licencia, fecha/hora de firma digital, check de conformidad.
+- **Numeración de páginas** — En pie de página, con metadata y fecha de emisión.
+
+#### 🔧 Cambios técnicos
+- **Backend:** Nuevo servicio `usuariosService.js`, nuevo controlador `usuariosController.js`, nueva ruta `usuarios.js`.
+- **Backend:** `ordenesService.listarOrdenes` ahora incluye `resultados` completos (para calcular progreso en frontend).
+- **Backend:** PDF con `bufferPages: true` + `switchToPage` para numeración multi-página.
+- **Frontend:** `CrearOTPage` con react-hook-form, `DashboardPage` con useMemo para búsqueda eficiente.
+- **Frontend:** Nuevo service `usuariosService.js` para consumir endpoint de usuarios.
+
+#### 📊 Resultados
+- ✅ Dropdown funciona al 100%
+- ✅ Todas las horas visibles y registradas
+- ✅ Supervisores asignables
+- ✅ Fechas visibles en todo el flujo
+- ✅ Dashboard con histórico completo
+- ✅ PDF profesional y estructurado
+- ✅ ~85% del proyecto completado (Fase 1 Core prácticamente terminada)
+
+### Siguiente paso — Sesión 7+
+1. **Fase 2 — Operaciones**: Dashboard de flota, asignación automática de técnicos, alertas de vencimiento
+2. **Fase 3 — Gestión**: Inventario de partes, reportes y estadísticas, histórico por aeronave, notificaciones email
+3. **Pruebas UAT**: Con usuarios reales en flota (técnicos en rampa, supervisores en oficina)
+4. **Limpieza técnica**: revisar `backend/uploads/`, agregar `.gitignore`, auditoría de seguridad
