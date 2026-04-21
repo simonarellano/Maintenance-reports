@@ -319,6 +319,9 @@ function FilaPunto({ index, resultado, soloLectura, onCambiar, onFirmar, onSubir
   const punto = resultado.punto
   const [obs, setObs] = useState(resultado.observacion || '')
   const fileInputRef = useRef(null)
+  const videoRef = useRef(null)
+  const canvasRef = useRef(null)
+  const [modoCaptura, setModoCaptura] = useState(null) // null | 'camara' | 'archivo'
 
   useEffect(() => {
     setObs(resultado.observacion || '')
@@ -341,7 +344,6 @@ function FilaPunto({ index, resultado, soloLectura, onCambiar, onFirmar, onSubir
 
   const toggleCompletado = () => {
     if (soloLectura) return
-    // Si pide observación y no hay, evitar marcar completado
     if (!resultado.completado && requiereObs && !(obs || '').trim()) {
       alert('Escribe una observación antes de marcar como completado')
       return
@@ -350,6 +352,42 @@ function FilaPunto({ index, resultado, soloLectura, onCambiar, onFirmar, onSubir
       completado: !resultado.completado,
       ...(requiereObs ? { observacion: obs } : {}),
     })
+  }
+
+  const iniciarCapturaCamara = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      setModoCaptura('camara')
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+        videoRef.current.play()
+      }
+    } catch (err) {
+      console.error('Error accediendo a la cámara:', err)
+      alert('No se pudo acceder a la cámara. Usa el método manual.')
+    }
+  }
+
+  const capturarFoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const context = canvasRef.current.getContext('2d')
+      canvasRef.current.width = videoRef.current.videoWidth
+      canvasRef.current.height = videoRef.current.videoHeight
+      context.drawImage(videoRef.current, 0, 0)
+
+      canvasRef.current.toBlob((blob) => {
+        const file = new File([blob], `foto-${Date.now()}.jpg`, { type: 'image/jpeg' })
+        onSubirFoto(resultado.id, file)
+        cerrarCaptura()
+      }, 'image/jpeg', 0.95)
+    }
+  }
+
+  const cerrarCaptura = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      videoRef.current.srcObject.getTracks().forEach(track => track.stop())
+    }
+    setModoCaptura(null)
   }
 
   return (
@@ -391,25 +429,28 @@ function FilaPunto({ index, resultado, soloLectura, onCambiar, onFirmar, onSubir
 
         {/* Condición */}
         <td className="px-3 py-3 align-top">
-          <div className="flex flex-wrap gap-1">
-            {ESTADOS.map((e) => {
-              const activo = resultado.estadoResultado === e.value
-              return (
-                <button
-                  key={e.value}
-                  type="button"
-                  onClick={() => cambiarEstado(e.value)}
-                  disabled={soloLectura}
-                  className={`px-2 py-1 text-xs font-medium rounded border transition ${
-                    activo
-                      ? `${e.color} ring-2 ring-blue-500`
-                      : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                  } disabled:opacity-50 disabled:cursor-not-allowed`}
-                >
+          <div className="space-y-2">
+            <select
+              value={resultado.estadoResultado || 'bueno'}
+              onChange={(e) => cambiarEstado(e.target.value)}
+              disabled={soloLectura}
+              className={`w-full px-3 py-2 text-xs border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition ${
+                soloLectura ? 'bg-gray-100 text-gray-600 cursor-not-allowed' : 'bg-white'
+              }`}
+            >
+              {ESTADOS.map((e) => (
+                <option key={e.value} value={e.value}>
                   {e.label}
-                </button>
-              )
-            })}
+                </option>
+              ))}
+            </select>
+            {resultado.estadoResultado && (
+              <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded ${
+                ESTADOS.find(e => e.value === resultado.estadoResultado)?.color
+              }`}>
+                {ESTADOS.find(e => e.value === resultado.estadoResultado)?.label}
+              </span>
+            )}
           </div>
           {requiereObs && (
             <textarea
@@ -479,29 +520,68 @@ function FilaPunto({ index, resultado, soloLectura, onCambiar, onFirmar, onSubir
               <span className="text-xs text-gray-400 italic">Sin fotos</span>
             )}
           </div>
-          {!soloLectura && (
-            <>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                capture="environment"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  if (file) onSubirFoto(resultado.id, file)
-                  e.target.value = ''
-                }}
-              />
+
+          {!soloLectura && modoCaptura === null && (
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={iniciarCapturaCamara}
+                className="px-2 py-1 text-xs bg-blue-600 hover:bg-blue-700 text-white rounded font-medium"
+              >
+                📷 Capturar
+              </button>
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded border border-gray-300"
+                className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded border border-gray-300 text-gray-700"
               >
-                📷 Agregar foto
+                📁 Cargar archivo
               </button>
-            </>
+            </div>
           )}
+
+          {modoCaptura === 'camara' && (
+            <div className="fixed inset-0 bg-black/75 flex flex-col items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-lg w-full max-w-md overflow-hidden">
+                <div className="bg-gray-200 relative">
+                  <video
+                    ref={videoRef}
+                    className="w-full aspect-video object-cover"
+                    playsInline
+                  />
+                </div>
+                <canvas ref={canvasRef} className="hidden" />
+                <div className="flex gap-2 p-4">
+                  <button
+                    type="button"
+                    onClick={cerrarCaptura}
+                    className="flex-1 px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded font-medium text-sm"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={capturarFoto}
+                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded font-medium text-sm"
+                  >
+                    📷 Capturar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) onSubirFoto(resultado.id, file)
+              e.target.value = ''
+            }}
+          />
         </td>
       </tr>
   )

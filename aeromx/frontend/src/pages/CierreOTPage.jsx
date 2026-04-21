@@ -15,6 +15,7 @@ export default function CierreOTPage() {
   const [submitLoading, setSubmitLoading] = useState(false)
   const [cierre, setCierre] = useState(null)
   const [step, setStep] = useState('resumen') // 'resumen' o 'firma'
+  const [firmaConfirmada, setFirmaConfirmada] = useState(false)
 
   const { register, handleSubmit, formState: { errors } } = useForm({
     defaultValues: {
@@ -57,19 +58,24 @@ export default function CierreOTPage() {
   }
 
   const handleFirmar = async () => {
+    if (!firmaConfirmada) {
+      setError('Debe confirmar que está de acuerdo con los datos antes de firmar')
+      return
+    }
     setSubmitLoading(true)
     try {
       const firmaData = {
         tipo: user.rol
       }
       await ordenesService.firmarCierre(id, firmaData)
-      cargarOrden()
-      // Mostrar éxito y opción de descargar PDF
+      await cargarOrden()
+      setFirmaConfirmada(false)
       setTimeout(() => {
         descargarPDF()
-      }, 1000)
+      }, 1500)
     } catch (err) {
       setError(err.response?.data?.message || 'Error firmando cierre')
+      setFirmaConfirmada(false)
     } finally {
       setSubmitLoading(false)
     }
@@ -226,47 +232,98 @@ export default function CierreOTPage() {
               </h2>
 
               <div className="space-y-6">
-                <div className="p-4 bg-blue-50 rounded-lg">
-                  <p className="text-gray-700 mb-2">
-                    <strong>Técnico/Ingeniero:</strong> {orden?.tecnico?.nombre}
-                  </p>
-                  <p className="text-gray-700">
-                    <strong>Supervisor:</strong> {orden?.supervisor?.nombre || 'No asignado'}
-                  </p>
+                {/* Resumen de datos a firmar */}
+                <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                  <h3 className="font-semibold text-gray-800 mb-3">Datos de la Orden</h3>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-gray-600">Orden:</p>
+                      <p className="font-semibold text-blue-600">{orden?.numeroOt}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-600">Aeronave:</p>
+                      <p className="font-semibold">{orden?.aeronave?.matricula}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-600">Técnico:</p>
+                      <p className="font-semibold">{orden?.tecnico?.nombre}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-600">Supervisor:</p>
+                      <p className="font-semibold">{orden?.supervisor?.nombre || '—'}</p>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-                  <p className="text-gray-600 mb-4">
-                    Firma digital registrada automáticamente con tu autenticación
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Usuario: {user?.email}
-                  </p>
+                {/* Información de firma */}
+                <div className="p-5 bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-lg">
+                  <div className="flex gap-3 mb-3">
+                    <span className="text-2xl">🔐</span>
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-800">Firma Digital Segura</p>
+                      <p className="text-sm text-gray-600">Tu identidad será registrada automáticamente</p>
+                    </div>
+                  </div>
+                  <div className="ml-9 space-y-2 text-sm text-gray-700">
+                    <p><strong>Usuario autenticado:</strong> {user?.email}</p>
+                    <p><strong>Rol:</strong> {user?.rol?.charAt(0).toUpperCase() + user?.rol?.slice(1)}</p>
+                    <p><strong>Fecha y hora:</strong> {new Date().toLocaleString('es-MX')}</p>
+                  </div>
                 </div>
 
+                {/* Confirmación requerida */}
+                <label className="flex items-center gap-3 p-4 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 transition">
+                  <input
+                    type="checkbox"
+                    checked={firmaConfirmada}
+                    onChange={(e) => setFirmaConfirmada(e.target.checked)}
+                    className="w-5 h-5 text-green-600 rounded focus:ring-2 focus:ring-green-500"
+                  />
+                  <span className="text-gray-800 font-medium">
+                    Confirmo que he revisado los datos y autorizo el cierre de esta orden de trabajo
+                  </span>
+                </label>
+
+                {/* Botones de acción */}
                 <div className="flex gap-4">
                   <button
                     type="button"
-                    onClick={() => setStep('resumen')}
-                    className="flex-1 px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+                    onClick={() => {
+                      setStep('resumen')
+                      setFirmaConfirmada(false)
+                    }}
+                    className="flex-1 px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition font-medium"
                   >
                     ← Volver
                   </button>
                   <button
                     onClick={handleFirmar}
-                    disabled={submitLoading}
-                    className="flex-1 px-6 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white rounded-lg transition"
+                    disabled={submitLoading || !firmaConfirmada}
+                    className="flex-1 px-6 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg transition font-semibold text-lg"
                   >
-                    {submitLoading ? 'Firmando...' : 'Firmar y Completar'}
+                    {submitLoading ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <span className="inline-block animate-spin">⏳</span>
+                        Firmando...
+                      </span>
+                    ) : (
+                      '✓ Firmar y Completar'
+                    )}
                   </button>
                 </div>
 
-                {orden?.cierre?.firmasTecnico?.length > 0 && (
-                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                    <p className="text-green-800 font-semibold">✓ Orden completada exitosamente</p>
+                {/* Confirmación de éxito */}
+                {orden?.estado === 'cerrada' && (
+                  <div className="p-4 bg-green-50 border-2 border-green-300 rounded-lg">
+                    <p className="text-green-800 font-bold text-lg mb-3">
+                      ✓ Orden completada exitosamente
+                    </p>
+                    <p className="text-sm text-green-700 mb-4">
+                      La orden ha sido firmada y cerrada. Se descargará el PDF automáticamente.
+                    </p>
                     <button
                       onClick={descargarPDF}
-                      className="mt-2 text-green-600 hover:text-green-800 font-medium"
+                      className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded font-medium transition"
                     >
                       📥 Descargar PDF
                     </button>

@@ -190,74 +190,107 @@ export async function generarPDF(req, res, next) {
   const orden = await svc.obtenerOrden(req.params.id)
   if (!orden) return res.status(404).json({ error: 'Orden no encontrada' })
 
-  // pdfkit es CJS — se importa dinámicamente para compatibilidad con ESM
   const { default: PDFDocument } = await import('pdfkit')
 
   const doc = new PDFDocument({ margin: 40, size: 'LETTER' })
   res.setHeader('Content-Type', 'application/pdf')
-  res.setHeader('Content-Disposition', `attachment; filename="${orden.numeroOt}.pdf"`)
+  res.setHeader('Content-Disposition', `attachment; filename="OT-${orden.numeroOt}.pdf"`)
   doc.pipe(res)
 
   // ── Encabezado ──
-  doc.fontSize(18).font('Helvetica-Bold')
-    .text('AeroMX — Orden de Trabajo', { align: 'center' })
-  doc.fontSize(14).font('Helvetica')
+  doc.fontSize(20).font('Helvetica-Bold')
+    .text('AEROMX', { align: 'center' })
+  doc.fontSize(14).font('Helvetica-Bold')
+    .text('ORDEN DE TRABAJO DE MANTENIMIENTO', { align: 'center' })
+  doc.fontSize(12).font('Helvetica')
     .text(orden.numeroOt, { align: 'center' })
-  doc.moveDown(0.5)
+
+  // Línea separadora
+  doc.moveTo(40, doc.y).lineTo(555, doc.y).stroke()
+  doc.moveDown(0.3)
 
   // ── Datos generales ──
-  doc.fontSize(10)
+  doc.fontSize(10).font('Helvetica-Bold').text('INFORMACIÓN GENERAL')
+  doc.fontSize(9).font('Helvetica')
   doc.text(`Formato: ${orden.formato.nombre} v${orden.formato.version}`)
-  doc.text(`Aeronave: ${orden.aeronave.matricula} — ${orden.aeronave.modelo.nombre}`)
-  doc.text(`Técnico: ${orden.tecnico.nombre}${orden.tecnico.licenciaNum ? ` (Lic. ${orden.tecnico.licenciaNum})` : ''}`)
-  doc.text(`Supervisor: ${orden.supervisor.nombre}`)
+  doc.text(`Aeronave: ${orden.aeronave.matricula} (${orden.aeronave.modelo.nombre})`)
+  doc.text(`Técnico: ${orden.tecnico.nombre}${orden.tecnico.licenciaNum ? ` | Lic. ${orden.tecnico.licenciaNum}` : ''}`)
+  if (orden.supervisor) doc.text(`Supervisor: ${orden.supervisor.nombre}`)
   if (orden.cliente) doc.text(`Cliente: ${orden.cliente}`)
-  if (orden.ordenServicio) doc.text(`Orden de servicio: ${orden.ordenServicio}`)
-  doc.text(`Horas totales: ${orden.horasAlMomento}  |  Motor Der: ${orden.horasMotorDer}  |  Motor Izq: ${orden.horasMotorIzq}`)
+  if (orden.ordenServicio) doc.text(`Orden de Servicio: ${orden.ordenServicio}`)
+  doc.fontSize(9).text(`Horas: Total ${orden.horasAlMomento} | Motor Der. ${orden.horasMotorDer} | Motor Izq. ${orden.horasMotorIzq}`)
   doc.text(`Estado: ${orden.estado.replace(/_/g, ' ').toUpperCase()}`)
   if (orden.fechaInicio) doc.text(`Inicio: ${new Date(orden.fechaInicio).toLocaleDateString('es-MX')}`)
   if (orden.fechaCierre) doc.text(`Cierre: ${new Date(orden.fechaCierre).toLocaleDateString('es-MX')}`)
-  doc.moveDown()
+  doc.moveDown(0.3)
+
+  // Línea separadora
+  doc.moveTo(40, doc.y).lineTo(555, doc.y).stroke()
+  doc.moveDown(0.3)
 
   // ── Secciones e inspección ──
+  doc.fontSize(10).font('Helvetica-Bold').text('RESULTADOS DE INSPECCIÓN')
+  doc.fontSize(9).font('Helvetica')
   const resultadosPorPunto = Object.fromEntries(orden.resultados.map(r => [r.puntoId, r]))
 
+  let puntosCompletos = 0
+  let totalPuntos = 0
+
   for (const seccion of orden.formato.secciones) {
-    doc.font('Helvetica-Bold').fontSize(11).text(seccion.nombre.toUpperCase())
+    doc.moveDown(0.2)
+    doc.font('Helvetica-Bold').fontSize(10).text(`► ${seccion.nombre.toUpperCase()}`)
     doc.font('Helvetica').fontSize(9)
 
     for (const punto of seccion.puntos) {
       const r = resultadosPorPunto[punto.id]
       if (!r) continue
+      totalPuntos++
+      if (r.completado) puntosCompletos++
 
       const estado = r.estadoResultado.replace(/_/g, ' ').toUpperCase()
       const critico = punto.esCritico ? ' [CRÍTICO]' : ''
-      const firma = r.firmadoPor ? ` ✓ Firmado: ${r.firmante?.nombre ?? ''}` : ''
-      doc.text(`  • ${punto.nombreComponente}${critico}: ${estado}${firma}`)
-      if (r.observacion) doc.text(`      Obs: ${r.observacion}`, { indent: 20 })
-      if (r.fotos.length > 0) doc.text(`      Fotos adjuntas: ${r.fotos.length}`, { indent: 20 })
+      const firma = r.firmadoPor ? ` ✓ ${r.firmante?.nombre ?? 'Firmado'}` : ''
+      const completado = r.completado ? '✓' : '○'
+      doc.text(`  ${completado} ${punto.nombreComponente}${critico}: ${estado}${firma}`)
+      if (r.observacion) doc.text(`      ► ${r.observacion}`, { indent: 30, fontSize: 8 })
+      if (r.fotos.length > 0) doc.text(`      Fotos: ${r.fotos.length}`, { indent: 30, fontSize: 8, color: '#0066cc' })
     }
-    doc.moveDown(0.4)
   }
+  doc.moveDown(0.3)
+
+  // Línea separadora
+  doc.moveTo(40, doc.y).lineTo(555, doc.y).stroke()
+  doc.moveDown(0.2)
+
+  // ── Resumen ──
+  doc.fontSize(10).font('Helvetica-Bold').text('RESUMEN')
+  doc.fontSize(9).font('Helvetica')
+  doc.text(`Puntos completados: ${puntosCompletos} / ${totalPuntos}`)
 
   // ── Cierre ──
   if (orden.cierre) {
-    doc.moveDown(0.5)
-    doc.font('Helvetica-Bold').fontSize(11).text('CIERRE')
-    doc.font('Helvetica').fontSize(10)
+    doc.moveDown(0.3)
+    doc.fontSize(10).font('Helvetica-Bold').text('CIERRE Y FIRMAS')
+    doc.fontSize(9).font('Helvetica')
     doc.text(`¿Se encontró defecto?: ${orden.cierre.seEncontroDefecto ? 'Sí' : 'No'}`)
-    if (orden.cierre.refDocCorrectivo) doc.text(`Ref. doc. correctivo: ${orden.cierre.refDocCorrectivo}`)
+    if (orden.cierre.refDocCorrectivo) doc.text(`Documento correctivo: ${orden.cierre.refDocCorrectivo}`)
     if (orden.cierre.observacionesGenerales) doc.text(`Observaciones: ${orden.cierre.observacionesGenerales}`)
-    doc.moveDown(0.4)
+    doc.moveDown(0.2)
     if (orden.cierre.tecnico) {
-      doc.text(`Firma técnico/ingeniero: ${orden.cierre.tecnico.nombre}`)
-      if (orden.cierre.fechaFirmaTecnico) doc.text(`  Fecha: ${new Date(orden.cierre.fechaFirmaTecnico).toLocaleDateString('es-MX')}`)
+      doc.text(`✓ Firma Técnico/Ingeniero: ${orden.cierre.tecnico.nombre}`)
+      if (orden.cierre.fechaFirmaTecnico) doc.text(`  ${new Date(orden.cierre.fechaFirmaTecnico).toLocaleString('es-MX')}`, { fontSize: 8 })
     }
     if (orden.cierre.supervisor) {
-      doc.text(`Firma supervisor: ${orden.cierre.supervisor.nombre}`)
-      if (orden.cierre.fechaFirmaSupervisor) doc.text(`  Fecha: ${new Date(orden.cierre.fechaFirmaSupervisor).toLocaleDateString('es-MX')}`)
+      doc.text(`✓ Firma Supervisor: ${orden.cierre.supervisor.nombre}`)
+      if (orden.cierre.fechaFirmaSupervisor) doc.text(`  ${new Date(orden.cierre.fechaFirmaSupervisor).toLocaleString('es-MX')}`, { fontSize: 8 })
     }
   }
+
+  // Pie de página
+  doc.moveDown(1)
+  doc.fontSize(8).font('Helvetica').fillColor('#999')
+    .text('Documento generado digitalmente por AeroMX', { align: 'center' })
+    .text(`Fecha de emisión: ${new Date().toLocaleString('es-MX')}`, { align: 'center' })
 
   doc.end()
   } catch (e) { next(e) }
