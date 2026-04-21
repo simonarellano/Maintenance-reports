@@ -193,7 +193,7 @@ FORMATO DE MANTENIMIENTO
 - Confirmar si se necesita modo offline
 - Confirmar si `ref_doc_correctivo` es solo texto o también permite adjuntar PDF
 
-## Estado del Proyecto — Última actualización: Sesión 4 (~50% total)
+## Estado del Proyecto — Última actualización: Sesión 5 (~55% total)
 
 ### Completado (backend 100% + frontend funcional)
 | Archivo | Descripción |
@@ -221,7 +221,7 @@ FORMATO DE MANTENIMIENTO
 | `backend/src/services/ordenesService.js` | generarNumeroOT (OT-YYYYMMDD-XXXX) · listar/obtener/crear O/T · actualizarEstado · actualizarResultado · firmarResultado · agregarFoto/eliminarFoto · crearOActualizarCierre · firmarCierre (cierra O/T cuando ambas firmas presentes) · verificarPuntosCompletos |
 | `backend/package.json` | type=module, pdfkit añadido, scripts dev/migrate/seed |
 | `frontend/package.json` | React + Vite + TailwindCSS + Zustand + PWA |
-| `frontend/vite.config.js` | PWA manifest + proxy /api → localhost:3000 |
+| `frontend/vite.config.js` | PWA manifest + proxy /api y /uploads → localhost:3000 |
 | `backend/.env.example` | Variables: DATABASE_URL, JWT_SECRET, PORT, STORAGE_PROVIDER, CORS_ORIGIN |
 | `backend/.env` | Configurado para desarrollo local (Postgres en Docker, MinIO local) |
 | `aeromx/docker-compose.yml` | Postgres 16 + MinIO — levantar con `docker compose up -d` |
@@ -229,7 +229,7 @@ FORMATO DE MANTENIMIENTO
 | `frontend/src/pages/LoginPage.jsx` | Login funcional con JWT |
 | `frontend/src/pages/DashboardPage.jsx` | Lista de O/T del usuario |
 | `frontend/src/pages/CrearOTPage.jsx` | Crear O/T desde plantilla — **funcional** |
-| `frontend/src/pages/InspeccionPage.jsx` | Flujo de inspección por punto |
+| `frontend/src/pages/InspeccionPage.jsx` | Flujo de inspección — tabla por sección (Componente · Descripción · Condición · Firma · Fotos) |
 | `frontend/src/pages/CierreOTPage.jsx` | Cierre y firma de O/T |
 
 ### API completa — Endpoints implementados
@@ -322,8 +322,17 @@ npm run dev                   # UI en http://localhost:5173
 - `ordenesService.crearOrden`: usaba shorthand de FK (`formatoId`) que el cliente Prisma no aceptaba → cambiado a sintaxis `connect` explícita para todas las relaciones
 - `frontend/App.jsx`: warnings de React Router v7 future flags → agregados `v7_startTransition` y `v7_relativeSplatPath`
 
-### Siguiente paso — Sesión 5
-1. **Flujo de inspección**: probar y pulir `InspeccionPage` — radio buttons por punto, observación condicional, cámara
-2. **Cierre y firma**: probar `CierreOTPage` — firma digital con canvas, doble firma
-3. **Dashboard**: filtros por estado, refresh automático
-4. **UX móvil**: probar en celular/tablet (PWA), ajustar touch targets
+### Cambios en Sesión 5
+- **Rediseño de InspeccionPage** (commit `ad2c2b3`): las tarjetas por punto se reemplazaron por una **tabla por sección** con columnas Componente · Descripción de trabajo · Condición · Firma técnico · Registro fotográfico. Se respeta el orden del formato y se puede colapsar/expandir cada sección.
+- `ordenesService.obtenerOrden` ahora incluye `punto.seccion` en el resultado — sin esto, el frontend no podía agrupar los puntos por sección real y caían todos en "Sin sección".
+- Subida/eliminación de fotos y firma de puntos críticos quedan integradas en la misma tabla.
+- `vite.config.js`: se agregó proxy de `/uploads` → `localhost:3000` para que las miniaturas carguen en dev.
+- Ajustes menores en `.env.example` y `docker-compose.yml` (commit `70c0ef3`).
+- ⚠️ Quedaron dos archivos de prueba commiteados en `backend/uploads/` — revisar si deben limpiarse y agregarse al `.gitignore`.
+
+### Siguiente paso — Sesión 6
+1. **Cierre y firma**: probar `CierreOTPage` — firma digital con canvas, doble firma
+2. **Dashboard**: filtros por estado, refresh automático, mejorar listado
+3. **UX móvil**: probar tabla de inspección en celular/tablet (PWA), ajustar touch targets — la tabla puede ser densa en pantallas chicas
+4. **Cámara nativa**: capturar foto directo desde la cámara del dispositivo (no solo upload)
+5. **Limpieza**: revisar `backend/uploads/` y `.gitignore`
