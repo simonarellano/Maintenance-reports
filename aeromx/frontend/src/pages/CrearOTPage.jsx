@@ -29,6 +29,7 @@ export default function CrearOTPage() {
     defaultValues: {
       cliente: '',
       ordenServicio: '',
+      lugarMantenimiento: '',
       formatoId: '',
       aeronaveId: '',
       supervisorId: '',
@@ -90,6 +91,7 @@ export default function CrearOTPage() {
         ...data,
         supervisorId: data.supervisorId || undefined,
         tecnicoId: (esSupervisor && data.tecnicoId) ? data.tecnicoId : undefined,
+        lugarMantenimiento: data.lugarMantenimiento?.trim() || undefined,
         horasAlMomento: data.horasAlMomento === '' ? 0 : parseFloat(data.horasAlMomento),
         horasMotorDer:  data.horasMotorDer  === '' ? 0 : parseFloat(data.horasMotorDer),
         horasMotorIzq:  data.horasMotorIzq  === '' ? 0 : parseFloat(data.horasMotorIzq),
@@ -321,6 +323,21 @@ export default function CrearOTPage() {
                     placeholder="Número de orden de servicio"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  📍 Lugar donde se realiza el mantenimiento
+                </label>
+                <input
+                  type="text"
+                  {...register('lugarMantenimiento')}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Ej. Hangar 3 · Aeropuerto Toluca · Rampa Norte"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Hangar, base operativa, rampa o ubicación específica donde se ejecutará el servicio.
+                </p>
               </div>
             </div>
 

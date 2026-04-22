@@ -291,6 +291,12 @@ export default function InspeccionPage() {
                 <p className="font-semibold">{orden.ordenServicio}</p>
               </div>
             )}
+            {orden.lugarMantenimiento && (
+              <div>
+                <p className="text-gray-500 text-xs uppercase tracking-wide">Lugar</p>
+                <p className="font-semibold">📍 {orden.lugarMantenimiento}</p>
+              </div>
+            )}
             <div>
               <p className="text-gray-500 text-xs uppercase tracking-wide">Fecha inicio</p>
               <p className="font-semibold">

@@ -18,6 +18,10 @@ export async function listarOrdenes(filtros = {}) {
   if (filtros.aeronaveId) where.aeronaveId = filtros.aeronaveId
   if (filtros.tecnicoId) where.tecnicoId = filtros.tecnicoId
 
+  // archivada: true | false | 'todas' (por defecto excluye archivadas)
+  if (filtros.archivada === true)  where.archivada = true
+  else if (filtros.archivada === false) where.archivada = false
+
   const ordenes = await prisma.ordenTrabajo.findMany({
     where,
     orderBy: { createdAt: 'desc' },
@@ -73,7 +77,8 @@ export function obtenerOrden(id) {
 export async function crearOrden(data) {
   const {
     formatoId, aeronaveId, tecnicoId, supervisorId,
-    cliente, ordenServicio, horasAlMomento, horasMotorDer, horasMotorIzq,
+    cliente, ordenServicio, lugarMantenimiento,
+    horasAlMomento, horasMotorDer, horasMotorIzq,
   } = data
 
   // Obtener modelo de la aeronave para filtrar puntos excluidos
@@ -108,6 +113,7 @@ export async function crearOrden(data) {
       ...(supervisorId ? { supervisor: { connect: { id: supervisorId } } } : {}),
       cliente,
       ordenServicio,
+      lugarMantenimiento,
       horasAlMomento: horasAlMomento ?? 0,
       horasMotorDer:  horasMotorDer  ?? 0,
       horasMotorIzq:  horasMotorIzq  ?? 0,
@@ -177,6 +183,43 @@ export async function iniciarMantenimiento(id) {
   return prisma.ordenTrabajo.update({
     where: { id },
     data: { estado: 'en_proceso', fechaInicio: new Date() },
+  })
+}
+
+// Archivar / desarchivar la orden (no borra, oculta del dashboard principal).
+export function archivarOrden(id, archivada = true) {
+  return prisma.ordenTrabajo.update({
+    where: { id },
+    data: { archivada },
+  })
+}
+
+// Eliminación definitiva — solo permitida para órdenes en borrador sin datos capturados.
+export async function eliminarOrden(id) {
+  const orden = await prisma.ordenTrabajo.findUnique({
+    where: { id },
+    include: { _count: { select: { resultados: true } } },
+  })
+  if (!orden) throw Object.assign(new Error('Orden no encontrada'), { code: 'NOT_FOUND' })
+  if (orden.estado !== 'borrador' && !orden.archivada) {
+    throw Object.assign(
+      new Error('Solo se pueden eliminar órdenes en borrador o archivadas. Cambia a borrador o archívala primero.'),
+      { code: 'BAD_STATE' },
+    )
+  }
+
+  // Borrar en cascada manual: fotos → resultados → cierre → orden
+  await prisma.$transaction(async (tx) => {
+    const resultados = await tx.resultadoPunto.findMany({
+      where: { ordenId: id }, select: { id: true },
+    })
+    const ids = resultados.map((r) => r.id)
+    if (ids.length > 0) {
+      await tx.fotoInspeccion.deleteMany({ where: { resultadoId: { in: ids } } })
+      await tx.resultadoPunto.deleteMany({ where: { ordenId: id } })
+    }
+    await tx.cierreOT.deleteMany({ where: { ordenId: id } })
+    await tx.ordenTrabajo.delete({ where: { id } })
   })
 }
 

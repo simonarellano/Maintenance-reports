@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Header } from '../components/Header'
 import { ordenesService } from '../api/ordenesService'
+import { useAuthStore } from '../store/authStore'
 
 const ESTADO_COLORS = {
   borrador:        'bg-gray-100 text-gray-800 border-gray-300',
@@ -22,20 +23,27 @@ const FILTROS_ORDEN = ['todas', 'borrador', 'en_proceso', 'pendiente_firma', 'ce
 
 export default function DashboardPage() {
   const navigate = useNavigate()
+  const user = useAuthStore((s) => s.user)
+  const esSupervisor = user?.rol === 'supervisor'
   const [ordenes, setOrdenes] = useState([])
   const [filtro, setFiltro] = useState('todas')
+  const [vistaArchivo, setVistaArchivo] = useState('activas') // activas | archivadas | todas
   const [busqueda, setBusqueda] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {
     cargarOrdenes()
-  }, [filtro])
+  }, [filtro, vistaArchivo])
 
   const cargarOrdenes = async () => {
     setLoading(true)
     try {
-      const params = filtro === 'todas' ? {} : { estado: filtro }
+      const params = {}
+      if (filtro !== 'todas') params.estado = filtro
+      if (vistaArchivo === 'archivadas') params.archivada = 'true'
+      else if (vistaArchivo === 'todas') params.archivada = 'todas'
+      // por defecto vistaArchivo='activas' → backend excluye archivadas
       const response = await ordenesService.listar(params)
       setOrdenes(response.data || [])
       setError('')
@@ -44,6 +52,31 @@ export default function DashboardPage() {
       console.error(err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const archivarOrden = async (e, orden) => {
+    e.stopPropagation()
+    const accion = orden.archivada ? 'desarchivar' : 'archivar'
+    if (!confirm(`¿${accion === 'archivar' ? 'Archivar' : 'Desarchivar'} la orden ${orden.numeroOt}?`)) return
+    try {
+      await ordenesService.archivar(orden.id, !orden.archivada)
+      await cargarOrdenes()
+    } catch (err) {
+      setError(err.response?.data?.error || `Error al ${accion} la orden`)
+    }
+  }
+
+  const eliminarOrden = async (e, orden) => {
+    e.stopPropagation()
+    if (!confirm(
+      `⚠️ ¿Eliminar definitivamente la orden ${orden.numeroOt}?\n\nEsta acción es IRREVERSIBLE y borrará todos sus datos asociados.`
+    )) return
+    try {
+      await ordenesService.eliminar(orden.id)
+      await cargarOrdenes()
+    } catch (err) {
+      setError(err.response?.data?.error || 'Error eliminando la orden')
     }
   }
 
@@ -132,6 +165,28 @@ export default function DashboardPage() {
               </button>
             ))}
           </div>
+
+          {/* Vista de archivo */}
+          <div className="flex gap-2 flex-wrap items-center pt-2 border-t border-gray-200">
+            <span className="text-xs text-gray-500 uppercase font-semibold mr-1">Archivo:</span>
+            {[
+              { value: 'activas',     label: 'Activas' },
+              { value: 'archivadas',  label: 'Archivadas' },
+              { value: 'todas',       label: 'Mostrar todas' },
+            ].map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setVistaArchivo(opt.value)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                  vistaArchivo === opt.value
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-gray-100 text-gray-700 border border-gray-300 hover:border-indigo-400'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
           <div className="relative">
             <input
               type="text"
@@ -200,12 +255,17 @@ export default function DashboardPage() {
                         <p className="text-gray-600 text-sm">{orden.cliente}</p>
                       )}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
                         ESTADO_COLORS[orden.estado]
                       }`}>
                         {ESTADO_LABELS[orden.estado]?.replace(' (histórico)', '')}
                       </span>
+                      {orden.archivada && (
+                        <span className="px-2 py-1 bg-gray-200 text-gray-700 text-xs rounded-full font-semibold">
+                          Archivada
+                        </span>
+                      )}
                       {esCerrada && (
                         <button
                           onClick={(e) => descargarPDF(e, orden.id, orden.numeroOt)}
@@ -214,6 +274,30 @@ export default function DashboardPage() {
                         >
                           📄 PDF
                         </button>
+                      )}
+                      {esSupervisor && (
+                        <>
+                          <button
+                            onClick={(e) => archivarOrden(e, orden)}
+                            className={`px-3 py-1 text-xs rounded font-semibold border ${
+                              orden.archivada
+                                ? 'bg-indigo-100 hover:bg-indigo-200 text-indigo-700 border-indigo-300'
+                                : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border-gray-300'
+                            }`}
+                            title={orden.archivada ? 'Desarchivar' : 'Archivar'}
+                          >
+                            {orden.archivada ? '↩ Desarchivar' : '🗄 Archivar'}
+                          </button>
+                          {(orden.estado === 'borrador' || orden.archivada) && (
+                            <button
+                              onClick={(e) => eliminarOrden(e, orden)}
+                              className="px-3 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded font-semibold border border-red-300"
+                              title="Eliminar definitivamente"
+                            >
+                              🗑 Eliminar
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
@@ -240,6 +324,12 @@ export default function DashboardPage() {
                       <p className="text-gray-500 text-xs">Formato</p>
                       <p className="font-semibold">{orden.formato?.nombre}</p>
                     </div>
+                    {orden.lugarMantenimiento && (
+                      <div>
+                        <p className="text-gray-500 text-xs">Lugar</p>
+                        <p className="font-semibold">📍 {orden.lugarMantenimiento}</p>
+                      </div>
+                    )}
                     <div>
                       <p className="text-gray-500 text-xs">Recepción</p>
                       <p className="font-semibold">

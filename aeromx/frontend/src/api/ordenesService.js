@@ -22,6 +22,12 @@ export const ordenesService = {
   asignar: (id, { tecnicoId, supervisorId }) =>
     client.patch(`/ordenes/${id}/asignacion`, { tecnicoId, supervisorId }),
 
+  archivar: (id, archivada = true) =>
+    client.patch(`/ordenes/${id}/archivar`, { archivada }),
+
+  eliminar: (id) =>
+    client.delete(`/ordenes/${id}`),
+
   actualizarResultado: (id, resultadoId, data) =>
     client.patch(`/ordenes/${id}/puntos/${resultadoId}`, data),
 

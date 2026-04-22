@@ -177,10 +177,12 @@ model OrdenTrabajo {
   supervisorId   String?   @map("supervisor_id")
   cliente        String?
   ordenServicio  String?   @map("orden_servicio")
+  lugarMantenimiento String? @map("lugar_mantenimiento")
   horasAlMomento Float     @default(0) @map("horas_al_momento")
   horasMotorDer  Float     @default(0) @map("horas_motor_der")
   horasMotorIzq  Float     @default(0) @map("horas_motor_izq")
   estado         EstadoOT  @default(borrador)
+  archivada      Boolean   @default(false)
   // Hitos temporales del ciclo de vida de la O/T
   fechaRecepcion DateTime? @map("fecha_recepcion")
   matriculaRecepcion String? @map("matricula_recepcion")

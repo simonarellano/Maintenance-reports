@@ -35,9 +35,12 @@ export function Header() {
             <h1 className="text-2xl font-bold">AeroMX</h1>
             <p className="text-blue-100 text-xs">Gestión de Mantenimiento</p>
           </div>
-          <nav className="flex items-center gap-1">
+          <nav className="flex items-center gap-1 flex-wrap">
             {navLink('/dashboard', 'Órdenes')}
+            {navLink('/flota', 'Flota')}
+            {user?.rol === 'supervisor' && navLink('/aeronaves', 'Aeronaves')}
             {user?.rol === 'supervisor' && navLink('/modelos', 'Modelos')}
+            {user?.rol === 'supervisor' && navLink('/usuarios', 'Usuarios')}
           </nav>
         </div>
 

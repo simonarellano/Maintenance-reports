@@ -31,8 +31,16 @@ async function verificarPermisoEdicion(ordenId, user) {
 
 export async function listar(req, res, next) {
   try {
-    const { estado, aeronaveId, tecnicoId } = req.query
-    const ordenes = await svc.listarOrdenes({ estado, aeronaveId, tecnicoId })
+    const { estado, aeronaveId, tecnicoId, archivada } = req.query
+    // archivada: 'true' | 'false' | 'todas' (por defecto excluye archivadas)
+    let archivadaFiltro = false
+    if (archivada === 'true') archivadaFiltro = true
+    else if (archivada === 'todas') archivadaFiltro = undefined
+
+    const ordenes = await svc.listarOrdenes({
+      estado, aeronaveId, tecnicoId,
+      ...(archivadaFiltro !== undefined ? { archivada: archivadaFiltro } : {}),
+    })
     res.json(ordenes)
   } catch (e) { next(e) }
 }
@@ -46,7 +54,7 @@ export async function obtener(req, res, next) {
 }
 
 export async function crear(req, res, next) {
-  const { formatoId, aeronaveId, supervisorId, cliente, ordenServicio,
+  const { formatoId, aeronaveId, supervisorId, cliente, ordenServicio, lugarMantenimiento,
     horasAlMomento, horasMotorDer, horasMotorIzq, tecnicoId: tecnicoIdBody } = req.body
 
   // Supervisores pueden asignar la orden a otro técnico al crearla;
@@ -62,7 +70,8 @@ export async function crear(req, res, next) {
   try {
     const orden = await svc.crearOrden({
       formatoId, aeronaveId, tecnicoId, supervisorId,
-      cliente, ordenServicio, horasAlMomento, horasMotorDer, horasMotorIzq,
+      cliente, ordenServicio, lugarMantenimiento,
+      horasAlMomento, horasMotorDer, horasMotorIzq,
     })
     res.status(201).json(orden)
   } catch (e) {
@@ -115,6 +124,28 @@ export async function iniciarMantenimiento(req, res, next) {
   } catch (e) {
     if (e.code === 'NOT_FOUND') return res.status(404).json({ error: e.message })
     if (e.code === 'CONFLICT') return res.status(409).json({ error: e.message })
+    if (e.code === 'BAD_STATE') return res.status(400).json({ error: e.message })
+    next(e)
+  }
+}
+
+export async function archivar(req, res, next) {
+  try {
+    const { archivada = true } = req.body
+    const orden = await svc.archivarOrden(req.params.id, Boolean(archivada))
+    res.json(orden)
+  } catch (e) {
+    if (e.code === 'P2025') return res.status(404).json({ error: 'Orden no encontrada' })
+    next(e)
+  }
+}
+
+export async function eliminar(req, res, next) {
+  try {
+    await svc.eliminarOrden(req.params.id)
+    res.status(204).send()
+  } catch (e) {
+    if (e.code === 'NOT_FOUND') return res.status(404).json({ error: e.message })
     if (e.code === 'BAD_STATE') return res.status(400).json({ error: e.message })
     next(e)
   }
@@ -362,11 +393,12 @@ export async function generarPDF(req, res, next) {
       ['Formato',                `${orden.formato.nombre} · v${orden.formato.version}`],
       ['Cliente',                orden.cliente || '—'],
       ['Orden de servicio',      orden.ordenServicio || '—'],
+      ['Lugar de mantenimiento', orden.lugarMantenimiento || '—'],
+      ['Estado actual',          orden.estado.replace(/_/g, ' ').toUpperCase()],
       ['1. Creación de orden',   fechaCreacion],
       ['2. Recepción aeronave',  fechaRecepcion],
       ['3. Inicio mantenimiento', fechaInicio],
       ['4. Cierre / firma',      fechaCierre],
-      ['Estado actual',          orden.estado.replace(/_/g, ' ').toUpperCase()],
     ], M, CONTENT_W)
 
     // ═══════════════════════════════════════════════════════════════════════

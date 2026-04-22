@@ -127,6 +127,27 @@ aeromx/
    - Firma digital automática
    - Generación y descarga de PDF
 
+## ♻️ Después de un `git pull` con cambios de schema
+
+Cada vez que el `prisma/schema.prisma` cambie (campos nuevos como `fechaRecepcion`,
+`lugarMantenimiento`, `archivada`, etc.) hay que **regenerar el cliente Prisma y
+aplicar la migración a la base de datos**:
+
+```bash
+cd aeromx/backend
+
+# Aplica migraciones nuevas + regenera el cliente. Crea la migración si no existe.
+npx prisma migrate dev --name sync_qa_v3
+
+# Si la BD ya está creada y sólo necesitas sincronizarla rápido (sin migrations):
+# npx prisma db push
+```
+
+Si ves un error como
+`Unknown argument 'fechaRecepcion'. Available options are marked with ?` —
+significa que el cliente Prisma no se regeneró. Corre `npx prisma generate` o
+los comandos de arriba y reinicia `npm run dev`.
+
 ## 🛠️ Troubleshooting
 
 ### Error: `database "aeromx" does not exist`
@@ -140,6 +161,16 @@ aeromx/
 ### Error: `Cannot find module '@prisma/client'`
 - Ejecuta `npm install` en `aeromx/backend`
 - Luego `npm run db:generate`
+
+### Error: `Unknown argument 'fechaRecepcion' / 'lugarMantenimiento' / 'archivada'`
+- El schema cambió pero el cliente Prisma no se regeneró.
+- Soluciónalo en `aeromx/backend`:
+  ```bash
+  npx prisma migrate dev --name sync_qa_v3
+  # o, si no quieres crear migración:
+  npx prisma db push
+  ```
+- Reinicia `npm run dev` después de regenerar.
 
 ### Frontend no conecta con backend
 - Verifica que el backend corre en `http://localhost:3000`
