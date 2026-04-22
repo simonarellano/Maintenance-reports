@@ -135,6 +135,72 @@ export function actualizarEstadoOrden(id, estado) {
   return prisma.ordenTrabajo.update({ where: { id }, data })
 }
 
+// Registra la recepción de la aeronave validando la matrícula.
+// Solo técnicos asignados o supervisores pueden recepcionar.
+export async function registrarRecepcion(id, { matriculaConfirmada }) {
+  const orden = await prisma.ordenTrabajo.findUnique({
+    where: { id },
+    include: { aeronave: true },
+  })
+  if (!orden) throw Object.assign(new Error('Orden no encontrada'), { code: 'NOT_FOUND' })
+  if (orden.fechaRecepcion) {
+    throw Object.assign(new Error('La aeronave ya fue recepcionada'), { code: 'CONFLICT' })
+  }
+  const ingresada = (matriculaConfirmada || '').trim().toUpperCase()
+  const esperada = (orden.aeronave.matricula || '').trim().toUpperCase()
+  if (ingresada !== esperada) {
+    throw Object.assign(new Error('La matrícula ingresada no coincide con la de la aeronave'), { code: 'BAD_INPUT' })
+  }
+  return prisma.ordenTrabajo.update({
+    where: { id },
+    data: {
+      fechaRecepcion: new Date(),
+      matriculaRecepcion: esperada,
+    },
+  })
+}
+
+// Inicia el mantenimiento (desbloquea la edición de puntos).
+// Marca la orden como en_proceso y registra fechaInicio.
+export async function iniciarMantenimiento(id) {
+  const orden = await prisma.ordenTrabajo.findUnique({ where: { id } })
+  if (!orden) throw Object.assign(new Error('Orden no encontrada'), { code: 'NOT_FOUND' })
+  if (!orden.fechaRecepcion) {
+    throw Object.assign(
+      new Error('Debe registrar la recepción de la aeronave antes de iniciar el mantenimiento'),
+      { code: 'BAD_STATE' },
+    )
+  }
+  if (orden.fechaInicio) {
+    throw Object.assign(new Error('El mantenimiento ya fue iniciado'), { code: 'CONFLICT' })
+  }
+  return prisma.ordenTrabajo.update({
+    where: { id },
+    data: { estado: 'en_proceso', fechaInicio: new Date() },
+  })
+}
+
+// Asignar o reasignar técnico/supervisor a la orden (solo supervisores).
+export async function asignarOrden(id, { tecnicoId, supervisorId }) {
+  const data = {}
+  if (tecnicoId !== undefined) {
+    data.tecnico = tecnicoId ? { connect: { id: tecnicoId } } : undefined
+  }
+  if (supervisorId !== undefined) {
+    data.supervisor = supervisorId
+      ? { connect: { id: supervisorId } }
+      : { disconnect: true }
+  }
+  return prisma.ordenTrabajo.update({
+    where: { id },
+    data,
+    include: {
+      tecnico: { select: { id: true, nombre: true, rol: true } },
+      supervisor: { select: { id: true, nombre: true, rol: true } },
+    },
+  })
+}
+
 // ─── Resultados de Puntos ───────────────────────────────────────────────────
 
 export function obtenerResultado(ordenId, resultadoId) {

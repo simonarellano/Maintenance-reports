@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { Header } from '../components/Header'
 import { ordenesService } from '../api/ordenesService'
+import { usuariosService } from '../api/usuariosService'
+import { useAuthStore } from '../store/authStore'
 
 const ESTADOS = [
   { value: 'bueno',              label: 'Bueno',             color: 'bg-green-100  text-green-800  border-green-300'  },
@@ -15,10 +17,17 @@ const REQUIERE_OBSERVACION = ['correcto_con_danos', 'requiere_atencion']
 export default function InspeccionPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const user = useAuthStore((s) => s.user)
   const [orden, setOrden] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [collapsed, setCollapsed] = useState({})
+  const [matriculaInput, setMatriculaInput] = useState('')
+  const [recepcionLoading, setRecepcionLoading] = useState(false)
+  const [iniciarLoading, setIniciarLoading] = useState(false)
+  const [showAsignacion, setShowAsignacion] = useState(false)
+  const [tecnicos, setTecnicos] = useState([])
+  const [supervisores, setSupervisores] = useState([])
 
   useEffect(() => { cargarOrden() }, [id])
 
@@ -32,6 +41,68 @@ export default function InspeccionPage() {
       setError('Error cargando la orden')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const cargarUsuariosParaAsignacion = async () => {
+    try {
+      const [tecsRes, supsRes] = await Promise.all([
+        usuariosService.listar({ activo: true }),
+        usuariosService.listar({ rol: 'supervisor', activo: true }),
+      ])
+      // Filtrar sólo técnicos e ingenieros para asignación de la O/T
+      setTecnicos((tecsRes.data || []).filter(u => u.rol === 'tecnico' || u.rol === 'ingeniero'))
+      setSupervisores(supsRes.data || [])
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const abrirAsignacion = () => {
+    setShowAsignacion(true)
+    if (tecnicos.length === 0) cargarUsuariosParaAsignacion()
+  }
+
+  const guardarAsignacion = async (tecnicoId, supervisorId) => {
+    try {
+      await ordenesService.asignar(id, { tecnicoId, supervisorId })
+      setShowAsignacion(false)
+      await cargarOrden()
+    } catch (e) {
+      console.error(e)
+      setError(e.response?.data?.error || 'Error asignando la orden')
+    }
+  }
+
+  const recepcionarAeronave = async () => {
+    if (!matriculaInput.trim()) {
+      setError('Ingresa la matrícula para validar la recepción')
+      return
+    }
+    setRecepcionLoading(true)
+    try {
+      await ordenesService.recepcionarAeronave(id, matriculaInput.trim())
+      setMatriculaInput('')
+      setError('')
+      await cargarOrden()
+    } catch (e) {
+      setError(e.response?.data?.error || 'Error registrando la recepción')
+    } finally {
+      setRecepcionLoading(false)
+    }
+  }
+
+  const iniciarMantenimiento = async () => {
+    if (!confirm('¿Iniciar el mantenimiento? El timestamp se registrará ahora y se podrán capturar resultados.')) return
+    setIniciarLoading(true)
+    try {
+      await ordenesService.iniciarMantenimiento(id)
+      setError('')
+      await cargarOrden()
+    } catch (e) {
+      setError(e.response?.data?.error || 'Error iniciando el mantenimiento')
+    } finally {
+      setIniciarLoading(false)
     }
   }
 
@@ -138,6 +209,18 @@ export default function InspeccionPage() {
   const progreso = totalPuntos > 0 ? (completados / totalPuntos) * 100 : 0
   const todosCompletos = totalPuntos > 0 && completados === totalPuntos
 
+  // Permisos de edición: solo el técnico asignado o el supervisor de la O/T pueden escribir
+  const esTecnicoAsignado = user && orden.tecnico?.id === user.id
+  const esSupervisorAsignado = user && user.rol === 'supervisor' && orden.supervisor?.id === user.id
+  const puedeEditar = (esTecnicoAsignado || esSupervisorAsignado) && orden.estado !== 'cerrada'
+
+  // Hitos del ciclo de vida
+  const tieneRecepcion = Boolean(orden.fechaRecepcion)
+  const tieneInicio = Boolean(orden.fechaInicio)
+  // La captura de puntos queda bloqueada hasta que se pulse "Iniciar Mantenimiento"
+  const inspeccionBloqueada = !tieneInicio
+  const soloLectura = !puedeEditar || inspeccionBloqueada
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
@@ -158,7 +241,7 @@ export default function InspeccionPage() {
                 O/T {orden.numeroOt}
               </h2>
               <p className="text-sm text-gray-500 mt-1">
-                📅 Recepción: {orden.createdAt
+                📅 Creación: {orden.createdAt
                   ? new Date(orden.createdAt).toLocaleDateString('es-MX', {
                       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
                     })
@@ -241,7 +324,98 @@ export default function InspeccionPage() {
               <p className="font-bold text-blue-900 text-lg">{orden.horasMotorIzq ?? 0} h</p>
             </div>
           </div>
+
+          {/* Línea de tiempo del ciclo de vida */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mt-4 pt-4 border-t border-gray-200">
+            <HitoTemporal n={1} label="Creación" ts={orden.createdAt}      />
+            <HitoTemporal n={2} label="Recepción aeronave" ts={orden.fechaRecepcion} />
+            <HitoTemporal n={3} label="Inicio mantenimiento" ts={orden.fechaInicio} />
+            <HitoTemporal n={4} label="Finalización" ts={orden.fechaCierre} />
+          </div>
+
+          {/* Botones de asignación / reasignación (solo supervisor) */}
+          {user?.rol === 'supervisor' && orden.estado !== 'cerrada' && (
+            <div className="mt-4 pt-4 border-t border-gray-200 flex items-center gap-3 flex-wrap">
+              <span className="text-sm text-gray-600">Gestión de asignación:</span>
+              <button
+                onClick={abrirAsignacion}
+                className="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded font-semibold"
+              >
+                Reasignar técnico / supervisor
+              </button>
+            </div>
+          )}
         </div>
+
+        {/* Paso 1 del workflow: Recepcionar aeronave */}
+        {!tieneRecepcion && puedeEditar && (
+          <div className="bg-amber-50 border border-amber-300 rounded-lg p-5 mb-4">
+            <h3 className="text-lg font-bold text-amber-900 mb-1">Paso 1 · Recepción de la aeronave</h3>
+            <p className="text-sm text-amber-800 mb-3">
+              Confirma la recepción de la aeronave ingresando su matrícula para validar la identidad.
+              Esperada: <span className="font-mono font-bold">{orden.aeronave?.matricula}</span>
+            </p>
+            <div className="flex gap-2 flex-wrap">
+              <input
+                type="text"
+                value={matriculaInput}
+                onChange={(e) => setMatriculaInput(e.target.value.toUpperCase())}
+                placeholder="Matrícula de la aeronave"
+                className="flex-1 min-w-[200px] px-3 py-2 border border-amber-300 rounded-lg font-mono focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+              />
+              <button
+                onClick={recepcionarAeronave}
+                disabled={recepcionLoading}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white rounded-lg font-semibold"
+              >
+                {recepcionLoading ? 'Validando…' : 'Registrar recepción'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Paso 2 del workflow: Iniciar mantenimiento */}
+        {tieneRecepcion && !tieneInicio && puedeEditar && (
+          <div className="bg-blue-50 border border-blue-300 rounded-lg p-5 mb-4">
+            <h3 className="text-lg font-bold text-blue-900 mb-1">Paso 2 · Iniciar mantenimiento</h3>
+            <p className="text-sm text-blue-800 mb-3">
+              La orden está <strong>congelada</strong>: no se pueden capturar resultados hasta iniciar formalmente
+              los trabajos. Al pulsar el botón se registra el timestamp de inicio.
+            </p>
+            <button
+              onClick={iniciarMantenimiento}
+              disabled={iniciarLoading}
+              className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg font-semibold"
+            >
+              {iniciarLoading ? 'Iniciando…' : '▶ Iniciar mantenimiento'}
+            </button>
+          </div>
+        )}
+
+        {/* Aviso de solo lectura */}
+        {!puedeEditar && orden.estado !== 'cerrada' && (
+          <div className="bg-gray-100 border border-gray-300 rounded-lg p-4 mb-4 text-sm text-gray-700">
+            🔒 <strong>Modo solo lectura.</strong> Esta orden está asignada a{' '}
+            <strong>{orden.tecnico?.nombre || 'otro usuario'}</strong> — solo la persona asignada o el supervisor
+            de la orden pueden capturar datos.
+          </div>
+        )}
+        {puedeEditar && inspeccionBloqueada && tieneRecepcion && (
+          <div className="bg-gray-100 border border-gray-300 rounded-lg p-4 mb-4 text-sm text-gray-700">
+            🔒 Orden congelada: inicia el mantenimiento para habilitar la captura de resultados.
+          </div>
+        )}
+
+        {/* Modal de asignación */}
+        {showAsignacion && (
+          <ModalAsignacion
+            orden={orden}
+            tecnicos={tecnicos}
+            supervisores={supervisores}
+            onClose={() => setShowAsignacion(false)}
+            onGuardar={guardarAsignacion}
+          />
+        )}
 
         {/* Progreso */}
         <div className="bg-white rounded-lg shadow p-4 mb-4 sticky top-0 z-10">
@@ -317,7 +491,7 @@ export default function InspeccionPage() {
                             key={r.id}
                             index={i + 1}
                             resultado={r}
-                            soloLectura={orden.estado === 'cerrada'}
+                            soloLectura={soloLectura}
                             onCambiar={actualizarResultado}
                             onFirmar={firmarPunto}
                             onSubirFoto={subirFoto}
@@ -353,6 +527,115 @@ export default function InspeccionPage() {
           )}
         </div>
       </main>
+    </div>
+  )
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Línea de tiempo del ciclo de vida
+// ───────────────────────────────────────────────────────────────────────────
+
+function HitoTemporal({ n, label, ts }) {
+  const completado = Boolean(ts)
+  return (
+    <div className={`border rounded p-2 text-center ${
+      completado ? 'bg-green-50 border-green-300' : 'bg-gray-50 border-gray-200'
+    }`}>
+      <p className="text-[10px] uppercase tracking-wide font-semibold text-gray-500">
+        {n}. {label}
+      </p>
+      <p className={`text-xs font-bold mt-1 ${completado ? 'text-green-800' : 'text-gray-400'}`}>
+        {completado
+          ? new Date(ts).toLocaleString('es-MX', {
+              day: '2-digit', month: '2-digit', year: 'numeric',
+              hour: '2-digit', minute: '2-digit',
+            })
+          : 'Pendiente'}
+      </p>
+    </div>
+  )
+}
+
+// ───────────────────────────────────────────────────────────────────────────
+// Modal de asignación (técnico / supervisor)
+// ───────────────────────────────────────────────────────────────────────────
+
+function ModalAsignacion({ orden, tecnicos, supervisores, onClose, onGuardar }) {
+  const [tecnicoId, setTecnicoId] = useState(orden.tecnico?.id || '')
+  const [supervisorId, setSupervisorId] = useState(orden.supervisor?.id || '')
+  const [saving, setSaving] = useState(false)
+
+  const guardar = async () => {
+    setSaving(true)
+    try {
+      await onGuardar(tecnicoId, supervisorId || null)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+        <h3 className="text-lg font-bold text-gray-800 mb-4">
+          Asignación de la orden
+        </h3>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Técnico / Ingeniero responsable <span className="text-red-600">*</span>
+            </label>
+            <select
+              value={tecnicoId}
+              onChange={(e) => setTecnicoId(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+            >
+              <option value="">-- Selecciona --</option>
+              {tecnicos.map(u => (
+                <option key={u.id} value={u.id}>
+                  {u.nombre} · {u.rol}{u.licenciaNum ? ` · ${u.licenciaNum}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Supervisor asignado
+            </label>
+            <select
+              value={supervisorId}
+              onChange={(e) => setSupervisorId(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+            >
+              <option value="">-- Sin supervisor --</option>
+              {supervisores.map(u => (
+                <option key={u.id} value={u.id}>
+                  {u.nombre}{u.licenciaNum ? ` · ${u.licenciaNum}` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          <p className="text-xs text-gray-500">
+            Solo el técnico asignado y el supervisor de la orden tendrán permisos de edición.
+            El resto de usuarios verá la orden en modo solo lectura.
+          </p>
+        </div>
+        <div className="flex gap-2 mt-6">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={guardar}
+            disabled={saving || !tecnicoId}
+            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold disabled:bg-blue-400"
+          >
+            {saving ? 'Guardando…' : 'Guardar'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

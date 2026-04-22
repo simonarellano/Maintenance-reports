@@ -181,6 +181,9 @@ model OrdenTrabajo {
   horasMotorDer  Float     @default(0) @map("horas_motor_der")
   horasMotorIzq  Float     @default(0) @map("horas_motor_izq")
   estado         EstadoOT  @default(borrador)
+  // Hitos temporales del ciclo de vida de la O/T
+  fechaRecepcion DateTime? @map("fecha_recepcion")
+  matriculaRecepcion String? @map("matricula_recepcion")
   fechaInicio    DateTime? @map("fecha_inicio")
   fechaCierre    DateTime? @map("fecha_cierre")
   createdAt      DateTime  @default(now()) @map("created_at")

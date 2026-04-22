@@ -1,7 +1,31 @@
 import * as svc from '../services/ordenesService.js'
+import prisma from '../lib/prisma.js'
 
 const ESTADOS_VALIDOS = ['borrador', 'en_proceso', 'pendiente_firma', 'cerrada']
 const ESTADOS_OBS_OBLIGATORIA = ['correcto_con_danos', 'requiere_atencion']
+
+// Solo el técnico asignado puede editar puntos/fotos (o ingeniero/supervisor también
+// cuando el rol lo amerita). Los usuarios no asignados quedan en solo lectura.
+async function verificarPermisoEdicion(ordenId, user) {
+  const orden = await prisma.ordenTrabajo.findUnique({
+    where: { id: ordenId },
+    select: { tecnicoId: true, supervisorId: true, estado: true },
+  })
+  if (!orden) return { ok: false, status: 404, error: 'Orden no encontrada' }
+  if (orden.estado === 'cerrada') {
+    return { ok: false, status: 400, error: 'La orden está cerrada y no se puede modificar' }
+  }
+  const esAsignado = orden.tecnicoId === user.sub
+  const esSupervisor = user.rol === 'supervisor' && orden.supervisorId === user.sub
+  if (!esAsignado && !esSupervisor) {
+    return {
+      ok: false,
+      status: 403,
+      error: 'Solo el técnico asignado puede editar esta orden (modo solo lectura)',
+    }
+  }
+  return { ok: true, orden }
+}
 
 // ─── Órdenes de Trabajo ─────────────────────────────────────────────────────
 
@@ -23,9 +47,13 @@ export async function obtener(req, res, next) {
 
 export async function crear(req, res, next) {
   const { formatoId, aeronaveId, supervisorId, cliente, ordenServicio,
-    horasAlMomento, horasMotorDer, horasMotorIzq } = req.body
+    horasAlMomento, horasMotorDer, horasMotorIzq, tecnicoId: tecnicoIdBody } = req.body
 
-  const tecnicoId = req.user.sub
+  // Supervisores pueden asignar la orden a otro técnico al crearla;
+  // técnicos e ingenieros sólo pueden crear órdenes a su nombre.
+  const tecnicoId = (req.user.rol === 'supervisor' && tecnicoIdBody)
+    ? tecnicoIdBody
+    : req.user.sub
 
   if (!formatoId || !aeronaveId) {
     return res.status(400).json({ error: 'formatoId y aeronaveId son requeridos' })
@@ -58,12 +86,69 @@ export async function actualizarEstado(req, res, next) {
   }
 }
 
+// ─── Hitos del ciclo de vida ────────────────────────────────────────────────
+
+export async function recepcionarAeronave(req, res, next) {
+  try {
+    const { matriculaConfirmada } = req.body
+    if (!matriculaConfirmada?.trim()) {
+      return res.status(400).json({ error: 'Debes confirmar la matrícula de la aeronave' })
+    }
+    const orden = await svc.registrarRecepcion(req.params.id, { matriculaConfirmada })
+    res.json(orden)
+  } catch (e) {
+    if (e.code === 'NOT_FOUND') return res.status(404).json({ error: e.message })
+    if (e.code === 'CONFLICT') return res.status(409).json({ error: e.message })
+    if (e.code === 'BAD_INPUT') return res.status(400).json({ error: e.message })
+    next(e)
+  }
+}
+
+export async function iniciarMantenimiento(req, res, next) {
+  try {
+    // Solo el técnico asignado o supervisor pueden iniciar
+    const perm = await verificarPermisoEdicion(req.params.id, req.user)
+    if (!perm.ok) return res.status(perm.status).json({ error: perm.error })
+
+    const orden = await svc.iniciarMantenimiento(req.params.id)
+    res.json(orden)
+  } catch (e) {
+    if (e.code === 'NOT_FOUND') return res.status(404).json({ error: e.message })
+    if (e.code === 'CONFLICT') return res.status(409).json({ error: e.message })
+    if (e.code === 'BAD_STATE') return res.status(400).json({ error: e.message })
+    next(e)
+  }
+}
+
+export async function asignarOrden(req, res, next) {
+  try {
+    const { tecnicoId, supervisorId } = req.body
+    if (tecnicoId === undefined && supervisorId === undefined) {
+      return res.status(400).json({ error: 'Debes especificar al menos tecnicoId o supervisorId' })
+    }
+    const orden = await svc.asignarOrden(req.params.id, { tecnicoId, supervisorId })
+    res.json(orden)
+  } catch (e) {
+    if (e.code === 'P2025') return res.status(404).json({ error: 'Orden, técnico o supervisor no encontrado' })
+    if (e.code === 'P2003') return res.status(400).json({ error: 'Una o más referencias no existen' })
+    next(e)
+  }
+}
+
 // ─── Resultados de Puntos ───────────────────────────────────────────────────
 
 export async function actualizarResultado(req, res, next) {
   try {
     const { estadoResultado, observacion, completado } = req.body
     const { id: ordenId, resultadoId } = req.params
+
+    const perm = await verificarPermisoEdicion(ordenId, req.user)
+    if (!perm.ok) return res.status(perm.status).json({ error: perm.error })
+    if (!perm.orden.estado || perm.orden.estado === 'borrador') {
+      return res.status(400).json({
+        error: 'Debes iniciar el mantenimiento antes de capturar resultados',
+      })
+    }
 
     const resultado = await svc.obtenerResultado(ordenId, resultadoId)
     if (!resultado) return res.status(404).json({ error: 'Resultado no encontrado' })
@@ -92,6 +177,9 @@ export async function firmarResultado(req, res, next) {
   try {
     const { id: ordenId, resultadoId } = req.params
 
+    const perm = await verificarPermisoEdicion(ordenId, req.user)
+    if (!perm.ok) return res.status(perm.status).json({ error: perm.error })
+
     const resultado = await svc.obtenerResultado(ordenId, resultadoId)
     if (!resultado) return res.status(404).json({ error: 'Resultado no encontrado' })
     if (!resultado.punto.esCritico) {
@@ -112,6 +200,9 @@ export async function subirFoto(req, res, next) {
   try {
     const { id: ordenId, resultadoId } = req.params
 
+    const perm = await verificarPermisoEdicion(ordenId, req.user)
+    if (!perm.ok) return res.status(perm.status).json({ error: perm.error })
+
     const resultado = await svc.obtenerResultado(ordenId, resultadoId)
     if (!resultado) return res.status(404).json({ error: 'Resultado no encontrado' })
     if (!req.file) return res.status(400).json({ error: 'No se recibió archivo' })
@@ -130,6 +221,9 @@ export async function subirFoto(req, res, next) {
 
 export async function eliminarFoto(req, res, next) {
   try {
+    const perm = await verificarPermisoEdicion(req.params.id, req.user)
+    if (!perm.ok) return res.status(perm.status).json({ error: perm.error })
+
     const foto = await svc.obtenerFoto(req.params.fotoId)
     if (!foto) return res.status(404).json({ error: 'Foto no encontrada' })
     await svc.eliminarFoto(req.params.fotoId)
@@ -258,19 +352,21 @@ export async function generarPDF(req, res, next) {
     // ═══════════════════════════════════════════════════════════════════════
     sectionTitle(doc, '1. DATOS GENERALES DEL SERVICIO', M, CONTENT_W)
 
-    const fechaCreacion = orden.createdAt ? fmtFechaHora(orden.createdAt) : '—'
-    const fechaInicio   = orden.fechaInicio ? fmtFechaHora(orden.fechaInicio) : '—'
-    const fechaCierre   = orden.fechaCierre ? fmtFechaHora(orden.fechaCierre) : 'Pendiente'
+    const fechaCreacion  = orden.createdAt      ? fmtFechaHora(orden.createdAt)      : '—'
+    const fechaRecepcion = orden.fechaRecepcion ? fmtFechaHora(orden.fechaRecepcion) : 'Pendiente'
+    const fechaInicio    = orden.fechaInicio    ? fmtFechaHora(orden.fechaInicio)    : 'Pendiente'
+    const fechaCierre    = orden.fechaCierre    ? fmtFechaHora(orden.fechaCierre)    : 'Pendiente'
 
     drawKVGrid(doc, [
-      ['N.º Orden',           orden.numeroOt],
-      ['Formato',             `${orden.formato.nombre} · v${orden.formato.version}`],
-      ['Cliente',             orden.cliente || '—'],
-      ['Orden de servicio',   orden.ordenServicio || '—'],
-      ['Fecha de recepción',  fechaCreacion],
-      ['Fecha de inicio',     fechaInicio],
-      ['Fecha de cierre',     fechaCierre],
-      ['Estado',              orden.estado.replace(/_/g, ' ').toUpperCase()],
+      ['N.º Orden',              orden.numeroOt],
+      ['Formato',                `${orden.formato.nombre} · v${orden.formato.version}`],
+      ['Cliente',                orden.cliente || '—'],
+      ['Orden de servicio',      orden.ordenServicio || '—'],
+      ['1. Creación de orden',   fechaCreacion],
+      ['2. Recepción aeronave',  fechaRecepcion],
+      ['3. Inicio mantenimiento', fechaInicio],
+      ['4. Cierre / firma',      fechaCierre],
+      ['Estado actual',          orden.estado.replace(/_/g, ' ').toUpperCase()],
     ], M, CONTENT_W)
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -317,20 +413,23 @@ export async function generarPDF(req, res, next) {
       doc.moveDown(0.2)
       ensureSpace(doc, 60)
       const secY = doc.y
+      doc.save()
       doc.rect(M, secY, CONTENT_W, 18).fill(COLOR.primary)
+      doc.restore()
       doc.fillColor('#fff').font('Helvetica-Bold').fontSize(10)
-        .text(seccion.nombre.toUpperCase(), M + 8, secY + 5, { width: CONTENT_W - 16, lineBreak: false })
+        .text(seccion.nombre.toUpperCase(), M + 8, secY + 5, { width: CONTENT_W - 16, lineBreak: false, ellipsis: true })
       doc.fillColor(COLOR.dark)
       doc.y = secY + 22
 
       // Tabla de puntos: # | Componente | Descripción | Estado | Obs | Firma
+      // El ancho total debe ser igual a CONTENT_W (doc.page.width - 2*M)
       const cols = [
-        { w: 22,  label: '#'           },
-        { w: 140, label: 'COMPONENTE'  },
-        { w: 180, label: 'DESCRIPCIÓN' },
-        { w: 75,  label: 'CONDICIÓN'   },
-        { w: 55,  label: 'FIRMA'       },
-        { w: 43,  label: 'FOTOS'       },
+        { w: 24,  label: '#'           },
+        { w: 130, label: 'COMPONENTE'  },
+        { w: 175, label: 'DESCRIPCIÓN' },
+        { w: 85,  label: 'CONDICIÓN'   },
+        { w: 80,  label: 'FIRMA'       },
+        { w: 41,  label: 'FOTOS'       },
       ]
       drawTableHeader(doc, cols, M)
 
@@ -446,8 +545,10 @@ function sectionTitle(doc, txt, M, W) {
 
 function drawKVGrid(doc, pairs, M, W) {
   const colW = W / 2
-  const rowH = 18
-  let gridY = doc.y
+  const rowH = 20
+  const rows = Math.ceil(pairs.length / 2)
+  ensureSpace(doc, rows * rowH + 12)
+  const gridY = doc.y
 
   for (let i = 0; i < pairs.length; i++) {
     const col = i % 2
@@ -455,64 +556,111 @@ function drawKVGrid(doc, pairs, M, W) {
     const x = M + col * colW
     const y = gridY + row * rowH
 
-    if (row === 0 && col === 0) ensureSpace(doc, pairs.length / 2 * rowH + 20)
-
-    doc.rect(x, y, colW, rowH).stroke(COLOR.border)
-    doc.font('Helvetica-Bold').fontSize(8).fillColor(COLOR.gray)
-      .text(pairs[i][0].toUpperCase(), x + 6, y + 3, { width: colW - 12, lineBreak: false })
-    doc.font('Helvetica').fontSize(9).fillColor(COLOR.dark)
-      .text(String(pairs[i][1]), x + 6, y + 8, { width: colW - 12, ellipsis: true, height: 10 })
+    doc.lineWidth(0.5).strokeColor(COLOR.border)
+    doc.rect(x, y, colW, rowH).stroke()
+    doc.font('Helvetica-Bold').fontSize(7).fillColor(COLOR.gray)
+      .text(pairs[i][0].toUpperCase(), x + 6, y + 3, {
+        width: colW - 12, lineBreak: false, ellipsis: true,
+      })
+    doc.font('Helvetica').fontSize(8.5).fillColor(COLOR.dark)
+      .text(String(pairs[i][1] ?? ''), x + 6, y + 10, {
+        width: colW - 12, height: rowH - 11, ellipsis: true, lineBreak: false,
+      })
   }
-  const rows = Math.ceil(pairs.length / 2)
   doc.y = gridY + rows * rowH + 6
 }
+
+// Padding y tamaños de fuente uniformes dentro de la tabla
+const TABLE_PAD_X = 4
+const TABLE_PAD_Y = 4
+const TABLE_FONT_SIZE = 7.5
+const TABLE_HEADER_FONT_SIZE = 7.5
+const TABLE_OBS_FONT_SIZE = 7
+const TABLE_MIN_ROW_H = 18
 
 function drawTableHeader(doc, cols, M) {
   ensureSpace(doc, 40)
   const headerY = doc.y
   const totalW = cols.reduce((a, c) => a + c.w, 0)
+  doc.save()
   doc.rect(M, headerY, totalW, 16).fill(COLOR.dark)
+  doc.restore()
 
   let x = M
+  doc.fillColor('#fff').font('Helvetica-Bold').fontSize(TABLE_HEADER_FONT_SIZE)
   for (const c of cols) {
-    doc.fillColor('#fff').font('Helvetica-Bold').fontSize(8)
-      .text(c.label, x + 4, headerY + 4, { width: c.w - 8, lineBreak: false })
+    doc.text(c.label, x + TABLE_PAD_X, headerY + TABLE_PAD_Y, {
+      width: c.w - TABLE_PAD_X * 2,
+      lineBreak: false,
+      ellipsis: true,
+    })
     x += c.w
   }
   doc.fillColor(COLOR.dark)
-  doc.y = headerY + 20
+  doc.y = headerY + 18
 }
 
 function drawTableRow(doc, cols, M, values, r) {
-  const heights = values.map((v, i) => doc.heightOfString(String(v), { width: cols[i].w - 8 }))
-  const baseH = Math.max(16, Math.max(...heights) + 6)
-  const obsH = r?.observacion ? doc.heightOfString(`Obs: ${r.observacion}`, { width: cols.reduce((a, c) => a + c.w, 0) - 20 }) + 4 : 0
-  const rowH = baseH + obsH
   const totalW = cols.reduce((a, c) => a + c.w, 0)
+
+  // Calcular altura requerida con el mismo tamaño de fuente de texto de celda
+  doc.font('Helvetica').fontSize(TABLE_FONT_SIZE)
+  const heights = values.map((v, i) =>
+    doc.heightOfString(String(v ?? ''), {
+      width: cols[i].w - TABLE_PAD_X * 2,
+      align: 'left',
+    }),
+  )
+  const baseH = Math.max(TABLE_MIN_ROW_H, Math.max(...heights) + TABLE_PAD_Y * 2)
+
+  // Altura del bloque de observación (ocupa todo el ancho de la fila)
+  doc.font('Helvetica-Oblique').fontSize(TABLE_OBS_FONT_SIZE)
+  const obsH = r?.observacion
+    ? doc.heightOfString(`Obs: ${r.observacion}`, {
+        width: totalW - TABLE_PAD_X * 2,
+      }) + 6
+    : 0
+  const rowH = baseH + obsH
 
   ensureSpace(doc, rowH + 10)
   const rowY = doc.y
 
-  // Fondo ligero si requiere atención
-  if (r?.estadoResultado === 'requiere_atencion') {
-    doc.rect(M, rowY, totalW, rowH).fill('#fff4f4')
-  } else if (r?.estadoResultado === 'correcto_con_danos') {
-    doc.rect(M, rowY, totalW, rowH).fill('#fffbea')
-  } else if (r?.completado) {
-    doc.rect(M, rowY, totalW, rowH).fill('#f7fbf7')
+  // Fondo de fila según estado — usamos save/restore para no contaminar fillColor
+  const bg = r?.estadoResultado === 'requiere_atencion' ? '#fff4f4'
+    : r?.estadoResultado === 'correcto_con_danos' ? '#fffbea'
+    : r?.completado ? '#f7fbf7'
+    : null
+  if (bg) {
+    doc.save()
+    doc.rect(M, rowY, totalW, rowH).fill(bg)
+    doc.restore()
   }
 
+  // Bordes de celda (sin relleno) y luego texto en color oscuro
   let x = M
-  doc.fillColor(COLOR.dark).font('Helvetica').fontSize(8)
+  doc.lineWidth(0.5).strokeColor(COLOR.border)
+  for (const c of cols) {
+    doc.rect(x, rowY, c.w, rowH).stroke()
+    x += c.w
+  }
+
+  x = M
+  doc.fillColor(COLOR.dark).font('Helvetica').fontSize(TABLE_FONT_SIZE)
   for (let i = 0; i < cols.length; i++) {
-    doc.rect(x, rowY, cols[i].w, rowH).stroke(COLOR.border)
-    doc.text(String(values[i]), x + 4, rowY + 4, { width: cols[i].w - 8 })
+    doc.text(String(values[i] ?? ''), x + TABLE_PAD_X, rowY + TABLE_PAD_Y, {
+      width: cols[i].w - TABLE_PAD_X * 2,
+      height: baseH - TABLE_PAD_Y * 2,
+      ellipsis: true,
+      lineBreak: true,
+    })
     x += cols[i].w
   }
 
   if (r?.observacion) {
-    doc.font('Helvetica-Oblique').fontSize(8).fillColor(COLOR.accent)
-      .text(`Obs: ${r.observacion}`, M + 4, rowY + baseH, { width: totalW - 20 })
+    doc.font('Helvetica-Oblique').fontSize(TABLE_OBS_FONT_SIZE).fillColor(COLOR.accent)
+      .text(`Obs: ${r.observacion}`, M + TABLE_PAD_X, rowY + baseH + 1, {
+        width: totalW - TABLE_PAD_X * 2,
+      })
     doc.fillColor(COLOR.dark)
   }
 

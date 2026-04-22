@@ -8,6 +8,7 @@ import DashboardPage from './pages/DashboardPage'
 import CrearOTPage from './pages/CrearOTPage'
 import InspeccionPage from './pages/InspeccionPage'
 import CierreOTPage from './pages/CierreOTPage'
+import ModelosPage from './pages/ModelosPage'
 
 function App() {
   const hydrate = useAuthStore((state) => state.hydrate)
@@ -49,6 +50,14 @@ function App() {
           element={
             <ProtectedRoute>
               <CierreOTPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/modelos"
+          element={
+            <ProtectedRoute>
+              <ModelosPage />
             </ProtectedRoute>
           }
         />

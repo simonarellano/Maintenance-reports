@@ -6,12 +6,16 @@ import { formatosService } from '../api/formatosService'
 import { aeronavesService } from '../api/aeronavesService'
 import { ordenesService } from '../api/ordenesService'
 import { usuariosService } from '../api/usuariosService'
+import { useAuthStore } from '../store/authStore'
 
 export default function CrearOTPage() {
   const navigate = useNavigate()
+  const user = useAuthStore((s) => s.user)
+  const esSupervisor = user?.rol === 'supervisor'
   const [formatos, setFormatos] = useState([])
   const [aeronaves, setAeronaves] = useState([])
   const [supervisores, setSupervisores] = useState([])
+  const [tecnicos, setTecnicos] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [submitLoading, setSubmitLoading] = useState(false)
@@ -28,6 +32,7 @@ export default function CrearOTPage() {
       formatoId: '',
       aeronaveId: '',
       supervisorId: '',
+      tecnicoId: '',
       horasAlMomento: '',
       horasMotorDer: '',
       horasMotorIzq: '',
@@ -53,14 +58,23 @@ export default function CrearOTPage() {
 
   const cargarDatos = async () => {
     try {
-      const [formatosRes, aeronavesRes, supRes] = await Promise.all([
+      const base = [
         formatosService.listar(),
         aeronavesService.listar(),
         usuariosService.listar({ rol: 'supervisor', activo: true }),
-      ])
-      setFormatos(formatosRes.data || [])
-      setAeronaves(aeronavesRes.data || [])
-      setSupervisores(supRes.data || [])
+      ]
+      const requests = esSupervisor
+        ? [...base, usuariosService.listar({ activo: true })]
+        : base
+      const results = await Promise.all(requests)
+      setFormatos(results[0].data || [])
+      setAeronaves(results[1].data || [])
+      setSupervisores(results[2].data || [])
+      if (esSupervisor && results[3]) {
+        setTecnicos((results[3].data || []).filter(
+          u => u.rol === 'tecnico' || u.rol === 'ingeniero',
+        ))
+      }
     } catch (err) {
       setError('Error cargando datos')
       console.error(err)
@@ -75,6 +89,7 @@ export default function CrearOTPage() {
       const payload = {
         ...data,
         supervisorId: data.supervisorId || undefined,
+        tecnicoId: (esSupervisor && data.tecnicoId) ? data.tecnicoId : undefined,
         horasAlMomento: data.horasAlMomento === '' ? 0 : parseFloat(data.horasAlMomento),
         horasMotorDer:  data.horasMotorDer  === '' ? 0 : parseFloat(data.horasMotorDer),
         horasMotorIzq:  data.horasMotorIzq  === '' ? 0 : parseFloat(data.horasMotorIzq),
@@ -119,7 +134,11 @@ export default function CrearOTPage() {
             <div>
               <h2 className="text-3xl font-bold text-gray-800">Nueva Orden de Mantenimiento</h2>
               <p className="text-sm text-gray-500 mt-1 capitalize">
-                📅 Fecha de recepción: <span className="font-semibold">{hoyLegible}</span>
+                📅 Fecha de creación: <span className="font-semibold">{hoyLegible}</span>
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                La recepción de la aeronave y el inicio del mantenimiento se registran como hitos
+                posteriores dentro de la orden.
               </p>
             </div>
             <div className="bg-blue-50 border border-blue-200 text-blue-800 px-3 py-2 rounded-lg text-sm">
@@ -225,11 +244,34 @@ export default function CrearOTPage() {
               </p>
             </div>
 
-            {/* ─── Supervisor ─── */}
+            {/* ─── Asignación ─── */}
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-4">
               <h3 className="font-semibold text-gray-700 text-sm uppercase tracking-wide">
                 Asignación
               </h3>
+
+              {esSupervisor && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Técnico / Ingeniero responsable
+                  </label>
+                  <select
+                    {...register('tecnicoId')}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">-- Asignarme a mí --</option>
+                    {tecnicos.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.nombre} · {t.rol}{t.licenciaNum ? ` · ${t.licenciaNum}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Solo el técnico asignado podrá capturar los resultados de la inspección.
+                  </p>
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Supervisor asignado

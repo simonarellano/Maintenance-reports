@@ -241,11 +241,19 @@ export default function DashboardPage() {
                       <p className="font-semibold">{orden.formato?.nombre}</p>
                     </div>
                     <div>
-                      <p className="text-gray-500 text-xs">Fecha inicio</p>
+                      <p className="text-gray-500 text-xs">Recepción</p>
+                      <p className="font-semibold">
+                        {orden.fechaRecepcion
+                          ? new Date(orden.fechaRecepcion).toLocaleDateString('es-MX')
+                          : <span className="text-amber-700">Pendiente</span>}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500 text-xs">Inicio trabajos</p>
                       <p className="font-semibold">
                         {orden.fechaInicio
                           ? new Date(orden.fechaInicio).toLocaleDateString('es-MX')
-                          : '—'}
+                          : <span className="text-gray-400">Sin iniciar</span>}
                       </p>
                     </div>
                     {esCerrada && (
