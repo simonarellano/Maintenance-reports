@@ -21,29 +21,35 @@ const ESTADO_LABELS = {
 
 const FILTROS_ORDEN = ['todas', 'borrador', 'en_proceso', 'pendiente_firma', 'cerrada']
 
+// Vistas de alto nivel del dashboard
+const VISTAS = [
+  { value: 'mias',    label: 'Mis órdenes abiertas', descripcion: 'Sólo las órdenes asignadas a ti que aún no están cerradas' },
+  { value: 'todas',   label: 'Ver todo',             descripcion: 'Todas las órdenes activas (propias y ajenas)' },
+  { value: 'archivo', label: 'Archivo',              descripcion: 'Órdenes archivadas' },
+]
+
 export default function DashboardPage() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const esSupervisor = user?.rol === 'supervisor'
   const [ordenes, setOrdenes] = useState([])
   const [filtro, setFiltro] = useState('todas')
-  const [vistaArchivo, setVistaArchivo] = useState('activas') // activas | archivadas | todas
+  const [vista, setVista] = useState('mias') // mias | todas | archivo
   const [busqueda, setBusqueda] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   useEffect(() => {
     cargarOrdenes()
-  }, [filtro, vistaArchivo])
+  }, [filtro, vista])
 
   const cargarOrdenes = async () => {
     setLoading(true)
     try {
       const params = {}
       if (filtro !== 'todas') params.estado = filtro
-      if (vistaArchivo === 'archivadas') params.archivada = 'true'
-      else if (vistaArchivo === 'todas') params.archivada = 'todas'
-      // por defecto vistaArchivo='activas' → backend excluye archivadas
+      if (vista === 'archivo') params.archivada = 'true'
+      // 'mias' y 'todas' traen no-archivadas (default del backend)
       const response = await ordenesService.listar(params)
       setOrdenes(response.data || [])
       setError('')
@@ -80,24 +86,35 @@ export default function DashboardPage() {
     }
   }
 
+  const ordenesVisibles = useMemo(() => {
+    let lista = ordenes
+    if (vista === 'mias' && user?.id) {
+      lista = lista.filter(o =>
+        (o.tecnico?.id === user.id || o.supervisor?.id === user.id) &&
+        o.estado !== 'cerrada'
+      )
+    }
+    return lista
+  }, [ordenes, vista, user?.id])
+
   const ordenesFiltradas = useMemo(() => {
     const q = busqueda.trim().toLowerCase()
-    if (!q) return ordenes
-    return ordenes.filter(o =>
+    if (!q) return ordenesVisibles
+    return ordenesVisibles.filter(o =>
       o.numeroOt?.toLowerCase().includes(q) ||
       o.aeronave?.matricula?.toLowerCase().includes(q) ||
       o.cliente?.toLowerCase().includes(q) ||
       o.tecnico?.nombre?.toLowerCase().includes(q) ||
       o.formato?.nombre?.toLowerCase().includes(q)
     )
-  }, [ordenes, busqueda])
+  }, [ordenesVisibles, busqueda])
 
   const contadores = useMemo(() => ({
-    total:           ordenes.length,
-    enProceso:       ordenes.filter(o => o.estado === 'en_proceso').length,
-    pendienteFirma:  ordenes.filter(o => o.estado === 'pendiente_firma').length,
-    cerradas:        ordenes.filter(o => o.estado === 'cerrada').length,
-  }), [ordenes])
+    total:           ordenesVisibles.length,
+    enProceso:       ordenesVisibles.filter(o => o.estado === 'en_proceso').length,
+    pendienteFirma:  ordenesVisibles.filter(o => o.estado === 'pendiente_firma').length,
+    cerradas:        ordenesVisibles.filter(o => o.estado === 'cerrada').length,
+  }), [ordenesVisibles])
 
   const descargarPDF = async (e, id, numeroOt) => {
     e.stopPropagation()
@@ -125,9 +142,11 @@ export default function DashboardPage() {
       <main className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
           <div>
-            <h2 className="text-3xl font-bold text-gray-800">Órdenes de Trabajo</h2>
+            <h2 className="text-3xl font-bold text-gray-800">
+              {VISTAS.find(v => v.value === vista)?.label || 'Órdenes de Trabajo'}
+            </h2>
             <p className="text-gray-500 text-sm mt-1">
-              Registro histórico de mantenimientos realizados
+              {VISTAS.find(v => v.value === vista)?.descripcion}
             </p>
           </div>
           <button
@@ -138,54 +157,53 @@ export default function DashboardPage() {
           </button>
         </div>
 
-        {/* Tarjetas de resumen */}
-        {filtro === 'todas' && !loading && (
+        {/* Selector de vista principal — separa "mis órdenes" del histórico general */}
+        <div className="bg-white rounded-lg shadow p-2 mb-4 flex gap-2 flex-wrap">
+          {VISTAS.map(v => (
+            <button
+              key={v.value}
+              onClick={() => { setVista(v.value); setFiltro('todas') }}
+              className={`flex-1 min-w-[160px] px-4 py-2 rounded-lg font-semibold text-sm transition ${
+                vista === v.value
+                  ? 'bg-blue-600 text-white shadow'
+                  : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Tarjetas de resumen — sólo en vistas agregadas */}
+        {filtro === 'todas' && !loading && vista !== 'archivo' && (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
             <StatCard label="Total" value={contadores.total} color="gray" />
             <StatCard label="En proceso" value={contadores.enProceso} color="blue" />
             <StatCard label="Pendiente firma" value={contadores.pendienteFirma} color="yellow" />
-            <StatCard label="Cerradas" value={contadores.cerradas} color="green" />
+            {vista === 'todas' && (
+              <StatCard label="Cerradas" value={contadores.cerradas} color="green" />
+            )}
           </div>
         )}
 
-        {/* Filtros + búsqueda */}
+        {/* Filtros de estado + búsqueda */}
         <div className="bg-white rounded-lg shadow p-4 mb-6 space-y-3">
           <div className="flex gap-2 flex-wrap">
-            {FILTROS_ORDEN.map((value) => (
-              <button
-                key={value}
-                onClick={() => setFiltro(value)}
-                className={`px-4 py-2 rounded-lg font-medium transition duration-200 text-sm ${
-                  filtro === value
-                    ? 'bg-blue-600 text-white shadow'
-                    : 'bg-gray-100 text-gray-700 border border-gray-300 hover:border-blue-500'
-                }`}
-              >
-                {ESTADO_LABELS[value]}
-              </button>
-            ))}
-          </div>
-
-          {/* Vista de archivo */}
-          <div className="flex gap-2 flex-wrap items-center pt-2 border-t border-gray-200">
-            <span className="text-xs text-gray-500 uppercase font-semibold mr-1">Archivo:</span>
-            {[
-              { value: 'activas',     label: 'Activas' },
-              { value: 'archivadas',  label: 'Archivadas' },
-              { value: 'todas',       label: 'Mostrar todas' },
-            ].map(opt => (
-              <button
-                key={opt.value}
-                onClick={() => setVistaArchivo(opt.value)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                  vistaArchivo === opt.value
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-gray-100 text-gray-700 border border-gray-300 hover:border-indigo-400'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
+            {FILTROS_ORDEN
+              .filter(v => vista !== 'mias' || v !== 'cerrada')
+              .map((value) => (
+                <button
+                  key={value}
+                  onClick={() => setFiltro(value)}
+                  className={`px-4 py-2 rounded-lg font-medium transition duration-200 text-sm ${
+                    filtro === value
+                      ? 'bg-blue-600 text-white shadow'
+                      : 'bg-gray-100 text-gray-700 border border-gray-300 hover:border-blue-500'
+                  }`}
+                >
+                  {ESTADO_LABELS[value]}
+                </button>
+              ))}
           </div>
           <div className="relative">
             <input
@@ -224,14 +242,28 @@ export default function DashboardPage() {
               <p className="text-gray-600 mb-4">
                 {busqueda
                   ? `Sin resultados para "${busqueda}"`
-                  : 'No hay órdenes en este estado'}
+                  : vista === 'mias'
+                    ? 'No tienes órdenes abiertas asignadas. Cambia a "Ver todo" para revisar el histórico general.'
+                    : vista === 'archivo'
+                      ? 'No hay órdenes archivadas.'
+                      : 'No hay órdenes en este estado'}
               </p>
-              <button
-                onClick={() => navigate('/ordenes/crear')}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
-              >
-                Crear nueva orden
-              </button>
+              <div className="flex gap-2 justify-center flex-wrap">
+                {vista === 'mias' && (
+                  <button
+                    onClick={() => setVista('todas')}
+                    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                  >
+                    Ver todo
+                  </button>
+                )}
+                <button
+                  onClick={() => navigate('/ordenes/crear')}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
+                >
+                  Crear nueva orden
+                </button>
+              </div>
             </div>
           ) : (
             ordenesFiltradas.map((orden) => {

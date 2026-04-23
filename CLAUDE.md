@@ -193,7 +193,7 @@ FORMATO DE MANTENIMIENTO
 - Confirmar si se necesita modo offline
 - Confirmar si `ref_doc_correctivo` es solo texto o también permite adjuntar PDF
 
-## Estado del Proyecto — Última actualización: Sesión 6 (~85% total)
+## Estado del Proyecto — Última actualización: Sesión 9 (~95% Fase 1)
 
 ### Completado (backend 100% + frontend UI/UX mejorada)
 | Archivo | Descripción |
@@ -383,8 +383,96 @@ npm run dev                   # UI en http://localhost:5173
 - ✅ PDF profesional y estructurado
 - ✅ ~85% del proyecto completado (Fase 1 Core prácticamente terminada)
 
-### Siguiente paso — Sesión 7+
-1. **Fase 2 — Operaciones**: Dashboard de flota, asignación automática de técnicos, alertas de vencimiento
-2. **Fase 3 — Gestión**: Inventario de partes, reportes y estadísticas, histórico por aeronave, notificaciones email
-3. **Pruebas UAT**: Con usuarios reales en flota (técnicos en rampa, supervisores en oficina)
-4. **Limpieza técnica**: revisar `backend/uploads/`, agregar `.gitignore`, auditoría de seguridad
+### Cambios en Sesión 7 — QA v1 (workflow de 4 hitos + asignación)
+**Commit:** `d2e9513` | **Rama:** `claude/qa-ui-fixes-gs3pE`
+
+#### PDF
+- Corrige overflow de texto en celdas (7.5pt, padding uniforme, `ellipsis`, `save/restore` para evitar bleed de color).
+- KV grid con alto fijo y elipsis; bloque de datos generales con los 4 hitos temporales.
+
+#### Workflow de 4 hitos
+- Schema: `fechaRecepcion` (DateTime?) y `matriculaRecepcion` (String?) en `OrdenTrabajo`.
+- `POST /api/ordenes/:id/recepcion` — valida matrícula ingresada vs. esperada antes de registrar recepción.
+- `POST /api/ordenes/:id/iniciar-mantenimiento` — congela la orden hasta que el técnico pulsa el botón; registra `fechaInicio` y cambia a `en_proceso`.
+- `InspeccionPage` en solo lectura hasta iniciar el mantenimiento.
+- Línea de tiempo "1. Creación · 2. Recepción · 3. Inicio · 4. Finalización" visible en todo el flujo.
+- Banners guía para Paso 1 (recepción con validación de matrícula) y Paso 2 (iniciar mantenimiento).
+
+#### Asignación y permisos
+- `PATCH /api/ordenes/:id/asignacion` (supervisor) — reasigna técnico y/o supervisor de la orden.
+- `crearOrden` acepta `tecnicoId` cuando el creador es supervisor; resto crea a su nombre.
+- Mutaciones de puntos/fotos/iniciar mantenimiento exigen ser el técnico asignado o el supervisor de la orden; otros reciben 403 y el frontend muestra banner 🔒 "Modo solo lectura".
+- Modal de reasignación en `InspeccionPage` (solo supervisor).
+- Selector de técnico responsable en `CrearOT` (solo supervisor).
+
+#### Catálogo de modelos
+- `ModelosPage` en `/modelos` con CRUD.
+- `DELETE /api/modelos/:id` protegido contra modelos con aeronaves asociadas (409).
+
+### Cambios en Sesión 8 — QA v2 (lugar, archivado, vista por flota, usuarios)
+**Commit:** `7cacbb9` | **Rama:** `claude/qa-ui-fixes-gs3pE`
+
+#### Schema
+- `OrdenTrabajo.lugarMantenimiento` (String?) — hangar, rampa, base operativa.
+- `OrdenTrabajo.archivada` (Boolean default false) — permite ocultar órdenes del dashboard principal sin borrarlas.
+
+#### Backend
+- `listarOrdenes` acepta `archivada = 'true' | 'false' | 'todas'` (por defecto excluye archivadas).
+- `crearOrden` acepta `lugarMantenimiento`.
+- `PATCH /api/ordenes/:id/archivar` (supervisor) — toggle archivada.
+- `DELETE /api/ordenes/:id` (supervisor) — borrado en cascada manual de fotos → resultados → cierre → orden. Sólo se permite en estado `borrador` o cuando la orden ya está archivada.
+- PDF muestra "Lugar de mantenimiento" en datos generales.
+
+#### Frontend — nuevas páginas
+- `AeronavesPage` en `/aeronaves` (supervisor) — CRUD completo de aeronaves con filtro de inactivas, selección de modelo y horas.
+- `UsuariosPage` en `/usuarios` (supervisor) — alta/edición/desactivación con password, confirmación, licencia, teléfono y filtro por rol.
+- `FlotaPage` en `/flota` — vista agrupada por aeronave con histórico desplegable de O/T. Cada resumen muestra técnico, supervisor, lugar y fecha.
+- `Header` con navegación Órdenes · Flota · Aeronaves · Modelos · Usuarios (los tres últimos solo para supervisor).
+
+#### Frontend — Dashboard
+- Filtro de archivo: activas / archivadas / todas.
+- Botones Archivar/Desarchivar y Eliminar (este último solo en borrador o archivadas) visibles para supervisores.
+- Tarjetas muestran lugar de mantenimiento y badge "Archivada".
+
+#### Frontend — CrearOT / Inspección
+- Nuevo campo "📍 Lugar donde se realiza el mantenimiento" en CrearOT.
+- InspeccionPage muestra el lugar en el bloque de datos generales.
+
+### Cambios en Sesión 9 — QA v3 (flujo de cierre + dashboard por rol)
+**Rama:** `claude/qa-ui-fixes-gs3pE`
+
+#### Flujo de cierre — separar firma de descarga
+- La firma digital **ya no descarga el PDF automáticamente**.
+- `handleFirmar` solo cierra la orden (estado `cerrada`) y refresca el estado en memoria.
+- El bloque de éxito ahora expone dos acciones explícitas:
+  - "📥 Descargar comprobante" (bajo demanda)
+  - "Volver al dashboard"
+
+#### Dashboard — tres vistas de alto nivel
+- **Mis órdenes abiertas** (default): filtra en cliente a `o.tecnico?.id === user.id || o.supervisor?.id === user.id` y `estado !== 'cerrada'`. Oculta el filtro "cerrada" y la tarjeta "Cerradas" en este modo.
+- **Ver todo**: todas las órdenes activas no archivadas (propias y ajenas).
+- **Archivo**: sólo órdenes archivadas.
+- Estado vacío de "Mis órdenes" incluye un botón directo a "Ver todo".
+- El selector de vista está como una barra de pestañas al inicio del dashboard; al cambiar vista, el filtro de estado vuelve a "Todas".
+
+## ⚠️ Regeneración del cliente Prisma (obligatorio tras pull)
+
+Cada sesión agrega campos al `schema.prisma`. Si al correr el backend ves
+`Unknown argument 'fechaRecepcion'/'lugarMantenimiento'/'archivada'`,
+el cliente no se regeneró. Soluciónalo:
+
+```bash
+cd aeromx/backend
+npx prisma migrate dev --name sync_latest   # crea y aplica migración
+# o, sin crear migración:
+npx prisma db push
+```
+
+Luego reinicia `npm run dev`.
+
+### Siguiente paso — Sesión 10+
+1. **Fase 2 — Operaciones**: Dashboard de flota con alertas de vencimiento, asignación automática por carga de trabajo.
+2. **Fase 3 — Gestión**: Inventario de partes, reportes y estadísticas, notificaciones email/push.
+3. **Pruebas UAT**: Con usuarios reales en flota (técnicos en rampa, supervisores en oficina).
+4. **Limpieza técnica**: revisar `backend/uploads/`, agregar `.gitignore`, auditoría de seguridad, rate-limit, input sanitization.
+5. **Roadmap de despliegue**: backend/DB estable, UI en ajuste (vistas recién entregadas), funcionalidad en ajuste (firma/descarga separados), seguridad estable.

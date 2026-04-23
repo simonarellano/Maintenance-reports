@@ -70,9 +70,8 @@ export default function CierreOTPage() {
       await ordenesService.firmarCierre(id, firmaData)
       await cargarOrden()
       setFirmaConfirmada(false)
-      setTimeout(() => {
-        descargarPDF()
-      }, 1500)
+      // La descarga del PDF ya no se dispara automáticamente. El usuario
+      // pulsa el botón "Descargar comprobante" cuando lo requiera.
     } catch (err) {
       setError(err.response?.data?.message || 'Error firmando cierre')
       setFirmaConfirmada(false)
@@ -314,19 +313,28 @@ export default function CierreOTPage() {
 
                 {/* Confirmación de éxito */}
                 {orden?.estado === 'cerrada' && (
-                  <div className="p-4 bg-green-50 border-2 border-green-300 rounded-lg">
-                    <p className="text-green-800 font-bold text-lg mb-3">
-                      ✓ Orden completada exitosamente
+                  <div className="p-4 bg-green-50 border-2 border-green-300 rounded-lg space-y-3">
+                    <p className="text-green-800 font-bold text-lg">
+                      ✓ Orden cerrada y firmada
                     </p>
-                    <p className="text-sm text-green-700 mb-4">
-                      La orden ha sido firmada y cerrada. Se descargará el PDF automáticamente.
+                    <p className="text-sm text-green-700">
+                      La orden cambió a estado <strong>cerrada</strong> en el sistema.
+                      El comprobante en PDF queda disponible para descarga bajo demanda.
                     </p>
-                    <button
-                      onClick={descargarPDF}
-                      className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded font-medium transition"
-                    >
-                      📥 Descargar PDF
-                    </button>
+                    <div className="flex gap-2 flex-wrap">
+                      <button
+                        onClick={descargarPDF}
+                        className="flex-1 min-w-[180px] px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded font-medium transition"
+                      >
+                        📥 Descargar comprobante
+                      </button>
+                      <button
+                        onClick={() => navigate('/dashboard')}
+                        className="flex-1 min-w-[180px] px-4 py-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-300 rounded font-medium transition"
+                      >
+                        Volver al dashboard
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
