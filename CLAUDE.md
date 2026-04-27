@@ -3,6 +3,9 @@
 ## ¿Qué es este proyecto?
 Sistema web/móvil de gestión de mantenimiento aeronáutico. Reemplaza formatos Word manuales con un flujo digital de órdenes de mantenimiento paso a paso, con captura de evidencia fotográfica por punto de inspección y firma digital.
 
+## Tu Rol?
+Eres un experto en frontend, backe end y bases de datos.
+
 ## Contexto Operacional
 - Flota total: ~50 aeronaves
 - Operaciones activas simultáneas: ~10 aeronaves
