@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AeroMX — Prototipo Interactivo</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script type="text/babel" src="ios-frame.jsx"></script>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:#060810; display:flex; align-items:center; justify-content:center; min-height:100vh; font-family:'Space Grotesk',system-ui,sans-serif; }
+    ::-webkit-scrollbar { display:none; }
+    input, textarea { -webkit-appearance:none; appearance:none; }
+    input[type=password] { letter-spacing:0.1em; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useRef, useEffect, useCallback } = React;
+
+// ── Design Tokens ─────────────────────────────────────────────
+const T = {
+  bg:    '#090b12',
+  s1:    '#12151e',
+  s2:    '#1b1f2e',
+  s3:    '#242840',
+  border:'rgba(100,130,255,0.10)',
+  cyan:  '#00d0e8',
+  cD:    'rgba(0,208,232,0.13)',
+  amber: '#f0a030',
+  aD:    'rgba(240,160,48,0.13)',
+  green: '#28d980',
+  gD:    'rgba(40,217,128,0.13)',
+  red:   '#ff4545',
+  rD:    'rgba(255,69,69,0.13)',
+  text:  '#dde8f8',
+  sub:   '#6070a0',
+  dim:   '#2a3050',
+  mono:  '"JetBrains Mono", monospace',
+  font:  '"Space Grotesk", system-ui, sans-serif',
+};
+
+const STATUS = {
+  borrador:        { label:'Borrador',       c:T.sub,   bg:'rgba(96,112,160,0.15)' },
+  en_proceso:      { label:'En Proceso',     c:T.cyan,  bg:T.cD },
+  pendiente_firma: { label:'Pend. Firma',    c:T.amber, bg:T.aD },
+  cerrada:         { label:'Cerrada',        c:T.green, bg:T.gD },
+};
+
+// ── Mock Data ──────────────────────────────────────────────────
+const DRONES = [
+  { id:1, modelo:'DJI Matrice 350 RTK', mat:'XB-AMX-01', horas:248.5, serie:'M350-2024-0471' },
+  { id:2, modelo:'DJI Agras T40',       mat:'XB-AMX-07', horas:112.3, serie:'T40-2024-0832'  },
+  { id:3, modelo:'Autel EVO Max 4T',    mat:'XB-AMX-12', horas:89.7,  serie:'AUT-2024-1109'  },
+];
+
+const FORMATS = [
+  { id:1, nom:'Mantenimiento Menor',  desc:'Preventivo general · ~2h' },
+  { id:2, nom:'Inspección Pre-vuelo', desc:'Check pre-op · ~20 min' },
+  { id:3, nom:'Cambio de Componente', desc:'Sustitución de piezas · variable' },
+  { id:4, nom:'Inspección 50h',       desc:'Revisión a 50 horas de vuelo · ~1.5h' },
+];
+
+const OTS = [
+  {
+    id:1, num:'OT-20260421-0042', fmt:'Mantenimiento Menor',
+    drone:DRONES[0], estado:'en_proceso', tec:'J. Hernández', fecha:'21 Abr 2026', prog:0.62,
+    secs:[
+      { id:1, nom:'Estructura',  pts:8,  done:8,  st:'ok' },
+      { id:2, nom:'Motores',     pts:12, done:10, st:'warn' },
+      { id:3, nom:'Batería',     pts:6,  done:4,  st:'partial' },
+      { id:4, nom:'Electrónica', pts:9,  done:0,  st:'pending' },
+      { id:5, nom:'Carga Útil',  pts:5,  done:0,  st:'pending' },
+    ],
+  },
+  { id:2, num:'OT-20260421-0041', fmt:'Inspección Pre-vuelo',
+    drone:DRONES[1], estado:'pendiente_firma', tec:'M. Rodríguez', fecha:'21 Abr 2026', prog:1.0 },
+  { id:3, num:'OT-20260420-0039', fmt:'Inspección 50h',
+    drone:DRONES[2], estado:'cerrada', tec:'A. López', fecha:'20 Abr 2026', prog:1.0 },
+];
+
+const PUNTOS = [
+  { id:1, nom:'ESC delantero izq.',  cat:'Motor', desc:'Verificar temperatura, vibración y respuesta de throttle', critico:true,  done:true,  st:'ok' },
+  { id:2, nom:'ESC delantero der.',  cat:'Motor', desc:'Verificar temperatura, vibración y respuesta de throttle', critico:true,  done:true,  st:'ok' },
+  { id:3, nom:'ESC trasero izq.',    cat:'Motor', desc:'Verificar temperatura y vibración a distintas RPM',        critico:false, done:true,  st:'warn', obs:'Vibración ligera a máx. RPM. Monitorear en próxima inspección.' },
+  { id:4, nom:'ESC trasero der.',    cat:'Motor', desc:'Verificar temperatura y vibración a distintas RPM',        critico:false, done:false, st:null },
+  { id:5, nom:'Hélice frontal izq.', cat:'Motor', desc:'Inspeccionar aspas, balanceo dinámico y sujeción',         critico:false, done:false, st:null },
+  { id:6, nom:'Hélice frontal der.', cat:'Motor', desc:'Inspeccionar aspas, balanceo dinámico y sujeción',         critico:false, done:false, st:null },
+];
+
+// ── Shared Primitives ─────────────────────────────────────────
+function Pill({ label, color, bg, small }) {
+  return (
+    <span style={{
+      display:'inline-flex', alignItems:'center',
+      padding: small ? '2px 8px' : '3px 10px',
+      borderRadius:999, background: bg || T.s2,
+      color: color || T.sub,
+      fontSize: small ? 10 : 11, fontWeight:600, letterSpacing:'0.05em',
+      textTransform:'uppercase', fontFamily:T.font,
+    }}>{label}</span>
+  );
+}
+
+function Btn({ label, onPress, variant='primary', disabled, icon }) {
+  const styles = {
+    primary: { bg:T.cyan,  c:T.bg,   border:'none' },
+    ghost:   { bg:'transparent', c:T.sub, border:`1px solid ${T.border}` },
+    danger:  { bg:T.rD,   c:T.red,  border:`1px solid ${T.red}40` },
+    surface: { bg:T.s2,   c:T.text, border:`1px solid ${T.border}` },
+    amber:   { bg:T.aD,   c:T.amber,border:`1px solid ${T.amber}40` },
+  };
+  const s = styles[variant] || styles.primary;
+  return (
+    <div onClick={!disabled ? onPress : undefined} style={{
+      display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+      height:50, borderRadius:14, background: disabled ? T.s2 : s.bg,
+      color: disabled ? T.dim : s.c, border: s.border,
+      cursor: disabled ? 'default' : 'pointer',
+      fontSize:15, fontWeight:600, fontFamily:T.font,
+      opacity: disabled ? 0.45 : 1, transition:'opacity .15s',
+    }}>
+      {icon && icon}{label}
+    </div>
+  );
+}
+
+function Field({ label, value, onChange, placeholder, mono, type='text' }) {
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+      {label && <span style={{ fontSize:11, fontWeight:600, color:T.sub, letterSpacing:'0.07em', textTransform:'uppercase' }}>{label}</span>}
+      <input
+        value={value||''} onChange={e => onChange && onChange(e.target.value)}
+        placeholder={placeholder||''} type={type}
+        style={{
+          background:T.s2, border:`1px solid ${T.border}`, borderRadius:10,
+          padding:'11px 13px', color:T.text, fontSize:15,
+          fontFamily: mono ? T.mono : T.font, outline:'none', width:'100%',
+        }}
+      />
+    </div>
+  );
+}
+
+function Hdr({ title, back, sub, right }) {
+  return (
+    <div style={{ paddingBottom:18, paddingTop:6 }}>
+      {back && (
+        <div onClick={back} style={{ display:'flex', alignItems:'center', gap:5, color:T.cyan, fontSize:13, fontWeight:500, marginBottom:10, cursor:'pointer' }}>
+          <svg width="7" height="12" viewBox="0 0 7 12"><path d="M6 1L1 6l5 5" stroke="currentColor" strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          Atrás
+        </div>
+      )}
+      {sub && <div style={{ fontSize:11, color:T.sub, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:4, fontFamily:T.mono }}>{sub}</div>}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+        <div style={{ fontSize:24, fontWeight:700, color:T.text, lineHeight:1.2, flex:1 }}>{title}</div>
+        {right && right}
+      </div>
+    </div>
+  );
+}
+
+function TabBar({ tab, setTab }) {
+  const tabs = [
+    { id:'home',  label:'Órdenes', icon:(a) => <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><rect x="3" y="3" width="7" height="8" rx="2" stroke={a?T.cyan:T.sub} strokeWidth="1.7"/><rect x="12" y="3" width="7" height="8" rx="2" stroke={a?T.cyan:T.sub} strokeWidth="1.7"/><rect x="3" y="13" width="7" height="6" rx="2" stroke={a?T.cyan:T.sub} strokeWidth="1.7"/><rect x="12" y="13" width="7" height="6" rx="2" stroke={a?T.cyan:T.sub} strokeWidth="1.7"/></svg> },
+    { id:'nueva', label:'Nueva',   icon:(a) => <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><circle cx="11" cy="11" r="9" stroke={a?T.cyan:T.sub} strokeWidth="1.7"/><path d="M11 7v8M7 11h8" stroke={a?T.cyan:T.sub} strokeWidth="2" strokeLinecap="round"/></svg> },
+    { id:'perfil',label:'Perfil',  icon:(a) => <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><circle cx="11" cy="8" r="3.5" stroke={a?T.cyan:T.sub} strokeWidth="1.7"/><path d="M3.5 19c0-3.6 3.4-6.5 7.5-6.5s7.5 2.9 7.5 6.5" stroke={a?T.cyan:T.sub} strokeWidth="1.7" strokeLinecap="round"/></svg> },
+  ];
+  return (
+    <div style={{
+      position:'absolute', bottom:0, left:0, right:0, height:82,
+      background:'rgba(9,11,18,0.94)', backdropFilter:'blur(24px)',
+      borderTop:`1px solid ${T.border}`, display:'flex', zIndex:50,
+    }}>
+      {tabs.map(t => (
+        <div key={t.id} onClick={() => setTab(t.id)} style={{
+          flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+          gap:4, cursor:'pointer', paddingBottom:16,
+          color: tab===t.id ? T.cyan : T.sub, transition:'color .15s',
+        }}>
+          {t.icon(tab===t.id)}
+          <span style={{ fontSize:10, fontWeight:600, letterSpacing:'0.04em', textTransform:'uppercase' }}>{t.label}</span>
+          {tab===t.id && <div style={{ position:'absolute', top:0, width:20, height:2, background:T.cyan, borderRadius:1 }} />}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DroneMark({ size=40, color=T.cyan }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 44 44" fill="none">
+      <line x1="22" y1="22" x2="9"  y2="9"  stroke={color} strokeWidth="2.5" strokeLinecap="round"/>
+      <line x1="22" y1="22" x2="35" y2="9"  stroke={color} strokeWidth="2.5" strokeLinecap="round"/>
+      <line x1="22" y1="22" x2="9"  y2="35" stroke={color} strokeWidth="2.5" strokeLinecap="round"/>
+      <line x1="22" y1="22" x2="35" y2="35" stroke={color} strokeWidth="2.5" strokeLinecap="round"/>
+      <circle cx="9"  cy="9"  r="5" stroke={color} strokeWidth="2"/>
+      <circle cx="35" cy="9"  r="5" stroke={color} strokeWidth="2"/>
+      <circle cx="9"  cy="35" r="5" stroke={color} strokeWidth="2"/>
+      <circle cx="35" cy="35" r="5" stroke={color} strokeWidth="2"/>
+      <rect x="16" y="16" width="12" height="12" rx="3.5" fill={color} opacity="0.9"/>
+      <rect x="20" y="20" width="4" height="4" rx="1" fill={T.bg} opacity="0.8"/>
+    </svg>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// SCREENS
+// ─────────────────────────────────────────────────────────────
+
+function LoginScreen({ onLogin }) {
+  const [email, setEmail] = useState('tecnico@aeromx.com');
+  const [pass,  setPass]  = useState('aeromx123');
+  const [loading, setLoad] = useState(false);
+  const login = () => { setLoad(true); setTimeout(() => { setLoad(false); onLogin(); }, 1100); };
+  return (
+    <div style={{ height:'100%', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'0 28px', background:T.bg, position:'relative' }}>
+      {/* Logo */}
+      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:14, marginBottom:48 }}>
+        <div style={{ width:84, height:84, borderRadius:24, background:T.s1, border:`1px solid ${T.border}`, display:'flex', alignItems:'center', justifyContent:'center', boxShadow:`0 0 48px rgba(0,208,232,0.14)` }}>
+          <DroneMark size={52} />
+        </div>
+        <div style={{ textAlign:'center' }}>
+          <div style={{ fontSize:34, fontWeight:700, color:T.text, letterSpacing:'-0.03em' }}>AeroMX</div>
+          <div style={{ fontSize:12, color:T.sub, marginTop:3, letterSpacing:'0.1em', textTransform:'uppercase' }}>Sistema de Mantenimiento</div>
+        </div>
+      </div>
+      {/* Form */}
+      <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:14 }}>
+        <Field label="Correo Electrónico" value={email} onChange={setEmail} placeholder="usuario@aeromx.com" />
+        <Field label="Contraseña" value={pass} onChange={setPass} type="password" placeholder="••••••••" />
+        <div style={{ marginTop:8 }}>
+          <Btn label={loading ? 'Verificando…' : 'Iniciar Sesión'} onPress={login} disabled={loading} />
+        </div>
+      </div>
+      {/* Hint */}
+      <div style={{ marginTop:24, background:T.s1, border:`1px solid ${T.border}`, borderRadius:10, padding:'8px 12px', width:'100%' }}>
+        <div style={{ fontSize:11, color:T.sub, fontFamily:T.mono, lineHeight:1.7 }}>
+          <div>tecnico@aeromx.com · aeromx123</div>
+          <div>supervisor@aeromx.com · aeromx123</div>
+        </div>
+      </div>
+      <div style={{ position:'absolute', bottom:20, fontSize:11, color:T.dim, fontFamily:T.mono }}>AeroMX v1.0 · 2026</div>
+    </div>
+  );
+}
+
+function DashboardScreen({ navigate }) {
+  return (
+    <div style={{ background:T.bg, padding:'8px 16px 20px', minHeight:'100%' }}>
+      {/* Header */}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:20 }}>
+        <div>
+          <div style={{ fontSize:13, color:T.sub }}>Bienvenido de vuelta</div>
+          <div style={{ fontSize:26, fontWeight:700, color:T.text }}>Jorge H.</div>
+        </div>
+        <div style={{ width:40, height:40, borderRadius:12, background:T.s1, border:`1px solid ${T.border}`, display:'flex', alignItems:'center', justifyContent:'center', marginTop:4 }}>
+          <svg width="19" height="20" viewBox="0 0 19 20" fill="none">
+            <path d="M9.5 2a5.5 5.5 0 015.5 5.5c0 3.5 1.5 4.5 2 5H2c.5-.5 2-1.5 2-5A5.5 5.5 0 019.5 2z" stroke={T.sub} strokeWidth="1.5"/>
+            <path d="M7.5 17a2 2 0 004 0" stroke={T.sub} strokeWidth="1.5" strokeLinecap="round"/>
+            <circle cx="15" cy="4" r="3" fill={T.red} stroke={T.bg} strokeWidth="1.5"/>
+          </svg>
+        </div>
+      </div>
+
+      {/* Fleet chips */}
+      <div style={{ display:'flex', gap:8, marginBottom:24 }}>
+        {[
+          { label:'En Vuelo',    n:4, c:T.green, bg:T.gD },
+          { label:'En Manto.',   n:2, c:T.amber, bg:T.aD },
+          { label:'Disponibles', n:4, c:T.cyan,  bg:T.cD },
+        ].map(s => (
+          <div key={s.label} style={{ flex:1, background:s.bg, border:`1px solid ${s.c}25`, borderRadius:14, padding:'10px 6px', textAlign:'center' }}>
+            <div style={{ fontSize:24, fontWeight:700, color:s.c, fontFamily:T.mono }}>{s.n}</div>
+            <div style={{ fontSize:10, color:s.c, fontWeight:600, letterSpacing:'0.04em', marginTop:1 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Section label */}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+        <span style={{ fontSize:11, fontWeight:600, color:T.sub, letterSpacing:'0.07em', textTransform:'uppercase' }}>Órdenes Recientes</span>
+        <span style={{ fontSize:12, color:T.cyan, fontWeight:500 }}>Ver todas</span>
+      </div>
+
+      {/* OT Cards */}
+      {OTS.map(ot => {
+        const st = STATUS[ot.estado];
+        return (
+          <div key={ot.id} onClick={() => navigate('otDetail', ot)} style={{
+            background:T.s1, borderRadius:16, padding:'14px 14px 12px',
+            marginBottom:10, cursor:'pointer',
+            borderLeft:`3px solid ${st.c}`,
+            border:`1px solid ${T.border}`,
+            borderLeft:`3px solid ${st.c}`,
+          }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:7 }}>
+              <span style={{ fontFamily:T.mono, fontSize:11, color:T.sub }}>{ot.num}</span>
+              <Pill label={st.label} color={st.c} bg={st.bg} small />
+            </div>
+            <div style={{ fontSize:16, fontWeight:600, color:T.text, marginBottom:3 }}>{ot.drone.modelo}</div>
+            <div style={{ fontSize:12, color:T.sub, marginBottom: ot.prog !== undefined ? 10 : 0 }}>{ot.fmt} · {ot.fecha}</div>
+            {ot.prog !== undefined && (
+              <div>
+                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:5 }}>
+                  <span style={{ fontSize:11, color:T.sub }}>Progreso</span>
+                  <span style={{ fontSize:11, color:T.sub, fontFamily:T.mono }}>{Math.round(ot.prog*100)}%</span>
+                </div>
+                <div style={{ height:3, background:T.dim, borderRadius:4 }}>
+                  <div style={{ height:'100%', width:`${ot.prog*100}%`, background: ot.prog===1 ? T.green : T.cyan, borderRadius:4 }} />
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function OTDetailScreen({ ot, navigate, back }) {
+  const st = STATUS[ot.estado];
+  const steps = ['borrador','en_proceso','pendiente_firma','cerrada'];
+  const stepLabels = ['Borrador','En Proceso','Pend. Firma','Cerrada'];
+  const curIdx = steps.indexOf(ot.estado);
+  const secs = ot.secs || [];
+
+  return (
+    <div style={{ background:T.bg, padding:'8px 16px 20px', minHeight:'100%' }}>
+      <Hdr title={ot.fmt} back={back} sub={ot.num} right={<Pill label={st.label} color={st.c} bg={st.bg} />} />
+
+      {/* Drone card */}
+      <div style={{ background:T.s1, border:`1px solid ${T.border}`, borderRadius:16, padding:'14px', marginBottom:16 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+          <div style={{ width:36, height:36, borderRadius:10, background:T.cD, border:`1px solid ${T.cyan}30`, display:'flex', alignItems:'center', justifyContent:'center' }}>
+            <DroneMark size={22} />
+          </div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:15, fontWeight:600, color:T.text }}>{ot.drone.modelo}</div>
+            <div style={{ fontFamily:T.mono, fontSize:12, color:T.cyan, marginTop:1 }}>{ot.drone.mat}</div>
+          </div>
+        </div>
+        <div style={{ display:'flex', gap:16, borderTop:`1px solid ${T.border}`, paddingTop:10 }}>
+          {[['Horas Totales',`${ot.drone.horas}h`,true],['Serie',ot.drone.serie,true],['Técnico',ot.tec,false]].map(([k,v,mono]) => (
+            <div key={k} style={{ flex:1 }}>
+              <div style={{ fontSize:9, color:T.sub, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:3 }}>{k}</div>
+              <div style={{ fontSize:12, color:T.text, fontFamily:mono?T.mono:T.font }}>{v}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Flow steps */}
+      <div style={{ display:'flex', alignItems:'flex-start', marginBottom:20, padding:'0 4px' }}>
+        {stepLabels.map((s,i) => {
+          const active = i <= curIdx, current = i === curIdx;
+          return (
+            <React.Fragment key={s}>
+              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:5 }}>
+                <div style={{ width:22, height:22, borderRadius:'50%', background: active ? T.cyan : T.s2, border:`2px solid ${active ? T.cyan : T.dim}`, display:'flex', alignItems:'center', justifyContent:'center', boxShadow: current ? `0 0 10px ${T.cyan}60` : 'none' }}>
+                  {active && <svg width="9" height="7" viewBox="0 0 9 7"><path d="M1 3.5l2.5 2.5 4.5-5" stroke={T.bg} strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                </div>
+                <span style={{ fontSize:8, color: active ? T.cyan : T.sub, fontWeight:600, textAlign:'center', letterSpacing:'0.04em', maxWidth:48, lineHeight:1.3 }}>{s}</span>
+              </div>
+              {i < 3 && <div style={{ flex:1, height:2, background: i < curIdx ? T.cyan : T.dim, marginTop:10, marginBottom:0 }} />}
+            </React.Fragment>
+          );
+        })}
+      </div>
+
+      {/* Sections */}
+      {secs.length > 0 && (
+        <>
+          <div style={{ fontSize:11, fontWeight:600, color:T.sub, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>Secciones de Inspección</div>
+          {secs.map(sec => {
+            const pct = sec.done / sec.pts;
+            const c = sec.st==='ok' ? T.green : sec.st==='warn' ? T.amber : pct > 0 ? T.cyan : T.sub;
+            const clickable = sec.nom === 'Motores';
+            return (
+              <div key={sec.id} onClick={() => clickable && navigate('inspection', { ot, sec })} style={{
+                background:T.s1, border:`1px solid ${T.border}`, borderRadius:12,
+                padding:'11px 13px', marginBottom:8, cursor: clickable ? 'pointer' : 'default',
+              }}>
+                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
+                  <span style={{ fontSize:14, fontWeight:600, color:T.text }}>{sec.nom}</span>
+                  <span style={{ fontFamily:T.mono, fontSize:12, color: c }}>{sec.done}/{sec.pts}</span>
+                </div>
+                <div style={{ height:3, background:T.dim, borderRadius:4 }}>
+                  <div style={{ height:'100%', width:`${pct*100}%`, background:c, borderRadius:4, transition:'width .4s' }} />
+                </div>
+              </div>
+            );
+          })}
+        </>
+      )}
+
+      {/* Actions */}
+      <div style={{ marginTop:20, display:'flex', flexDirection:'column', gap:10 }}>
+        {ot.estado === 'en_proceso' && (
+          <Btn label="Continuar Inspección" onPress={() => navigate('inspection', { ot, sec:ot.secs[1] })} />
+        )}
+        {ot.estado !== 'cerrada' && (
+          <Btn label="Ir a Cierre y Firma →" onPress={() => navigate('cierre', ot)} variant={ot.estado==='pendiente_firma' ? 'primary' : 'ghost'} />
+        )}
+        {ot.estado === 'cerrada' && (
+          <Btn label="Descargar PDF" onPress={() => {}} variant="surface" icon={
+            <svg width="16" height="17" viewBox="0 0 16 17" fill="none"><path d="M3 12v2h10v-2M8 3v8M5 8l3 3 3-3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          } />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function InspectionScreen({ data, navigate, back }) {
+  const { ot, sec } = data;
+  const completed = PUNTOS.filter(p => p.done).length;
+
+  return (
+    <div style={{ background:T.bg, padding:'8px 16px 20px', minHeight:'100%' }}>
+      <Hdr title={sec.nom} back={back} sub={`${ot.drone.mat} · ${ot.fmt}`} />
+
+      {/* Progress */}
+      <div style={{ background:T.s1, border:`1px solid ${T.border}`, borderRadius:12, padding:'12px 14px', marginBottom:16 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8 }}>
+          <span style={{ fontSize:13, color:T.text, fontWeight:600 }}>{completed} de {PUNTOS.length} completados</span>
+          <span style={{ fontSize:12, color:T.amber }}>{PUNTOS.length - completed} pendientes</span>
+        </div>
+        <div style={{ height:4, background:T.dim, borderRadius:4 }}>
+          <div style={{ height:'100%', width:`${(completed/PUNTOS.length)*100}%`, background:T.cyan, borderRadius:4 }} />
+        </div>
+      </div>
+
+      {/* Point list */}
+      {PUNTOS.map(p => (
+        <div key={p.id} onClick={() => navigate('pointDetail', { ot, sec, punto:p })} style={{
+          background:T.s1,
+          border:`1px solid ${p.done ? (p.st==='ok' ? T.green+'35' : T.amber+'35') : T.border}`,
+          borderLeft:`3px solid ${p.done ? (p.st==='ok' ? T.green : T.amber) : T.dim}`,
+          borderRadius:12, padding:'12px 13px', marginBottom:8, cursor:'pointer',
+        }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+            <div style={{ flex:1, paddingRight:10 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:4 }}>
+                <span style={{ fontSize:14, fontWeight:600, color:T.text }}>{p.nom}</span>
+                {p.critico && <span style={{ fontSize:9, fontWeight:700, color:T.red, background:T.rD, padding:'1px 6px', borderRadius:4, textTransform:'uppercase', letterSpacing:'0.05em' }}>Crítico</span>}
+              </div>
+              <div style={{ fontSize:12, color:T.sub }}>{p.cat}</div>
+              {p.obs && <div style={{ fontSize:11, color:T.amber, marginTop:5, fontStyle:'italic', lineHeight:1.4 }}>⚠ {p.obs}</div>}
+            </div>
+            <div style={{ width:28, height:28, borderRadius:'50%', background: p.done ? (p.st==='ok' ? T.gD : T.aD) : T.s2, border:`2px solid ${p.done ? (p.st==='ok' ? T.green : T.amber) : T.dim}`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+              {p.done && <svg width="12" height="10" viewBox="0 0 12 10"><path d="M1 5l4 4 6-8" stroke={p.st==='ok'?T.green:T.amber} strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+            </div>
+          </div>
+        </div>
+      ))}
+
+      <div style={{ marginTop:16 }}>
+        <Btn label="Guardar Sección" onPress={back} variant="ghost" />
+      </div>
+    </div>
+  );
+}
+
+function PointDetailScreen({ data, navigate, back }) {
+  const { punto } = data;
+  const [st, setSt]     = useState(punto.st || null);
+  const [obs, setObs]   = useState(punto.obs || '');
+  const [photos, setPh] = useState(punto.done ? 1 : 0);
+  const needsObs = st === 'warn' || st === 'attention';
+
+  const opts = [
+    { id:'ok',        label:'Bueno',          c:T.green, bg:T.gD },
+    { id:'na',        label:'No Aplica',       c:T.sub,   bg:T.s2 },
+    { id:'warn',      label:'Con Daños',       c:T.amber, bg:T.aD },
+    { id:'attention', label:'Req. Atención',   c:T.red,   bg:T.rD },
+  ];
+
+  return (
+    <div style={{ background:T.bg, padding:'8px 16px 20px', minHeight:'100%' }}>
+      <Hdr title={punto.nom} back={back} sub={punto.cat} />
+
+      {punto.critico && (
+        <div style={{ display:'flex', alignItems:'center', gap:8, background:T.rD, border:`1px solid ${T.red}35`, borderRadius:10, padding:'9px 12px', marginBottom:16 }}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2L15 13H1L8 2z" stroke={T.red} strokeWidth="1.6" strokeLinejoin="round"/><path d="M8 6v3.5M8 11v.5" stroke={T.red} strokeWidth="1.8" strokeLinecap="round"/></svg>
+          <span style={{ fontSize:12, fontWeight:600, color:T.red }}>Punto Crítico — requiere firma individual</span>
+        </div>
+      )}
+
+      {/* Description */}
+      <div style={{ background:T.s1, border:`1px solid ${T.border}`, borderRadius:12, padding:'12px', marginBottom:16 }}>
+        <div style={{ fontSize:10, color:T.sub, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Descripción</div>
+        <div style={{ fontSize:14, color:T.text, lineHeight:1.55 }}>{punto.desc}</div>
+      </div>
+
+      {/* Status */}
+      <div style={{ marginBottom:16 }}>
+        <div style={{ fontSize:10, color:T.sub, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>Estado del Componente</div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+          {opts.map(o => (
+            <div key={o.id} onClick={() => setSt(o.id)} style={{
+              background: st===o.id ? o.bg : T.s1,
+              border:`2px solid ${st===o.id ? o.c : T.border}`,
+              borderRadius:12, padding:'13px 10px', textAlign:'center', cursor:'pointer',
+              transition:'border-color .15s, background .15s',
+            }}>
+              <div style={{ fontSize:14, fontWeight:600, color: st===o.id ? o.c : T.sub }}>{o.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Observation */}
+      <div style={{ marginBottom:16 }}>
+        <div style={{ fontSize:10, color:T.sub, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:8 }}>
+          Observación {needsObs ? <span style={{ color:T.red }}>*</span> : <span style={{ color:T.dim }}>(opcional)</span>}
+        </div>
+        <textarea value={obs} onChange={e => setObs(e.target.value)} placeholder="Describe el hallazgo..."
+          style={{ width:'100%', minHeight:72, background:T.s2, border:`1px solid ${needsObs && !obs ? T.red+'70' : T.border}`, borderRadius:10, padding:'10px 12px', color:T.text, fontSize:14, fontFamily:T.font, resize:'none', outline:'none' }}
+        />
+      </div>
+
+      {/* Photos */}
+      <div style={{ marginBottom:20 }}>
+        <div style={{ fontSize:10, color:T.sub, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:8 }}>
+          Fotografías {needsObs && <span style={{ color:T.red }}>* mín. 1</span>}
+        </div>
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+          {Array.from({length:photos}).map((_,i) => (
+            <div key={i} style={{ width:68, height:68, background:T.s2, border:`1px solid ${T.cyan}40`, borderRadius:10, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:3 }}>
+              <svg width="22" height="19" viewBox="0 0 22 19" fill="none"><rect x="1" y="3" width="20" height="15" rx="3" stroke={T.cyan} strokeWidth="1.4"/><circle cx="11" cy="10" r="3.5" stroke={T.cyan} strokeWidth="1.4"/><rect x="7.5" y="1" width="7" height="4" rx="1.5" stroke={T.cyan} strokeWidth="1.4"/></svg>
+              <span style={{ fontSize:9, color:T.cyan, fontFamily:T.mono }}>foto_{i+1}</span>
+            </div>
+          ))}
+          <div onClick={() => setPh(p => p+1)} style={{ width:68, height:68, background:T.s2, border:`2px dashed ${T.dim}`, borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer' }}>
+            <svg width="22" height="22" viewBox="0 0 22 22" fill="none"><path d="M11 5v12M5 11h12" stroke={T.sub} strokeWidth="2" strokeLinecap="round"/></svg>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+        {punto.critico && st && (
+          <Btn label="Firmar Punto Crítico" onPress={() => navigate('firma', { ot:data.ot, rol:'Técnico · Punto Crítico' })} variant="ghost" />
+        )}
+        <Btn label="Guardar Punto" onPress={back} disabled={needsObs && !obs} />
+      </div>
+    </div>
+  );
+}
+
+function CierreScreen({ ot, navigate, back }) {
+  const [defecto, setDef] = useState(null);
+  const [refDoc,  setRef] = useState('');
+  const [obsGen,  setObs] = useState('');
+  const [firmaT,  setFT]  = useState(false);
+  const [firmaSup, setFS] = useState(false);
+
+  const canClose = defecto !== null && (!( defecto === 'Sí') || refDoc.length > 0);
+
+  return (
+    <div style={{ background:T.bg, padding:'8px 16px 20px', minHeight:'100%' }}>
+      <Hdr title="Cierre de O/T" back={back} sub={ot.num} />
+
+      {/* All done banner */}
+      <div style={{ background:T.gD, border:`1px solid ${T.green}40`, borderRadius:14, padding:'12px 14px', marginBottom:20 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+          <div style={{ width:30, height:30, borderRadius:'50%', background:T.green, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+            <svg width="14" height="11" viewBox="0 0 14 11"><path d="M1 5l5 5L13 1" stroke={T.bg} strokeWidth="2.3" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </div>
+          <div>
+            <div style={{ fontSize:14, fontWeight:600, color:T.green }}>Todos los puntos completados</div>
+            <div style={{ fontSize:12, color:T.sub, marginTop:1 }}>40 de 40 · {ot.drone.modelo}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Defecto */}
+      <div style={{ marginBottom:16 }}>
+        <div style={{ fontSize:14, fontWeight:600, color:T.text, marginBottom:10 }}>¿Se encontró algún defecto?</div>
+        <div style={{ display:'flex', gap:10 }}>
+          {['Sí','No'].map(v => (
+            <div key={v} onClick={() => setDef(v)} style={{
+              flex:1, height:46, borderRadius:12,
+              background: defecto===v ? (v==='Sí' ? T.rD : T.gD) : T.s1,
+              border:`2px solid ${defecto===v ? (v==='Sí' ? T.red : T.green) : T.border}`,
+              display:'flex', alignItems:'center', justifyContent:'center',
+              cursor:'pointer', fontWeight:600, fontSize:16,
+              color: defecto===v ? (v==='Sí' ? T.red : T.green) : T.sub,
+              transition:'all .15s',
+            }}>{v}</div>
+          ))}
+        </div>
+      </div>
+
+      {defecto === 'Sí' && (
+        <div style={{ marginBottom:16 }}>
+          <Field label="Ref. Documento Correctivo *" value={refDoc} onChange={setRef} placeholder="RNC-2026-XXX" mono />
+        </div>
+      )}
+
+      {/* Observaciones */}
+      <div style={{ marginBottom:20 }}>
+        <div style={{ fontSize:10, color:T.sub, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:8 }}>Observaciones Generales</div>
+        <textarea value={obsGen} onChange={e => setObs(e.target.value)} placeholder="Notas adicionales del mantenimiento..."
+          style={{ width:'100%', minHeight:80, background:T.s2, border:`1px solid ${T.border}`, borderRadius:10, padding:'10px 12px', color:T.text, fontSize:14, fontFamily:T.font, resize:'none', outline:'none' }}
+        />
+      </div>
+
+      {/* Firmas */}
+      <div style={{ marginBottom:20 }}>
+        <div style={{ fontSize:10, color:T.sub, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:10 }}>Firmas Requeridas</div>
+        {[
+          { rol:'Técnico / Ingeniero', nombre:'Jorge Hernández', done:firmaT, onSign:() => navigate('firma', { ot, rol:'Técnico / Ingeniero', onDone:() => setFT(true) }) },
+          { rol:'Supervisor',          nombre:'Por asignar',     done:firmaSup, onSign:() => navigate('firma', { ot, rol:'Supervisor', onDone:() => setFS(true) }) },
+        ].map((f,i) => (
+          <div key={i} style={{ background:T.s1, border:`1px solid ${f.done ? T.green+'40' : T.border}`, borderRadius:12, padding:'12px 14px', marginBottom:8, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            <div>
+              <div style={{ fontSize:11, color:T.sub, marginBottom:2 }}>{f.rol}</div>
+              <div style={{ fontSize:14, fontWeight:600, color:T.text }}>{f.nombre}</div>
+            </div>
+            {f.done
+              ? <div style={{ display:'flex', alignItems:'center', gap:5, color:T.green, fontSize:12, fontWeight:600 }}>
+                  <svg width="13" height="11" viewBox="0 0 13 11"><path d="M1 5l4 4 7-8" stroke={T.green} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  Firmado
+                </div>
+              : <div onClick={f.onSign} style={{ background:T.cD, color:T.cyan, fontSize:12, fontWeight:600, padding:'7px 12px', borderRadius:8, cursor:'pointer', border:`1px solid ${T.cyan}30` }}>
+                  Firmar →
+                </div>
+            }
+          </div>
+        ))}
+      </div>
+
+      <Btn label="Cerrar Orden de Trabajo" onPress={() => navigate('otClosed')} disabled={!canClose} />
+    </div>
+  );
+}
+
+function FirmaScreen({ data, navigate, back }) {
+  const { ot, rol } = data;
+  const canvasRef = useRef(null);
+  const drawing   = useRef(false);
+  const lastPos   = useRef(null);
+  const [hasSig,  setSig] = useState(false);
+
+  const drawInit = useCallback(() => {
+    const cv = canvasRef.current; if (!cv) return;
+    const ctx = cv.getContext('2d');
+    ctx.fillStyle = T.s2;
+    ctx.fillRect(0,0,cv.width,cv.height);
+    ctx.strokeStyle = 'rgba(100,130,255,0.07)';
+    ctx.lineWidth = 0.5;
+    for (let x=0;x<cv.width;x+=18) { ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,cv.height);ctx.stroke(); }
+    for (let y=0;y<cv.height;y+=18) { ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(cv.width,y);ctx.stroke(); }
+    ctx.strokeStyle = 'rgba(0,208,232,0.15)';
+    ctx.lineWidth = 1; ctx.setLineDash([5,5]);
+    ctx.beginPath(); ctx.moveTo(20, cv.height*0.68); ctx.lineTo(cv.width-20, cv.height*0.68); ctx.stroke();
+    ctx.setLineDash([]);
+  }, []);
+
+  useEffect(() => { drawInit(); }, [drawInit]);
+
+  const getPos = (e, cv) => {
+    const r = cv.getBoundingClientRect();
+    const s = e.touches ? e.touches[0] : e;
+    return { x:(s.clientX-r.left)*(cv.width/r.width), y:(s.clientY-r.top)*(cv.height/r.height) };
+  };
+  const onStart = (e) => { e.preventDefault(); drawing.current=true; setSig(true); lastPos.current=getPos(e,canvasRef.current); };
+  const onMove  = (e) => {
+    if (!drawing.current) return; e.preventDefault();
+    const cv=canvasRef.current, ctx=cv.getContext('2d'), pos=getPos(e,cv);
+    ctx.beginPath(); ctx.strokeStyle=T.cyan; ctx.lineWidth=2.4; ctx.lineCap='round'; ctx.lineJoin='round';
+    ctx.moveTo(lastPos.current.x, lastPos.current.y); ctx.lineTo(pos.x, pos.y); ctx.stroke();
+    lastPos.current=pos;
+  };
+  const onEnd = () => { drawing.current=false; };
+  const clear = () => { setSig(false); drawInit(); };
+
+  const confirm = () => {
+    if (data.onDone) data.onDone();
+    back();
+  };
+
+  return (
+    <div style={{ background:T.bg, padding:'8px 16px 20px', minHeight:'100%' }}>
+      <Hdr title="Firma Digital" back={back} sub={rol} />
+
+      {/* Signer card */}
+      <div style={{ display:'flex', alignItems:'center', gap:12, background:T.s1, border:`1px solid ${T.border}`, borderRadius:14, padding:'12px 14px', marginBottom:20 }}>
+        <div style={{ width:44, height:44, borderRadius:13, background:T.cD, border:`1px solid ${T.cyan}35`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:17, fontWeight:700, color:T.cyan, flexShrink:0 }}>JH</div>
+        <div>
+          <div style={{ fontSize:15, fontWeight:600, color:T.text }}>Jorge Hernández</div>
+          <div style={{ fontSize:12, color:T.sub }}>Técnico · Lic. TMA-2024-0891</div>
+        </div>
+      </div>
+
+      {/* Meta */}
+      {[['Orden de Trabajo', ot.num, true],['Fecha y Hora','21 Abr 2026 · 14:32',true],['Aeronave',ot.drone.modelo,false]].map(([k,v,mono]) => (
+        <div key={k} style={{ display:'flex', justifyContent:'space-between', marginBottom:10, paddingBottom:10, borderBottom:`1px solid ${T.border}` }}>
+          <span style={{ fontSize:12, color:T.sub }}>{k}</span>
+          <span style={{ fontSize:12, color:T.text, fontFamily:mono?T.mono:T.font }}>{v}</span>
+        </div>
+      ))}
+
+      {/* Canvas */}
+      <div style={{ marginTop:4, marginBottom:16 }}>
+        <div style={{ fontSize:10, color:T.sub, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:8 }}>Firma del {rol}</div>
+        <canvas ref={canvasRef} width={330} height={150}
+          style={{ borderRadius:12, border:`2px solid ${hasSig ? T.cyan+'60' : T.border}`, display:'block', touchAction:'none', cursor:'crosshair', width:'100%', height:'auto', transition:'border-color .2s' }}
+          onMouseDown={onStart} onMouseMove={onMove} onMouseUp={onEnd} onMouseLeave={onEnd}
+          onTouchStart={onStart} onTouchMove={onMove} onTouchEnd={onEnd}
+        />
+        <div style={{ display:'flex', justifyContent:'space-between', marginTop:7 }}>
+          <span style={{ fontSize:11, color:T.sub }}>Firme dentro del recuadro</span>
+          <span onClick={clear} style={{ fontSize:12, color:T.sub, cursor:'pointer', textDecoration:'underline' }}>Limpiar</span>
+        </div>
+      </div>
+
+      {/* Legal */}
+      <div style={{ background:T.s1, border:`1px solid ${T.border}`, borderRadius:10, padding:'10px 12px', marginBottom:20 }}>
+        <p style={{ fontSize:11, color:T.sub, lineHeight:1.55 }}>Al confirmar, declaro que revisé y ejecuté todos los puntos de este formato de mantenimiento conforme a los procedimientos AeroMX.</p>
+      </div>
+
+      <Btn label={hasSig ? 'Confirmar Firma ✓' : 'Firme para continuar'} onPress={confirm} disabled={!hasSig} />
+    </div>
+  );
+}
+
+function CrearOTScreen({ navigate, back }) {
+  const [step, setStep] = useState(1);
+  const [drone, setDrone] = useState(null);
+  const [fmt, setFmt] = useState(null);
+  const [cliente, setCliente] = useState('');
+  const [os, setOS] = useState('');
+
+  if (step === 1) return (
+    <div style={{ background:T.bg, padding:'8px 16px 20px', minHeight:'100%' }}>
+      <Hdr title="Nueva O/T" back={back} sub="Paso 1 de 3 · Aeronave" />
+      <StepBar step={1} total={3} />
+      <div style={{ fontSize:15, fontWeight:600, color:T.text, marginBottom:14 }}>Selecciona la aeronave</div>
+      {DRONES.map(d => (
+        <div key={d.id} onClick={() => setDrone(d)} style={{ background:T.s1, border:`2px solid ${drone?.id===d.id ? T.cyan : T.border}`, borderRadius:14, padding:'14px', marginBottom:10, cursor:'pointer', transition:'border-color .15s' }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+            <div style={{ fontSize:16, fontWeight:600, color:T.text }}>{d.modelo}</div>
+            <Pill label="Disponible" color={T.green} bg={T.gD} small />
+          </div>
+          <div style={{ display:'flex', gap:20 }}>
+            <div><div style={{ fontSize:9, color:T.sub, textTransform:'uppercase', letterSpacing:'0.06em' }}>Matrícula</div><div style={{ fontFamily:T.mono, fontSize:12, color:T.cyan, marginTop:2 }}>{d.mat}</div></div>
+            <div><div style={{ fontSize:9, color:T.sub, textTransform:'uppercase', letterSpacing:'0.06em' }}>Horas</div><div style={{ fontFamily:T.mono, fontSize:12, color:T.text, marginTop:2 }}>{d.horas}h</div></div>
+          </div>
+        </div>
+      ))}
+      <div style={{ marginTop:16 }}><Btn label="Siguiente →" onPress={() => setStep(2)} disabled={!drone} /></div>
+    </div>
+  );
+
+  if (step === 2) return (
+    <div style={{ background:T.bg, padding:'8px 16px 20px', minHeight:'100%' }}>
+      <Hdr title="Nueva O/T" back={() => setStep(1)} sub="Paso 2 de 3 · Formato" />
+      <StepBar step={2} total={3} />
+      <div style={{ fontSize:15, fontWeight:600, color:T.text, marginBottom:14 }}>Tipo de mantenimiento</div>
+      {FORMATS.map(f => (
+        <div key={f.id} onClick={() => setFmt(f)} style={{ background:T.s1, border:`2px solid ${fmt?.id===f.id ? T.cyan : T.border}`, borderRadius:14, padding:'14px', marginBottom:10, cursor:'pointer', transition:'border-color .15s' }}>
+          <div style={{ fontSize:15, fontWeight:600, color:T.text, marginBottom:5 }}>{f.nom}</div>
+          <div style={{ fontSize:13, color:T.sub }}>{f.desc}</div>
+        </div>
+      ))}
+      <div style={{ marginTop:16 }}><Btn label="Siguiente →" onPress={() => setStep(3)} disabled={!fmt} /></div>
+    </div>
+  );
+
+  return (
+    <div style={{ background:T.bg, padding:'8px 16px 20px', minHeight:'100%' }}>
+      <Hdr title="Nueva O/T" back={() => setStep(2)} sub="Paso 3 de 3 · Encabezado" />
+      <StepBar step={3} total={3} />
+      <div style={{ background:T.cD, border:`1px solid ${T.cyan}30`, borderRadius:12, padding:'10px 14px', marginBottom:20 }}>
+        <div style={{ fontFamily:T.mono, fontSize:12, color:T.cyan }}>{drone?.mat} · {fmt?.nom}</div>
+      </div>
+      <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+        <Field label="Cliente" value={cliente} onChange={setCliente} placeholder="Nombre del cliente" />
+        <Field label="Orden de Servicio" value={os} onChange={setOS} placeholder="OS-2026-XXX" mono />
+        <div>
+          <div style={{ fontSize:11, fontWeight:600, color:T.sub, letterSpacing:'0.07em', textTransform:'uppercase', marginBottom:6 }}>Horas al Momento</div>
+          <div style={{ background:T.s2, border:`1px solid ${T.border}`, borderRadius:10, padding:'11px 13px', fontFamily:T.mono, fontSize:15, color:T.cyan }}>{drone?.horas}h</div>
+        </div>
+      </div>
+      <div style={{ marginTop:24 }}>
+        <Btn label="Crear Orden de Trabajo" onPress={() => navigate('dashboard')} />
+      </div>
+    </div>
+  );
+}
+
+function StepBar({ step, total }) {
+  return (
+    <div style={{ height:4, background:T.dim, borderRadius:4, marginBottom:20, overflow:'hidden' }}>
+      <div style={{ height:'100%', width:`${(step/total)*100}%`, background:T.cyan, borderRadius:4, transition:'width .4s' }} />
+    </div>
+  );
+}
+
+function OTClosedScreen({ navigate }) {
+  return (
+    <div style={{ background:T.bg, height:'100%', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'0 28px', textAlign:'center', gap:20 }}>
+      <div style={{ width:80, height:80, borderRadius:24, background:T.gD, border:`2px solid ${T.green}60`, display:'flex', alignItems:'center', justifyContent:'center', boxShadow:`0 0 40px rgba(40,217,128,0.15)` }}>
+        <svg width="40" height="32" viewBox="0 0 40 32" fill="none"><path d="M2 16L15 29 38 3" stroke={T.green} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/></svg>
+      </div>
+      <div>
+        <div style={{ fontSize:24, fontWeight:700, color:T.text, marginBottom:8 }}>O/T Cerrada</div>
+        <div style={{ fontSize:14, color:T.sub, lineHeight:1.6 }}>La orden fue firmada y cerrada correctamente. El PDF está disponible para descarga y distribución.</div>
+      </div>
+      <div style={{ background:T.s1, border:`1px solid ${T.border}`, borderRadius:12, padding:'10px 16px' }}>
+        <div style={{ fontFamily:T.mono, fontSize:13, color:T.cyan }}>OT-20260421-0042</div>
+        <div style={{ fontSize:11, color:T.sub, marginTop:3 }}>21 Abr 2026 · 14:35</div>
+      </div>
+      <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:10, marginTop:10 }}>
+        <Btn label="Descargar PDF" onPress={() => {}} variant="surface" />
+        <Btn label="Volver al Dashboard" onPress={() => navigate('dashboard')} />
+      </div>
+    </div>
+  );
+}
+
+function PerfilScreen({ navigate }) {
+  return (
+    <div style={{ background:T.bg, padding:'8px 16px 20px', minHeight:'100%' }}>
+      <div style={{ fontSize:24, fontWeight:700, color:T.text, marginBottom:24, paddingTop:6 }}>Perfil</div>
+
+      {/* Avatar */}
+      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', marginBottom:28 }}>
+        <div style={{ width:76, height:76, borderRadius:22, background:T.cD, border:`2px solid ${T.cyan}40`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:26, fontWeight:700, color:T.cyan, marginBottom:12, boxShadow:`0 0 32px rgba(0,208,232,0.12)` }}>JH</div>
+        <div style={{ fontSize:20, fontWeight:700, color:T.text, marginBottom:4 }}>Jorge Hernández</div>
+        <div style={{ fontSize:13, color:T.sub, marginBottom:10 }}>tecnico@aeromx.com</div>
+        <Pill label="Técnico" color={T.cyan} bg={T.cD} />
+      </div>
+
+      {/* Info rows */}
+      {[
+        { k:'No. Licencia',   v:'TMA-2024-0891',       mono:true },
+        { k:'Teléfono',       v:'+52 614 123 4567',     mono:false },
+        { k:'Empresa',        v:'AeroMX Operations',    mono:false },
+        { k:'Último acceso',  v:'21 Abr 2026 · 08:14', mono:true },
+        { k:'Órdenes abiertas',v:'2 asignadas',         mono:false },
+      ].map((r,i,arr) => (
+        <div key={r.k} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'14px 0', borderBottom: i < arr.length-1 ? `1px solid ${T.border}` : 'none' }}>
+          <span style={{ fontSize:13, color:T.sub }}>{r.k}</span>
+          <span style={{ fontSize:13, color:T.text, fontFamily: r.mono ? T.mono : T.font }}>{r.v}</span>
+        </div>
+      ))}
+
+      <div style={{ marginTop:28, display:'flex', flexDirection:'column', gap:10 }}>
+        <Btn label="Cerrar Sesión" onPress={() => navigate('login')} variant="ghost" />
+      </div>
+      <div style={{ textAlign:'center', marginTop:20 }}>
+        <span style={{ fontSize:11, color:T.dim, fontFamily:T.mono }}>AeroMX v1.0 · Build 2026.04.21</span>
+      </div>
+    </div>
+  );
+}
+
+// ── APP ROUTER ────────────────────────────────────────────────
+function App() {
+  const saved = () => { try { return localStorage.getItem('aeromx_s') || 'login'; } catch(e) { return 'login'; } };
+  const [screen, setScreen] = useState(saved);
+  const [sData,  setSData]  = useState(null);
+  const [history, setHist]  = useState([]);
+  const [tab, setTab]       = useState('home');
+
+  const navigate = (to, data) => {
+    setHist(h => [...h, { screen, data: sData }]);
+    setScreen(to); setSData(data || null);
+    try { localStorage.setItem('aeromx_s', to); } catch(e) {}
+  };
+
+  const back = () => {
+    const prev = history[history.length-1];
+    if (prev) { setHist(h => h.slice(0,-1)); setScreen(prev.screen); setSData(prev.data); }
+  };
+
+  const handleTab = (t) => {
+    setTab(t); setHist([]);
+    if (t === 'home')   { setScreen('dashboard'); setSData(null); }
+    if (t === 'nueva')  { setScreen('createOT');  setSData(null); }
+    if (t === 'perfil') { setScreen('perfil');     setSData(null); }
+  };
+
+  const showTab = screen !== 'login';
+
+  const render = () => {
+    switch(screen) {
+      case 'login':       return <LoginScreen onLogin={() => { setTab('home'); navigate('dashboard'); }} />;
+      case 'dashboard':   return <DashboardScreen navigate={navigate} />;
+      case 'otDetail':    return <OTDetailScreen ot={sData || OTS[0]} navigate={navigate} back={back} />;
+      case 'inspection':  return <InspectionScreen data={sData || {ot:OTS[0],sec:OTS[0].secs[1]}} navigate={navigate} back={back} />;
+      case 'pointDetail': return <PointDetailScreen data={sData || {ot:OTS[0],sec:OTS[0].secs[1],punto:PUNTOS[0]}} navigate={navigate} back={back} />;
+      case 'cierre':      return <CierreScreen ot={sData || OTS[0]} navigate={navigate} back={back} />;
+      case 'firma':       return <FirmaScreen data={sData || {ot:OTS[0],rol:'Técnico / Ingeniero'}} navigate={navigate} back={back} />;
+      case 'otClosed':    return <OTClosedScreen navigate={navigate} />;
+      case 'createOT':    return <CrearOTScreen navigate={navigate} back={() => navigate('dashboard')} />;
+      case 'perfil':      return <PerfilScreen navigate={navigate} />;
+      default:            return <DashboardScreen navigate={navigate} />;
+    }
+  };
+
+  return (
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh', background:'#060810', padding:'20px 0' }}>
+      <IOSDevice dark={true} width={390} height={844}>
+        <div style={{ position:'relative', height:'100%', background:T.bg, overflow:'hidden' }}>
+          {/* Scrollable area */}
+          <div style={{ position:'absolute', top:62, bottom: showTab ? 82 : 0, left:0, right:0, overflowY:'auto' }}>
+            {render()}
+          </div>
+          {/* Tab bar */}
+          {showTab && <TabBar tab={tab} setTab={handleTab} />}
+        </div>
+      </IOSDevice>
+
+      {/* Tweaks panel */}
+      <TweaksPanel navigate={navigate} screen={screen} />
+    </div>
+  );
+}
+
+// ── TWEAKS ────────────────────────────────────────────────────
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "accentColor": "#00d0e8",
+  "darkBg": "#090b12",
+  "compactMode": true
+}/*EDITMODE-END*/;
+
+function TweaksPanel({ navigate, screen }) {
+  const [show, setShow] = useState(false);
+  const [cfg, setCfg] = useState(TWEAK_DEFAULTS);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.data?.type === '__activate_edit_mode') setShow(true);
+      if (e.data?.type === '__deactivate_edit_mode') setShow(false);
+    };
+    window.addEventListener('message', handler);
+    window.parent.postMessage({ type:'__edit_mode_available' }, '*');
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
+  const set = (k, v) => {
+    const next = { ...cfg, [k]:v };
+    setCfg(next);
+    window.parent.postMessage({ type:'__edit_mode_set_keys', edits:{ [k]:v } }, '*');
+  };
+
+  if (!show) return null;
+
+  const screens = ['login','dashboard','otDetail','inspection','pointDetail','cierre','firma','createOT','perfil','otClosed'];
+
+  return (
+    <div style={{ position:'fixed', bottom:24, right:24, background:T.s1, border:`1px solid ${T.border}`, borderRadius:16, padding:'14px 16px', width:220, zIndex:999, boxShadow:'0 8px 32px rgba(0,0,0,0.5)' }}>
+      <div style={{ fontSize:13, fontWeight:700, color:T.text, marginBottom:12, display:'flex', alignItems:'center', gap:8 }}>
+        <DroneMark size={16} /> Tweaks
+      </div>
+
+      <div style={{ fontSize:10, color:T.sub, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Navegar a pantalla</div>
+      <select onChange={e => navigate(e.target.value)} defaultValue=""
+        style={{ width:'100%', background:T.s2, border:`1px solid ${T.border}`, borderRadius:8, padding:'7px 10px', color:T.text, fontSize:12, fontFamily:T.font, outline:'none', marginBottom:12, cursor:'pointer' }}>
+        <option value="" disabled>— Seleccionar —</option>
+        {screens.map(s => <option key={s} value={s}>{s}</option>)}
+      </select>
+
+      <div style={{ fontSize:10, color:T.sub, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Color de Acento</div>
+      <div style={{ display:'flex', gap:6, marginBottom:12 }}>
+        {['#00d0e8','#f0a030','#28d980','#a78bfa'].map(c => (
+          <div key={c} onClick={() => set('accentColor',c)} style={{ width:28, height:28, borderRadius:'50%', background:c, cursor:'pointer', border:`3px solid ${cfg.accentColor===c ? '#fff' : 'transparent'}` }} />
+        ))}
+      </div>
+
+      <div style={{ fontSize:10, color:T.sub, textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:6 }}>Modo Compacto</div>
+      <div onClick={() => set('compactMode', !cfg.compactMode)} style={{ height:28, borderRadius:8, background: cfg.compactMode ? T.cD : T.s2, border:`1px solid ${cfg.compactMode ? T.cyan : T.border}`, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontSize:12, color: cfg.compactMode ? T.cyan : T.sub, fontWeight:600 }}>
+        {cfg.compactMode ? 'Activado' : 'Desactivado'}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
