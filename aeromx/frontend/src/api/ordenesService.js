@@ -13,6 +13,21 @@ export const ordenesService = {
   cambiarEstado: (id, estado) =>
     client.patch(`/ordenes/${id}/estado`, { estado }),
 
+  recepcionarAeronave: (id, matriculaConfirmada) =>
+    client.post(`/ordenes/${id}/recepcion`, { matriculaConfirmada }),
+
+  iniciarMantenimiento: (id) =>
+    client.post(`/ordenes/${id}/iniciar-mantenimiento`),
+
+  asignar: (id, { tecnicoId, supervisorId }) =>
+    client.patch(`/ordenes/${id}/asignacion`, { tecnicoId, supervisorId }),
+
+  archivar: (id, archivada = true) =>
+    client.patch(`/ordenes/${id}/archivar`, { archivada }),
+
+  eliminar: (id) =>
+    client.delete(`/ordenes/${id}`),
+
   actualizarResultado: (id, resultadoId, data) =>
     client.patch(`/ordenes/${id}/puntos/${resultadoId}`, data),
 

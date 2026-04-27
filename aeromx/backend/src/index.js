@@ -4,6 +4,7 @@ import dotenv from 'dotenv'
 import { fileURLToPath } from 'url'
 import path from 'path'
 import authRoutes from './routes/auth.js'
+import usuariosRoutes from './routes/usuarios.js'
 import modelosRoutes from './routes/modelos.js'
 import aeronavesRoutes from './routes/aeronaves.js'
 import formatosRoutes from './routes/formatos.js'
@@ -22,6 +23,7 @@ app.use(express.json())
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')))
 
 app.use('/api/auth', authRoutes)
+app.use('/api/usuarios', usuariosRoutes)
 app.use('/api/modelos', modelosRoutes)
 app.use('/api/aeronaves', aeronavesRoutes)
 app.use('/api/formatos', formatosRoutes)

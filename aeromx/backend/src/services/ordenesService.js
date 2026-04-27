@@ -12,13 +12,17 @@ async function generarNumeroOT() {
 
 // ─── Órdenes de Trabajo ─────────────────────────────────────────────────────
 
-export function listarOrdenes(filtros = {}) {
+export async function listarOrdenes(filtros = {}) {
   const where = {}
   if (filtros.estado) where.estado = filtros.estado
   if (filtros.aeronaveId) where.aeronaveId = filtros.aeronaveId
   if (filtros.tecnicoId) where.tecnicoId = filtros.tecnicoId
 
-  return prisma.ordenTrabajo.findMany({
+  // archivada: true | false | 'todas' (por defecto excluye archivadas)
+  if (filtros.archivada === true)  where.archivada = true
+  else if (filtros.archivada === false) where.archivada = false
+
+  const ordenes = await prisma.ordenTrabajo.findMany({
     where,
     orderBy: { createdAt: 'desc' },
     include: {
@@ -28,9 +32,13 @@ export function listarOrdenes(filtros = {}) {
       },
       tecnico: { select: { id: true, nombre: true, rol: true } },
       supervisor: { select: { id: true, nombre: true, rol: true } },
+      resultados: { select: { id: true, completado: true } },
       _count: { select: { resultados: true } },
     },
   })
+
+  // Devolver los resultados "aplanados" — el frontend solo necesita saber cuáles están completados
+  return ordenes
 }
 
 export function obtenerOrden(id) {
@@ -50,7 +58,7 @@ export function obtenerOrden(id) {
       supervisor: { select: { id: true, nombre: true, rol: true, licenciaNum: true } },
       resultados: {
         include: {
-          punto: true,
+          punto: { include: { seccion: true } },
           firmante: { select: { id: true, nombre: true } },
           fotos: true,
         },
@@ -69,7 +77,8 @@ export function obtenerOrden(id) {
 export async function crearOrden(data) {
   const {
     formatoId, aeronaveId, tecnicoId, supervisorId,
-    cliente, ordenServicio, horasAlMomento, horasMotorDer, horasMotorIzq,
+    cliente, ordenServicio, lugarMantenimiento,
+    horasAlMomento, horasMotorDer, horasMotorIzq,
   } = data
 
   // Obtener modelo de la aeronave para filtrar puntos excluidos
@@ -98,21 +107,22 @@ export async function crearOrden(data) {
   return prisma.ordenTrabajo.create({
     data: {
       numeroOt,
-      formatoId,
-      aeronaveId,
-      tecnicoId,
-      supervisorId,
+      formato:   { connect: { id: formatoId } },
+      aeronave:  { connect: { id: aeronaveId } },
+      tecnico:   { connect: { id: tecnicoId } },
+      ...(supervisorId ? { supervisor: { connect: { id: supervisorId } } } : {}),
       cliente,
       ordenServicio,
+      lugarMantenimiento,
       horasAlMomento: horasAlMomento ?? 0,
-      horasMotorDer: horasMotorDer ?? 0,
-      horasMotorIzq: horasMotorIzq ?? 0,
+      horasMotorDer:  horasMotorDer  ?? 0,
+      horasMotorIzq:  horasMotorIzq  ?? 0,
       estado: 'borrador',
       resultados: {
         create: puntos.map(p => ({
-          puntoId: p.id,
+          punto:          { connect: { id: p.id } },
           estadoResultado: 'bueno',
-          completado: false,
+          completado:      false,
         })),
       },
     },
@@ -129,6 +139,109 @@ export function actualizarEstadoOrden(id, estado) {
   if (estado === 'en_proceso') data.fechaInicio = new Date()
   if (estado === 'cerrada') data.fechaCierre = new Date()
   return prisma.ordenTrabajo.update({ where: { id }, data })
+}
+
+// Registra la recepción de la aeronave validando la matrícula.
+// Solo técnicos asignados o supervisores pueden recepcionar.
+export async function registrarRecepcion(id, { matriculaConfirmada }) {
+  const orden = await prisma.ordenTrabajo.findUnique({
+    where: { id },
+    include: { aeronave: true },
+  })
+  if (!orden) throw Object.assign(new Error('Orden no encontrada'), { code: 'NOT_FOUND' })
+  if (orden.fechaRecepcion) {
+    throw Object.assign(new Error('La aeronave ya fue recepcionada'), { code: 'CONFLICT' })
+  }
+  const ingresada = (matriculaConfirmada || '').trim().toUpperCase()
+  const esperada = (orden.aeronave.matricula || '').trim().toUpperCase()
+  if (ingresada !== esperada) {
+    throw Object.assign(new Error('La matrícula ingresada no coincide con la de la aeronave'), { code: 'BAD_INPUT' })
+  }
+  return prisma.ordenTrabajo.update({
+    where: { id },
+    data: {
+      fechaRecepcion: new Date(),
+      matriculaRecepcion: esperada,
+    },
+  })
+}
+
+// Inicia el mantenimiento (desbloquea la edición de puntos).
+// Marca la orden como en_proceso y registra fechaInicio.
+export async function iniciarMantenimiento(id) {
+  const orden = await prisma.ordenTrabajo.findUnique({ where: { id } })
+  if (!orden) throw Object.assign(new Error('Orden no encontrada'), { code: 'NOT_FOUND' })
+  if (!orden.fechaRecepcion) {
+    throw Object.assign(
+      new Error('Debe registrar la recepción de la aeronave antes de iniciar el mantenimiento'),
+      { code: 'BAD_STATE' },
+    )
+  }
+  if (orden.fechaInicio) {
+    throw Object.assign(new Error('El mantenimiento ya fue iniciado'), { code: 'CONFLICT' })
+  }
+  return prisma.ordenTrabajo.update({
+    where: { id },
+    data: { estado: 'en_proceso', fechaInicio: new Date() },
+  })
+}
+
+// Archivar / desarchivar la orden (no borra, oculta del dashboard principal).
+export function archivarOrden(id, archivada = true) {
+  return prisma.ordenTrabajo.update({
+    where: { id },
+    data: { archivada },
+  })
+}
+
+// Eliminación definitiva — solo permitida para órdenes en borrador sin datos capturados.
+export async function eliminarOrden(id) {
+  const orden = await prisma.ordenTrabajo.findUnique({
+    where: { id },
+    include: { _count: { select: { resultados: true } } },
+  })
+  if (!orden) throw Object.assign(new Error('Orden no encontrada'), { code: 'NOT_FOUND' })
+  if (orden.estado !== 'borrador' && !orden.archivada) {
+    throw Object.assign(
+      new Error('Solo se pueden eliminar órdenes en borrador o archivadas. Cambia a borrador o archívala primero.'),
+      { code: 'BAD_STATE' },
+    )
+  }
+
+  // Borrar en cascada manual: fotos → resultados → cierre → orden
+  await prisma.$transaction(async (tx) => {
+    const resultados = await tx.resultadoPunto.findMany({
+      where: { ordenId: id }, select: { id: true },
+    })
+    const ids = resultados.map((r) => r.id)
+    if (ids.length > 0) {
+      await tx.fotoInspeccion.deleteMany({ where: { resultadoId: { in: ids } } })
+      await tx.resultadoPunto.deleteMany({ where: { ordenId: id } })
+    }
+    await tx.cierreOT.deleteMany({ where: { ordenId: id } })
+    await tx.ordenTrabajo.delete({ where: { id } })
+  })
+}
+
+// Asignar o reasignar técnico/supervisor a la orden (solo supervisores).
+export async function asignarOrden(id, { tecnicoId, supervisorId }) {
+  const data = {}
+  if (tecnicoId !== undefined) {
+    data.tecnico = tecnicoId ? { connect: { id: tecnicoId } } : undefined
+  }
+  if (supervisorId !== undefined) {
+    data.supervisor = supervisorId
+      ? { connect: { id: supervisorId } }
+      : { disconnect: true }
+  }
+  return prisma.ordenTrabajo.update({
+    where: { id },
+    data,
+    include: {
+      tecnico: { select: { id: true, nombre: true, rol: true } },
+      supervisor: { select: { id: true, nombre: true, rol: true } },
+    },
+  })
 }
 
 // ─── Resultados de Puntos ───────────────────────────────────────────────────

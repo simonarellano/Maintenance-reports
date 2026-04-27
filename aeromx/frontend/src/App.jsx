@@ -8,6 +8,10 @@ import DashboardPage from './pages/DashboardPage'
 import CrearOTPage from './pages/CrearOTPage'
 import InspeccionPage from './pages/InspeccionPage'
 import CierreOTPage from './pages/CierreOTPage'
+import ModelosPage from './pages/ModelosPage'
+import AeronavesPage from './pages/AeronavesPage'
+import UsuariosPage from './pages/UsuariosPage'
+import FlotaPage from './pages/FlotaPage'
 
 function App() {
   const hydrate = useAuthStore((state) => state.hydrate)
@@ -17,7 +21,7 @@ function App() {
   }, [hydrate])
 
   return (
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route
@@ -49,6 +53,38 @@ function App() {
           element={
             <ProtectedRoute>
               <CierreOTPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/modelos"
+          element={
+            <ProtectedRoute>
+              <ModelosPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/aeronaves"
+          element={
+            <ProtectedRoute>
+              <AeronavesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/usuarios"
+          element={
+            <ProtectedRoute>
+              <UsuariosPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/flota"
+          element={
+            <ProtectedRoute>
+              <FlotaPage />
             </ProtectedRoute>
           }
         />

@@ -21,3 +21,15 @@ export function crearModelo(data) {
 export function actualizarModelo(id, data) {
   return prisma.modeloAeronave.update({ where: { id }, data })
 }
+
+export async function eliminarModelo(id) {
+  // Evitar eliminar si tiene aeronaves asociadas
+  const count = await prisma.aeronave.count({ where: { modeloId: id } })
+  if (count > 0) {
+    throw Object.assign(
+      new Error(`No se puede eliminar: el modelo tiene ${count} aeronave(s) asociada(s)`),
+      { code: 'CONFLICT' },
+    )
+  }
+  return prisma.modeloAeronave.delete({ where: { id } })
+}

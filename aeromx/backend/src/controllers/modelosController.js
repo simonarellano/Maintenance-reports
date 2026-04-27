@@ -35,3 +35,14 @@ export async function actualizar(req, res) {
     throw e
   }
 }
+
+export async function eliminar(req, res) {
+  try {
+    await svc.eliminarModelo(req.params.id)
+    res.status(204).send()
+  } catch (e) {
+    if (e.code === 'CONFLICT') return res.status(409).json({ error: e.message })
+    if (e.code === 'P2025') return res.status(404).json({ error: 'Modelo no encontrado' })
+    throw e
+  }
+}

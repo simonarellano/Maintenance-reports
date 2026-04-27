@@ -36,6 +36,15 @@ router.get('/:id', ctrl.obtener)
 router.post('/', ctrl.crear)
 router.patch('/:id/estado', requireRole(['supervisor', 'ingeniero']), ctrl.actualizarEstado)
 
+// ── Hitos del ciclo de vida ────────────────────────────────────────────────
+router.post('/:id/recepcion', ctrl.recepcionarAeronave)
+router.post('/:id/iniciar-mantenimiento', ctrl.iniciarMantenimiento)
+router.patch('/:id/asignacion', requireRole(['supervisor']), ctrl.asignarOrden)
+
+// ── Archivar / eliminar ────────────────────────────────────────────────────
+router.patch('/:id/archivar', requireRole(['supervisor']), ctrl.archivar)
+router.delete('/:id', requireRole(['supervisor']), ctrl.eliminar)
+
 // ── Resultados de puntos ────────────────────────────────────────────────────
 router.patch('/:id/puntos/:resultadoId', ctrl.actualizarResultado)
 router.post('/:id/puntos/:resultadoId/firmar', ctrl.firmarResultado)
