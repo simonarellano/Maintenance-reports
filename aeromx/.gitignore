@@ -5,3 +5,4 @@ dist/
 *.log
 backend/prisma/migrations/
 backend/uploads
+frontend/public

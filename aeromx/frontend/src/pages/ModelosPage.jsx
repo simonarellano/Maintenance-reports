@@ -3,6 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { Header } from '../components/Header'
 import { modelosService } from '../api/modelosService'
 import { useAuthStore } from '../store/authStore'
+import { T } from '../tokens/design'
+import {
+  Btn, BtnSm, Card, ErrorBanner, Field, FieldTextarea, Hdr, Pill, Spinner,
+} from '../components/ui'
 
 export default function ModelosPage() {
   const navigate = useNavigate()
@@ -56,39 +60,25 @@ export default function ModelosPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div style={{ minHeight: '100vh', background: T.bg }}>
       <Header />
-      <main className="container mx-auto px-4 py-8">
-        <button
-          onClick={() => navigate('/dashboard')}
-          className="mb-4 text-blue-600 hover:text-blue-800 flex items-center gap-2"
-        >
-          ← Volver
-        </button>
-
-        <div className="flex justify-between items-start mb-6 flex-wrap gap-3">
-          <div>
-            <h2 className="text-3xl font-bold text-gray-800">Catálogo de Modelos</h2>
-            <p className="text-sm text-gray-500 mt-1">
-              Gestión de modelos de aeronaves utilizados en la flota
-            </p>
-          </div>
+      <main style={{ maxWidth: 1100, margin: '0 auto', padding: '24px 20px 60px' }}>
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+          gap: 16, flexWrap: 'wrap',
+        }}>
+          <Hdr title="Catálogo de modelos" sub="Familias de aeronaves" back={() => navigate('/dashboard')} />
           {esSupervisor && (
-            <button
-              onClick={() => { setModoAlta(true); setEditando(null) }}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-semibold"
-            >
-              + Nuevo modelo
-            </button>
+            <div style={{ paddingTop: 6 }}>
+              <Btn label="+ Nuevo modelo" onClick={() => { setModoAlta(true); setEditando(null) }} />
+            </div>
           )}
         </div>
+        <p style={{ color: T.sub, fontSize: 13, marginTop: -8, marginBottom: 20 }}>
+          Gestión de modelos de aeronaves utilizados en la flota
+        </p>
 
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-            {error}
-            <button className="float-right font-bold" onClick={() => setError('')}>×</button>
-          </div>
-        )}
+        <ErrorBanner onClose={() => setError('')}>{error}</ErrorBanner>
 
         {(modoAlta || editando) && esSupervisor && (
           <FormularioModelo
@@ -99,65 +89,96 @@ export default function ModelosPage() {
         )}
 
         {loading ? (
-          <div className="text-center py-10">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <p className="text-gray-600 mt-2">Cargando modelos…</p>
-          </div>
+          <Spinner label="Cargando modelos…" />
         ) : modelos.length === 0 ? (
-          <div className="bg-white rounded-lg shadow p-10 text-center text-gray-600">
-            No hay modelos registrados.
-          </div>
+          <Card padding={40} style={{ textAlign: 'center' }}>
+            <p style={{ color: T.sub }}>No hay modelos registrados.</p>
+          </Card>
         ) : (
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200 text-left">
-                <tr className="text-gray-700">
-                  <th className="px-4 py-3 font-semibold">Modelo</th>
-                  <th className="px-4 py-3 font-semibold">Fabricante</th>
-                  <th className="px-4 py-3 font-semibold">Descripción</th>
-                  <th className="px-4 py-3 font-semibold text-center">Aeronaves</th>
-                  {esSupervisor && <th className="px-4 py-3 font-semibold text-right">Acciones</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {modelos.map((m) => (
-                  <tr key={m.id} className="border-b border-gray-100 hover:bg-gray-50">
-                    <td className="px-4 py-3 font-semibold text-gray-800">{m.nombre}</td>
-                    <td className="px-4 py-3 text-gray-600">{m.fabricante || '—'}</td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {m.descripcion
-                        ? <span className="line-clamp-2">{m.descripcion}</span>
-                        : <span className="text-gray-400 italic">—</span>}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-semibold">
-                        {m._count?.aeronaves ?? 0}
-                      </span>
-                    </td>
-                    {esSupervisor && (
-                      <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
-                        <button
-                          onClick={() => { setEditando(m); setModoAlta(false) }}
-                          className="px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded border border-gray-300"
-                        >
-                          Editar
-                        </button>
-                        <button
-                          onClick={() => eliminar(m)}
-                          className="px-3 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded border border-red-300"
-                        >
-                          Eliminar
-                        </button>
-                      </td>
-                    )}
+          <Card padding={0} style={{ overflow: 'hidden' }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: T.s2 }}>
+                    <Th>Modelo</Th>
+                    <Th>Fabricante</Th>
+                    <Th>Descripción</Th>
+                    <Th align="center">Aeronaves</Th>
+                    {esSupervisor && <Th align="right">Acciones</Th>}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {modelos.map((m) => (
+                    <tr key={m.id} style={{ borderTop: `1px solid ${T.border}` }}>
+                      <Td>
+                        <span style={{ fontWeight: 600, color: T.text }}>{m.nombre}</span>
+                      </Td>
+                      <Td>{m.fabricante || '—'}</Td>
+                      <Td>
+                        {m.descripcion ? (
+                          <span style={{
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden', textOverflow: 'ellipsis',
+                            color: T.sub, fontSize: 12, lineHeight: 1.5,
+                          }}>{m.descripcion}</span>
+                        ) : (
+                          <span style={{ color: T.dim, fontStyle: 'italic' }}>—</span>
+                        )}
+                      </Td>
+                      <Td align="center">
+                        <Pill
+                          small
+                          label={String(m._count?.aeronaves ?? 0)}
+                          color={T.cyan}
+                          bg={T.cD}
+                        />
+                      </Td>
+                      {esSupervisor && (
+                        <Td align="right">
+                          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                            <BtnSm
+                              variant="surface"
+                              label="Editar"
+                              onClick={() => { setEditando(m); setModoAlta(false) }}
+                            />
+                            <BtnSm
+                              variant="danger"
+                              label="Eliminar"
+                              onClick={() => eliminar(m)}
+                            />
+                          </div>
+                        </Td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         )}
       </main>
     </div>
+  )
+}
+
+function Th({ children, align }) {
+  return (
+    <th style={{
+      padding: '12px 14px', textAlign: align || 'left',
+      fontSize: 10, color: T.sub, fontWeight: 600,
+      letterSpacing: '0.07em', textTransform: 'uppercase',
+    }}>{children}</th>
+  )
+}
+
+function Td({ children, align }) {
+  return (
+    <td style={{
+      padding: '14px 14px', textAlign: align || 'left',
+      color: T.text, fontSize: 13, verticalAlign: 'middle',
+    }}>{children}</td>
   )
 }
 
@@ -183,68 +204,46 @@ function FormularioModelo({ inicial, onCancelar, onGuardar }) {
   }
 
   return (
-    <form
-      onSubmit={submit}
-      className="bg-white rounded-lg shadow p-5 mb-6 border-l-4 border-l-blue-500 space-y-3"
-    >
-      <h3 className="text-lg font-bold text-gray-800">
-        {inicial ? 'Editar modelo' : 'Nuevo modelo'}
-      </h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Nombre <span className="text-red-600">*</span>
-          </label>
-          <input
-            type="text"
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
+    <Card padding={20} style={{ marginBottom: 18, borderLeft: `3px solid ${T.cyan}` }}>
+      <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>
+          {inicial ? 'Editar modelo' : 'Nuevo modelo'}
+        </div>
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12,
+        }}>
+          <Field
+            label="Nombre"
             required
+            value={nombre}
+            onChange={setNombre}
             placeholder="Ej. Cessna 172S"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
           />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Fabricante
-          </label>
-          <input
-            type="text"
+          <Field
+            label="Fabricante"
             value={fabricante}
-            onChange={(e) => setFabricante(e.target.value)}
+            onChange={setFabricante}
             placeholder="Ej. Cessna"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
           />
         </div>
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Descripción
-        </label>
-        <textarea
-          rows={2}
+        <FieldTextarea
+          label="Descripción"
           value={descripcion}
-          onChange={(e) => setDescripcion(e.target.value)}
+          onChange={setDescripcion}
           placeholder="Descripción breve del modelo"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+          rows={3}
+          minHeight={64}
         />
-      </div>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={onCancelar}
-          className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-        >
-          Cancelar
-        </button>
-        <button
-          type="submit"
-          disabled={saving || !nombre.trim()}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold disabled:bg-blue-400"
-        >
-          {saving ? 'Guardando…' : (inicial ? 'Guardar cambios' : 'Crear modelo')}
-        </button>
-      </div>
-    </form>
+        <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+          <Btn variant="ghost" label="Cancelar" onClick={onCancelar} style={{ flex: 1 }} />
+          <Btn
+            type="submit"
+            label={saving ? 'Guardando…' : (inicial ? 'Guardar cambios' : 'Crear modelo')}
+            disabled={saving || !nombre.trim()}
+            style={{ flex: 1 }}
+          />
+        </div>
+      </form>
+    </Card>
   )
 }

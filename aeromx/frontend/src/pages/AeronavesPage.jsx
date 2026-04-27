@@ -4,6 +4,10 @@ import { Header } from '../components/Header'
 import { aeronavesService } from '../api/aeronavesService'
 import { modelosService } from '../api/modelosService'
 import { useAuthStore } from '../store/authStore'
+import { T } from '../tokens/design'
+import {
+  Btn, BtnSm, Card, ErrorBanner, Field, FieldSelect, Hdr, Pill, Spinner,
+} from '../components/ui'
 
 export default function AeronavesPage() {
   const navigate = useNavigate()
@@ -63,62 +67,69 @@ export default function AeronavesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div style={{ minHeight: '100vh', background: T.bg }}>
       <Header />
-      <main className="container mx-auto px-4 py-8">
-        <button
-          onClick={() => navigate('/dashboard')}
-          className="mb-4 text-blue-600 hover:text-blue-800 flex items-center gap-2"
-        >
-          ← Volver
-        </button>
-
-        <div className="flex justify-between items-start mb-6 flex-wrap gap-3">
-          <div>
-            <h2 className="text-3xl font-bold text-gray-800">Aeronaves</h2>
-            <p className="text-sm text-gray-500 mt-1">
-              Gestión de aeronaves registradas en la flota
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <label className="flex items-center gap-2 text-sm text-gray-700">
+      <main style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 20px 60px' }}>
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+          gap: 16, flexWrap: 'wrap', marginBottom: 4,
+        }}>
+          <Hdr
+            title="Aeronaves"
+            sub="Catálogo de flota"
+            back={() => navigate('/dashboard')}
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 6, flexWrap: 'wrap' }}>
+            <label style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              fontSize: 13, color: T.sub, cursor: 'pointer',
+            }}>
               <input
                 type="checkbox"
                 checked={incluirInactivas}
                 onChange={(e) => setIncluirInactivas(e.target.checked)}
+                style={{ width: 16, height: 16 }}
               />
               Incluir inactivas
             </label>
             {esSupervisor && (
-              <button
+              <Btn
+                label="+ Nueva aeronave"
                 onClick={() => { setModoAlta(true); setEditando(null) }}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-semibold"
                 disabled={modelos.length === 0}
                 title={modelos.length === 0 ? 'Registra al menos un modelo antes de alta de aeronaves' : ''}
-              >
-                + Nueva aeronave
-              </button>
+              />
             )}
           </div>
         </div>
+        <p style={{ color: T.sub, fontSize: 13, marginTop: -8, marginBottom: 20 }}>
+          Gestión de aeronaves registradas en la flota
+        </p>
 
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-            {error}
-            <button className="float-right font-bold" onClick={() => setError('')}>×</button>
-          </div>
-        )}
+        <ErrorBanner onClose={() => setError('')}>{error}</ErrorBanner>
 
         {modelos.length === 0 && esSupervisor && (
-          <div className="bg-amber-50 border border-amber-300 text-amber-800 rounded-lg p-4 mb-4 text-sm">
-            No hay modelos registrados. Primero crea un modelo en el{' '}
-            <button
-              onClick={() => navigate('/modelos')}
-              className="underline font-semibold"
-            >
-              catálogo de modelos
-            </button>.
-          </div>
+          <Card
+            padding={14}
+            style={{
+              marginBottom: 16,
+              background: T.aD,
+              borderColor: `${T.amber}40`,
+              borderLeft: `3px solid ${T.amber}`,
+            }}
+          >
+            <div style={{ fontSize: 13, color: T.text }}>
+              No hay modelos registrados. Primero crea un modelo en el{' '}
+              <button
+                onClick={() => navigate('/modelos')}
+                style={{
+                  background: 'transparent', border: 'none',
+                  color: T.amber, fontWeight: 700, cursor: 'pointer',
+                  textDecoration: 'underline', fontFamily: T.font, fontSize: 13,
+                }}
+              >catálogo de modelos</button>.
+            </div>
+          </Card>
         )}
 
         {(modoAlta || editando) && esSupervisor && (
@@ -131,83 +142,110 @@ export default function AeronavesPage() {
         )}
 
         {loading ? (
-          <div className="text-center py-10">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <p className="text-gray-600 mt-2">Cargando aeronaves…</p>
-          </div>
+          <Spinner label="Cargando aeronaves…" />
         ) : aeronaves.length === 0 ? (
-          <div className="bg-white rounded-lg shadow p-10 text-center text-gray-600">
-            No hay aeronaves registradas.
-          </div>
+          <Card padding={40} style={{ textAlign: 'center' }}>
+            <p style={{ color: T.sub }}>No hay aeronaves registradas.</p>
+          </Card>
         ) : (
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200 text-left">
-                <tr className="text-gray-700">
-                  <th className="px-4 py-3 font-semibold">Matrícula</th>
-                  <th className="px-4 py-3 font-semibold">Modelo</th>
-                  <th className="px-4 py-3 font-semibold">N.º serie</th>
-                  <th className="px-4 py-3 font-semibold text-right">Horas</th>
-                  <th className="px-4 py-3 font-semibold text-center">Estado</th>
-                  {esSupervisor && <th className="px-4 py-3 font-semibold text-right">Acciones</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {aeronaves.map((a) => (
-                  <tr key={a.id} className={`border-b border-gray-100 hover:bg-gray-50 ${
-                    a.activa === false ? 'opacity-60' : ''
-                  }`}>
-                    <td className="px-4 py-3 font-mono font-semibold text-gray-800">{a.matricula}</td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {a.modelo?.nombre || '—'}
-                      {a.modelo?.fabricante && (
-                        <span className="text-xs text-gray-400 block">{a.modelo.fabricante}</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-gray-600 font-mono text-xs">
-                      {a.numeroSerie || '—'}
-                    </td>
-                    <td className="px-4 py-3 text-right text-gray-700 text-sm">
-                      <div>Total: <strong>{a.horasTotales ?? 0}h</strong></div>
-                      <div className="text-xs text-gray-500">
-                        D: {a.horasMotorDer ?? 0}h · I: {a.horasMotorIzq ?? 0}h
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <span className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${
-                        a.activa === false
-                          ? 'bg-gray-200 text-gray-700'
-                          : 'bg-green-100 text-green-800'
-                      }`}>
-                        {a.activa === false ? 'Inactiva' : 'Activa'}
-                      </span>
-                    </td>
-                    {esSupervisor && (
-                      <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
-                        <button
-                          onClick={() => { setEditando(a); setModoAlta(false) }}
-                          className="px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded border border-gray-300"
-                        >
-                          Editar
-                        </button>
-                        {a.activa !== false && (
-                          <button
-                            onClick={() => desactivar(a)}
-                            className="px-3 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded border border-red-300"
-                          >
-                            Desactivar
-                          </button>
-                        )}
-                      </td>
-                    )}
+          <Card padding={0} style={{ overflow: 'hidden' }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: T.font }}>
+                <thead>
+                  <tr style={{ background: T.s2 }}>
+                    <Th>Matrícula</Th>
+                    <Th>Modelo</Th>
+                    <Th>N.º serie</Th>
+                    <Th align="right">Horas</Th>
+                    <Th align="center">Estado</Th>
+                    {esSupervisor && <Th align="right">Acciones</Th>}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {aeronaves.map((a) => (
+                    <tr key={a.id} style={{
+                      borderTop: `1px solid ${T.border}`,
+                      opacity: a.activa === false ? 0.55 : 1,
+                    }}>
+                      <Td>
+                        <span style={{ fontFamily: T.mono, fontSize: 14, color: T.text, fontWeight: 600 }}>
+                          {a.matricula}
+                        </span>
+                      </Td>
+                      <Td>
+                        <div style={{ color: T.text, fontSize: 13 }}>
+                          {a.modelo?.nombre || '—'}
+                        </div>
+                        {a.modelo?.fabricante && (
+                          <div style={{ fontSize: 11, color: T.sub, marginTop: 2 }}>{a.modelo.fabricante}</div>
+                        )}
+                      </Td>
+                      <Td>
+                        <span style={{ fontFamily: T.mono, fontSize: 12, color: T.sub }}>
+                          {a.numeroSerie || '—'}
+                        </span>
+                      </Td>
+                      <Td align="right">
+                        <div style={{ fontSize: 13, color: T.text, fontFamily: T.mono }}>
+                          {a.horasTotales ?? 0} h
+                        </div>
+                        <div style={{ fontSize: 11, color: T.sub, fontFamily: T.mono, marginTop: 2 }}>
+                          D: {a.horasMotorDer ?? 0}h · I: {a.horasMotorIzq ?? 0}h
+                        </div>
+                      </Td>
+                      <Td align="center">
+                        {a.activa === false ? (
+                          <Pill small label="Inactiva" color={T.sub} bg={T.s1} />
+                        ) : (
+                          <Pill small label="Activa" color={T.green} bg={T.gD} />
+                        )}
+                      </Td>
+                      {esSupervisor && (
+                        <Td align="right">
+                          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                            <BtnSm
+                              variant="surface"
+                              label="Editar"
+                              onClick={() => { setEditando(a); setModoAlta(false) }}
+                            />
+                            {a.activa !== false && (
+                              <BtnSm
+                                variant="danger"
+                                label="Desactivar"
+                                onClick={() => desactivar(a)}
+                              />
+                            )}
+                          </div>
+                        </Td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         )}
       </main>
     </div>
+  )
+}
+
+function Th({ children, align }) {
+  return (
+    <th style={{
+      padding: '12px 14px', textAlign: align || 'left',
+      fontSize: 10, color: T.sub, fontWeight: 600,
+      letterSpacing: '0.07em', textTransform: 'uppercase',
+    }}>{children}</th>
+  )
+}
+
+function Td({ children, align }) {
+  return (
+    <td style={{
+      padding: '14px 14px', textAlign: align || 'left',
+      verticalAlign: 'middle', color: T.text, fontSize: 13,
+    }}>{children}</td>
   )
 }
 
@@ -239,103 +277,82 @@ function FormularioAeronave({ inicial, modelos, onCancelar, onGuardar }) {
   }
 
   return (
-    <form
-      onSubmit={submit}
-      className="bg-white rounded-lg shadow p-5 mb-6 border-l-4 border-l-blue-500 space-y-3"
+    <Card
+      padding={20}
+      style={{ marginBottom: 18, borderLeft: `3px solid ${T.cyan}` }}
     >
-      <h3 className="text-lg font-bold text-gray-800">
-        {inicial ? `Editar ${inicial.matricula}` : 'Nueva aeronave'}
-      </h3>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Matrícula <span className="text-red-600">*</span>
-          </label>
-          <input
-            type="text"
+      <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>
+          {inicial ? `Editar ${inicial.matricula}` : 'Nueva aeronave'}
+        </div>
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12,
+        }}>
+          <Field
+            label="Matrícula"
+            required
             value={matricula}
-            onChange={(e) => setMatricula(e.target.value.toUpperCase())}
-            required
+            onChange={(v) => setMatricula(v.toUpperCase())}
             placeholder="XB-ABC"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg font-mono"
+            mono
           />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Modelo <span className="text-red-600">*</span>
-          </label>
-          <select
-            value={modeloId}
-            onChange={(e) => setModeloId(e.target.value)}
+          <FieldSelect
+            label="Modelo"
             required
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-          >
-            <option value="">-- Selecciona un modelo --</option>
-            {modelos.map(m => (
-              <option key={m.id} value={m.id}>
-                {m.nombre}{m.fabricante ? ` · ${m.fabricante}` : ''}
-              </option>
-            ))}
-          </select>
+            value={modeloId}
+            onChange={setModeloId}
+            placeholder="-- Selecciona un modelo --"
+            options={modelos.map(m => ({
+              value: m.id,
+              label: `${m.nombre}${m.fabricante ? ` · ${m.fabricante}` : ''}`,
+            }))}
+          />
         </div>
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          Número de serie
-        </label>
-        <input
-          type="text"
+        <Field
+          label="Número de serie"
           value={numeroSerie}
-          onChange={(e) => setNumeroSerie(e.target.value)}
+          onChange={setNumeroSerie}
           placeholder="Ej. C172S-12345"
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg font-mono"
+          mono
         />
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Horas totales</label>
-          <input
-            type="number" step="0.1" min="0"
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12,
+        }}>
+          <Field
+            label="Horas totales"
+            type="number"
             value={horasTotales}
-            onChange={(e) => setHorasTotales(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+            onChange={setHorasTotales}
+            mono
+            inputProps={{ step: '0.1', min: '0' }}
           />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Horas Motor Der.</label>
-          <input
-            type="number" step="0.1" min="0"
+          <Field
+            label="Horas motor derecho"
+            type="number"
             value={horasMotorDer}
-            onChange={(e) => setHorasMotorDer(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+            onChange={setHorasMotorDer}
+            mono
+            inputProps={{ step: '0.1', min: '0' }}
           />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Horas Motor Izq.</label>
-          <input
-            type="number" step="0.1" min="0"
+          <Field
+            label="Horas motor izquierdo"
+            type="number"
             value={horasMotorIzq}
-            onChange={(e) => setHorasMotorIzq(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+            onChange={setHorasMotorIzq}
+            mono
+            inputProps={{ step: '0.1', min: '0' }}
           />
         </div>
-      </div>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={onCancelar}
-          className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-        >
-          Cancelar
-        </button>
-        <button
-          type="submit"
-          disabled={saving || !matricula.trim() || !modeloId}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold disabled:bg-blue-400"
-        >
-          {saving ? 'Guardando…' : (inicial ? 'Guardar cambios' : 'Registrar aeronave')}
-        </button>
-      </div>
-    </form>
+        <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+          <Btn variant="ghost" label="Cancelar" onClick={onCancelar} style={{ flex: 1 }} />
+          <Btn
+            type="submit"
+            label={saving ? 'Guardando…' : (inicial ? 'Guardar cambios' : 'Registrar aeronave')}
+            disabled={saving || !matricula.trim() || !modeloId}
+            style={{ flex: 1 }}
+          />
+        </div>
+      </form>
+    </Card>
   )
 }

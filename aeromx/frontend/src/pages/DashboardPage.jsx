@@ -3,25 +3,21 @@ import { useNavigate } from 'react-router-dom'
 import { Header } from '../components/Header'
 import { ordenesService } from '../api/ordenesService'
 import { useAuthStore } from '../store/authStore'
-
-const ESTADO_COLORS = {
-  borrador:        'bg-gray-100 text-gray-800 border-gray-300',
-  en_proceso:      'bg-blue-100 text-blue-800 border-blue-300',
-  pendiente_firma: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-  cerrada:         'bg-green-100 text-green-800 border-green-300',
-}
+import { T, STATUS } from '../tokens/design'
+import {
+  Btn, BtnSm, Card, ErrorBanner, Pill, ProgressBar, Spinner,
+} from '../components/ui'
 
 const ESTADO_LABELS = {
   todas:           'Todas',
   borrador:        'Borrador',
   en_proceso:      'En Proceso',
-  pendiente_firma: 'Pendiente Firma',
-  cerrada:         'Cerradas (histórico)',
+  pendiente_firma: 'Pend. Firma',
+  cerrada:         'Cerradas',
 }
 
 const FILTROS_ORDEN = ['todas', 'borrador', 'en_proceso', 'pendiente_firma', 'cerrada']
 
-// Vistas de alto nivel del dashboard
 const VISTAS = [
   { value: 'mias',    label: 'Mis órdenes abiertas', descripcion: 'Sólo las órdenes asignadas a ti que aún no están cerradas' },
   { value: 'todas',   label: 'Ver todo',             descripcion: 'Todas las órdenes activas (propias y ajenas)' },
@@ -34,7 +30,7 @@ export default function DashboardPage() {
   const esSupervisor = user?.rol === 'supervisor'
   const [ordenes, setOrdenes] = useState([])
   const [filtro, setFiltro] = useState('todas')
-  const [vista, setVista] = useState('mias') // mias | todas | archivo
+  const [vista, setVista] = useState('mias')
   const [busqueda, setBusqueda] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -49,7 +45,6 @@ export default function DashboardPage() {
       const params = {}
       if (filtro !== 'todas') params.estado = filtro
       if (vista === 'archivo') params.archivada = 'true'
-      // 'mias' y 'todas' traen no-archivadas (default del backend)
       const response = await ordenesService.listar(params)
       setOrdenes(response.data || [])
       setError('')
@@ -135,298 +130,345 @@ export default function DashboardPage() {
     }
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <Header />
+  const vistaActiva = VISTAS.find(v => v.value === vista)
 
-      <main className="container mx-auto px-4 py-8">
-        <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
+  return (
+    <div style={{ minHeight: '100vh', background: T.bg }}>
+      <Header />
+      <main style={{ maxWidth: 1280, margin: '0 auto', padding: '28px 20px 60px' }}>
+        {/* Encabezado de la sección */}
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+          gap: 16, flexWrap: 'wrap', marginBottom: 22,
+        }}>
           <div>
-            <h2 className="text-3xl font-bold text-gray-800">
-              {VISTAS.find(v => v.value === vista)?.label || 'Órdenes de Trabajo'}
-            </h2>
-            <p className="text-gray-500 text-sm mt-1">
-              {VISTAS.find(v => v.value === vista)?.descripcion}
+            <div style={{
+              fontSize: 11, color: T.sub, letterSpacing: '0.08em',
+              textTransform: 'uppercase', fontFamily: T.mono, marginBottom: 4,
+            }}>Dashboard de operaciones</div>
+            <h2 style={{
+              fontSize: 28, fontWeight: 700, color: T.text,
+              letterSpacing: '-0.02em',
+            }}>{vistaActiva?.label || 'Órdenes de Trabajo'}</h2>
+            <p style={{ color: T.sub, fontSize: 13, marginTop: 4 }}>
+              {vistaActiva?.descripcion}
             </p>
           </div>
-          <button
+          <Btn
+            label="+ Nueva Orden"
             onClick={() => navigate('/ordenes/crear')}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition duration-200 font-semibold"
-          >
-            + Nueva Orden
-          </button>
+          />
         </div>
 
-        {/* Selector de vista principal — separa "mis órdenes" del histórico general */}
-        <div className="bg-white rounded-lg shadow p-2 mb-4 flex gap-2 flex-wrap">
-          {VISTAS.map(v => (
-            <button
-              key={v.value}
-              onClick={() => { setVista(v.value); setFiltro('todas') }}
-              className={`flex-1 min-w-[160px] px-4 py-2 rounded-lg font-semibold text-sm transition ${
-                vista === v.value
-                  ? 'bg-blue-600 text-white shadow'
-                  : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              {v.label}
-            </button>
-          ))}
+        {/* Tabs de vista */}
+        <div style={{
+          display: 'flex', gap: 6, marginBottom: 18, flexWrap: 'wrap',
+          background: T.s1, border: `1px solid ${T.border}`,
+          borderRadius: 12, padding: 4,
+        }}>
+          {VISTAS.map((v) => {
+            const active = vista === v.value
+            return (
+              <button
+                key={v.value}
+                onClick={() => { setVista(v.value); setFiltro('todas') }}
+                style={{
+                  flex: 1, minWidth: 140,
+                  padding: '10px 14px', borderRadius: 9,
+                  background: active ? T.cD : 'transparent',
+                  color: active ? T.cyan : T.sub,
+                  border: active ? `1px solid ${T.cyan}30` : '1px solid transparent',
+                  fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  fontFamily: T.font, transition: 'background .15s, color .15s',
+                }}
+              >{v.label}</button>
+            )
+          })}
         </div>
 
-        {/* Tarjetas de resumen — sólo en vistas agregadas */}
+        {/* Tarjetas de resumen */}
         {filtro === 'todas' && !loading && vista !== 'archivo' && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-            <StatCard label="Total" value={contadores.total} color="gray" />
-            <StatCard label="En proceso" value={contadores.enProceso} color="blue" />
-            <StatCard label="Pendiente firma" value={contadores.pendienteFirma} color="yellow" />
+          <div style={{
+            display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+            gap: 10, marginBottom: 18,
+          }}>
+            <StatChip label="Total"           value={contadores.total}          c={T.sub}    bg="rgba(96,112,160,0.12)" />
+            <StatChip label="En proceso"      value={contadores.enProceso}      c={T.cyan}   bg={T.cD} />
+            <StatChip label="Pendiente firma" value={contadores.pendienteFirma} c={T.amber}  bg={T.aD} />
             {vista === 'todas' && (
-              <StatCard label="Cerradas" value={contadores.cerradas} color="green" />
+              <StatChip label="Cerradas"      value={contadores.cerradas}       c={T.green}  bg={T.gD} />
             )}
           </div>
         )}
 
-        {/* Filtros de estado + búsqueda */}
-        <div className="bg-white rounded-lg shadow p-4 mb-6 space-y-3">
-          <div className="flex gap-2 flex-wrap">
+        {/* Filtros + búsqueda */}
+        <Card padding={14} style={{ marginBottom: 18 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
             {FILTROS_ORDEN
-              .filter(v => vista !== 'mias' || v !== 'cerrada')
-              .map((value) => (
-                <button
-                  key={value}
-                  onClick={() => setFiltro(value)}
-                  className={`px-4 py-2 rounded-lg font-medium transition duration-200 text-sm ${
-                    filtro === value
-                      ? 'bg-blue-600 text-white shadow'
-                      : 'bg-gray-100 text-gray-700 border border-gray-300 hover:border-blue-500'
-                  }`}
-                >
-                  {ESTADO_LABELS[value]}
-                </button>
-              ))}
+              .filter((v) => vista !== 'mias' || v !== 'cerrada')
+              .map((v) => {
+                const active = filtro === v
+                return (
+                  <button
+                    key={v}
+                    onClick={() => setFiltro(v)}
+                    style={{
+                      padding: '7px 14px', borderRadius: 999,
+                      background: active ? T.cD : T.s2,
+                      color: active ? T.cyan : T.sub,
+                      border: active ? `1px solid ${T.cyan}40` : `1px solid ${T.border}`,
+                      fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                      letterSpacing: '0.04em', textTransform: 'uppercase',
+                      fontFamily: T.font,
+                    }}
+                  >
+                    {ESTADO_LABELS[v]}
+                  </button>
+                )
+              })}
           </div>
-          <div className="relative">
+          <div style={{ position: 'relative' }}>
             <input
               type="text"
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
-              placeholder="🔎 Buscar por matrícula, N.º O/T, cliente, técnico o formato…"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Buscar por matrícula, N.º O/T, cliente, técnico o formato…"
+              style={{
+                width: '100%',
+                background: T.s2, border: `1px solid ${T.border}`, borderRadius: 10,
+                padding: '11px 40px 11px 38px', color: T.text, fontSize: 14,
+                outline: 'none',
+              }}
             />
+            <span style={{
+              position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)',
+              color: T.sub, pointerEvents: 'none',
+            }}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <circle cx="7" cy="7" r="5.2" stroke={T.sub} strokeWidth="1.5"/>
+                <path d="M11 11l3 3" stroke={T.sub} strokeWidth="1.7" strokeLinecap="round"/>
+              </svg>
+            </span>
             {busqueda && (
               <button
                 onClick={() => setBusqueda('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
-              >
-                ×
-              </button>
+                style={{
+                  position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                  background: 'transparent', border: 'none',
+                  color: T.sub, fontSize: 18, cursor: 'pointer', padding: '0 6px',
+                }}
+              >×</button>
             )}
           </div>
-        </div>
+        </Card>
 
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-            {error}
-          </div>
-        )}
+        <ErrorBanner onClose={() => setError('')}>{error}</ErrorBanner>
 
         {/* Lista */}
-        <div className="space-y-4">
-          {loading ? (
-            <div className="text-center py-12">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <p className="text-gray-600 mt-2">Cargando órdenes...</p>
+        {loading ? (
+          <Spinner label="Cargando órdenes…" />
+        ) : ordenesFiltradas.length === 0 ? (
+          <Card padding={40} style={{ textAlign: 'center' }}>
+            <div style={{ color: T.sub, fontSize: 14, marginBottom: 18 }}>
+              {busqueda
+                ? `Sin resultados para "${busqueda}"`
+                : vista === 'mias'
+                  ? 'No tienes órdenes abiertas asignadas. Cambia a "Ver todo" para revisar el histórico general.'
+                  : vista === 'archivo'
+                    ? 'No hay órdenes archivadas.'
+                    : 'No hay órdenes en este estado'}
             </div>
-          ) : ordenesFiltradas.length === 0 ? (
-            <div className="bg-white rounded-lg shadow p-10 text-center">
-              <p className="text-gray-600 mb-4">
-                {busqueda
-                  ? `Sin resultados para "${busqueda}"`
-                  : vista === 'mias'
-                    ? 'No tienes órdenes abiertas asignadas. Cambia a "Ver todo" para revisar el histórico general.'
-                    : vista === 'archivo'
-                      ? 'No hay órdenes archivadas.'
-                      : 'No hay órdenes en este estado'}
-              </p>
-              <div className="flex gap-2 justify-center flex-wrap">
-                {vista === 'mias' && (
-                  <button
-                    onClick={() => setVista('todas')}
-                    className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-                  >
-                    Ver todo
-                  </button>
-                )}
-                <button
-                  onClick={() => navigate('/ordenes/crear')}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg"
-                >
-                  Crear nueva orden
-                </button>
-              </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+              {vista === 'mias' && (
+                <Btn label="Ver todo" variant="ghost" onClick={() => setVista('todas')} />
+              )}
+              <Btn label="Crear nueva orden" onClick={() => navigate('/ordenes/crear')} />
             </div>
-          ) : (
-            ordenesFiltradas.map((orden) => {
-              const totalPuntos = orden._count?.resultados || 0
-              const completos = orden.resultados?.filter((r) => r.completado).length || 0
-              const progreso = totalPuntos > 0 ? (completos / totalPuntos) * 100 : 0
-              const esCerrada = orden.estado === 'cerrada'
-
-              return (
-                <div
-                  key={orden.id}
-                  onClick={() => navigate(`/ordenes/${orden.id}/inspeccion`)}
-                  className="bg-white rounded-lg shadow hover:shadow-lg transition cursor-pointer p-5 border-l-4 border-l-blue-500"
-                >
-                  <div className="flex justify-between items-start mb-3 flex-wrap gap-2">
-                    <div>
-                      <h3 className="text-lg font-bold text-gray-800">
-                        O/T {orden.numeroOt}
-                      </h3>
-                      {orden.cliente && (
-                        <p className="text-gray-600 text-sm">{orden.cliente}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
-                        ESTADO_COLORS[orden.estado]
-                      }`}>
-                        {ESTADO_LABELS[orden.estado]?.replace(' (histórico)', '')}
-                      </span>
-                      {orden.archivada && (
-                        <span className="px-2 py-1 bg-gray-200 text-gray-700 text-xs rounded-full font-semibold">
-                          Archivada
-                        </span>
-                      )}
-                      {esCerrada && (
-                        <button
-                          onClick={(e) => descargarPDF(e, orden.id, orden.numeroOt)}
-                          className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded font-semibold"
-                          title="Descargar reporte PDF"
-                        >
-                          📄 PDF
-                        </button>
-                      )}
-                      {esSupervisor && (
-                        <>
-                          <button
-                            onClick={(e) => archivarOrden(e, orden)}
-                            className={`px-3 py-1 text-xs rounded font-semibold border ${
-                              orden.archivada
-                                ? 'bg-indigo-100 hover:bg-indigo-200 text-indigo-700 border-indigo-300'
-                                : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border-gray-300'
-                            }`}
-                            title={orden.archivada ? 'Desarchivar' : 'Archivar'}
-                          >
-                            {orden.archivada ? '↩ Desarchivar' : '🗄 Archivar'}
-                          </button>
-                          {(orden.estado === 'borrador' || orden.archivada) && (
-                            <button
-                              onClick={(e) => eliminarOrden(e, orden)}
-                              className="px-3 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded font-semibold border border-red-300"
-                              title="Eliminar definitivamente"
-                            >
-                              🗑 Eliminar
-                            </button>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <p className="text-gray-500 text-xs">Aeronave</p>
-                      <p className="font-semibold">
-                        {orden.aeronave?.matricula}
-                        {orden.aeronave?.modelo?.nombre && (
-                          <span className="text-gray-500 font-normal"> · {orden.aeronave.modelo.nombre}</span>
-                        )}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500 text-xs">Técnico</p>
-                      <p className="font-semibold">{orden.tecnico?.nombre || '—'}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500 text-xs">Supervisor</p>
-                      <p className="font-semibold">{orden.supervisor?.nombre || '—'}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500 text-xs">Formato</p>
-                      <p className="font-semibold">{orden.formato?.nombre}</p>
-                    </div>
-                    {orden.lugarMantenimiento && (
-                      <div>
-                        <p className="text-gray-500 text-xs">Lugar</p>
-                        <p className="font-semibold">📍 {orden.lugarMantenimiento}</p>
-                      </div>
-                    )}
-                    <div>
-                      <p className="text-gray-500 text-xs">Recepción</p>
-                      <p className="font-semibold">
-                        {orden.fechaRecepcion
-                          ? new Date(orden.fechaRecepcion).toLocaleDateString('es-MX')
-                          : <span className="text-amber-700">Pendiente</span>}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500 text-xs">Inicio trabajos</p>
-                      <p className="font-semibold">
-                        {orden.fechaInicio
-                          ? new Date(orden.fechaInicio).toLocaleDateString('es-MX')
-                          : <span className="text-gray-400">Sin iniciar</span>}
-                      </p>
-                    </div>
-                    {esCerrada && (
-                      <div>
-                        <p className="text-gray-500 text-xs">Fecha cierre</p>
-                        <p className="font-semibold text-green-700">
-                          {orden.fechaCierre
-                            ? new Date(orden.fechaCierre).toLocaleDateString('es-MX')
-                            : '—'}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  {!esCerrada && totalPuntos > 0 && (
-                    <div className="mt-4 pt-3 border-t">
-                      <div className="flex justify-between items-center text-sm mb-1">
-                        <span className="text-gray-600">Progreso</span>
-                        <span className="font-semibold text-gray-800">
-                          {completos} / {totalPuntos}
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div
-                          className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${progreso}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )
-            })
-          )}
-        </div>
+          </Card>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {ordenesFiltradas.map((orden) => (
+              <OrdenCard
+                key={orden.id}
+                orden={orden}
+                esSupervisor={esSupervisor}
+                onClick={() => navigate(`/ordenes/${orden.id}/inspeccion`)}
+                onArchivar={(e) => archivarOrden(e, orden)}
+                onEliminar={(e) => eliminarOrden(e, orden)}
+                onPDF={(e) => descargarPDF(e, orden.id, orden.numeroOt)}
+              />
+            ))}
+          </div>
+        )}
       </main>
     </div>
   )
 }
 
-function StatCard({ label, value, color }) {
-  const colors = {
-    gray:   'bg-gray-50 text-gray-800 border-gray-300',
-    blue:   'bg-blue-50 text-blue-800 border-blue-300',
-    yellow: 'bg-yellow-50 text-yellow-800 border-yellow-300',
-    green:  'bg-green-50 text-green-800 border-green-300',
-  }
+// ── StatChip ──────────────────────────────────────────────────
+function StatChip({ label, value, c, bg }) {
   return (
-    <div className={`border rounded-lg p-3 ${colors[color]}`}>
-      <div className="text-xs uppercase tracking-wide font-semibold opacity-80">{label}</div>
-      <div className="text-2xl font-bold mt-1">{value}</div>
+    <div style={{
+      background: bg,
+      border: `1px solid ${c}25`,
+      borderRadius: 14,
+      padding: '12px 14px',
+    }}>
+      <div style={{
+        fontSize: 9, color: c, fontWeight: 600,
+        letterSpacing: '0.08em', textTransform: 'uppercase',
+      }}>{label}</div>
+      <div style={{
+        fontSize: 26, fontWeight: 700, color: c,
+        fontFamily: T.mono, marginTop: 2, lineHeight: 1.1,
+      }}>{value}</div>
+    </div>
+  )
+}
+
+// ── Card de O/T ────────────────────────────────────────────────
+function OrdenCard({ orden, esSupervisor, onClick, onArchivar, onEliminar, onPDF }) {
+  const st = STATUS[orden.estado] || { label: orden.estado, c: T.sub, bg: T.s2 }
+  const totalPuntos = orden._count?.resultados || 0
+  const completos = orden.resultados?.filter((r) => r.completado).length || 0
+  const progreso = totalPuntos > 0 ? completos / totalPuntos : 0
+  const esCerrada = orden.estado === 'cerrada'
+  const esBorrador = orden.estado === 'borrador'
+
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        background: T.s1,
+        border: `1px solid ${T.border}`,
+        borderLeft: `3px solid ${st.c}`,
+        borderRadius: 16, padding: 16,
+        cursor: 'pointer', transition: 'border-color .15s',
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.borderColor = `${T.cyan}30`; e.currentTarget.style.borderLeftColor = st.c }}
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = T.border; e.currentTarget.style.borderLeftColor = st.c }}
+    >
+      <div style={{
+        display: 'flex', justifyContent: 'space-between',
+        alignItems: 'flex-start', marginBottom: 8, gap: 10, flexWrap: 'wrap',
+      }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontFamily: T.mono, fontSize: 11, color: T.sub, marginBottom: 2 }}>
+            {orden.numeroOt}
+          </div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: T.text }}>
+            {orden.aeronave?.matricula}
+            <span style={{ color: T.sub, fontWeight: 400 }}>
+              {orden.aeronave?.modelo?.nombre ? ` · ${orden.aeronave.modelo.nombre}` : ''}
+            </span>
+          </div>
+          <div style={{ fontSize: 12, color: T.sub, marginTop: 2 }}>
+            {orden.formato?.nombre}
+            {orden.cliente && <span> · {orden.cliente}</span>}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <Pill label={st.label} color={st.c} bg={st.bg} small />
+          {orden.archivada && (
+            <Pill label="Archivada" color={T.sub} bg={T.s2} small />
+          )}
+        </div>
+      </div>
+
+      {/* Meta grid */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+        gap: 10, marginBottom: 10,
+        paddingTop: 10, borderTop: `1px solid ${T.border}`,
+      }}>
+        <Meta k="Técnico"     v={orden.tecnico?.nombre} />
+        <Meta k="Supervisor"  v={orden.supervisor?.nombre} />
+        {orden.lugarMantenimiento && <Meta k="Lugar" v={`📍 ${orden.lugarMantenimiento}`} />}
+        <Meta
+          k="Recepción"
+          v={orden.fechaRecepcion
+            ? new Date(orden.fechaRecepcion).toLocaleDateString('es-MX')
+            : 'Pendiente'}
+          color={orden.fechaRecepcion ? T.text : T.amber}
+        />
+        <Meta
+          k="Inicio"
+          v={orden.fechaInicio
+            ? new Date(orden.fechaInicio).toLocaleDateString('es-MX')
+            : 'Sin iniciar'}
+          color={orden.fechaInicio ? T.text : T.sub}
+        />
+        {esCerrada && (
+          <Meta
+            k="Cierre"
+            v={orden.fechaCierre ? new Date(orden.fechaCierre).toLocaleDateString('es-MX') : '—'}
+            color={T.green}
+          />
+        )}
+      </div>
+
+      {/* Progreso */}
+      {!esCerrada && totalPuntos > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <div style={{
+            display: 'flex', justifyContent: 'space-between',
+            marginBottom: 6, fontSize: 11,
+          }}>
+            <span style={{ color: T.sub }}>Progreso</span>
+            <span style={{ color: T.sub, fontFamily: T.mono }}>
+              {completos} / {totalPuntos} · {Math.round(progreso * 100)}%
+            </span>
+          </div>
+          <ProgressBar value={progreso} color={progreso === 1 ? T.green : T.cyan} height={3} />
+        </div>
+      )}
+
+      {/* Acciones */}
+      <div style={{
+        marginTop: 12, display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end',
+      }}>
+        {esCerrada && (
+          <BtnSm
+            variant="surface"
+            onClick={onPDF}
+            label={
+              <>
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                  <path d="M3 12v2h10v-2M8 3v8M5 8l3 3 3-3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                <span>PDF</span>
+              </>
+            }
+          />
+        )}
+        {esSupervisor && (
+          <>
+            <BtnSm
+              variant={orden.archivada ? 'surface' : 'ghost'}
+              onClick={onArchivar}
+              label={orden.archivada ? '↩ Desarchivar' : '🗄 Archivar'}
+            />
+            {(esBorrador || orden.archivada) && (
+              <BtnSm variant="danger" onClick={onEliminar} label="🗑 Eliminar" />
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function Meta({ k, v, color }) {
+  return (
+    <div>
+      <div style={{
+        fontSize: 9, color: T.sub, textTransform: 'uppercase',
+        letterSpacing: '0.07em', marginBottom: 3, fontWeight: 600,
+      }}>{k}</div>
+      <div style={{
+        fontSize: 12, color: color || T.text, fontWeight: 500,
+        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+      }}>{v ?? '—'}</div>
     </div>
   )
 }

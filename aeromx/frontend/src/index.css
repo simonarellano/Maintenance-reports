@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -8,33 +10,73 @@
   box-sizing: border-box;
 }
 
+html, body, #root {
+  min-height: 100vh;
+}
+
 html {
   scroll-behavior: smooth;
+  background: #060810;
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: 'Space Grotesk', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #090b12;
+  color: #dde8f8;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Scrollbar styling */
+input, textarea, select, button {
+  font-family: inherit;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #6070a0;
+  opacity: 0.7;
+}
+
+/* Animación de spinner reutilizable */
+@keyframes aeromx-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Drawer mobile */
+@keyframes aeromx-slide-in {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+@keyframes aeromx-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Scrollbar oscuro */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
 }
-
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: #090b12;
 }
-
 ::-webkit-scrollbar-thumb {
-  background: #888;
-  border-radius: 4px;
+  background: #1b1f2e;
+  border-radius: 5px;
+  border: 2px solid #090b12;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #242840;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #555;
+/* Selects nativos: que las options se vean dark también (depende del browser) */
+select option {
+  background: #1b1f2e;
+  color: #dde8f8;
+}
+
+/* Marcadores nativos del checkbox + scroll en webkit */
+input[type='checkbox'] {
+  accent-color: #00d0e8;
 }

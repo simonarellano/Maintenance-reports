@@ -12,6 +12,7 @@ import ModelosPage from './pages/ModelosPage'
 import AeronavesPage from './pages/AeronavesPage'
 import UsuariosPage from './pages/UsuariosPage'
 import FlotaPage from './pages/FlotaPage'
+import FormatosPage from './pages/FormatosPage'
 
 function App() {
   const hydrate = useAuthStore((state) => state.hydrate)
@@ -61,6 +62,14 @@ function App() {
           element={
             <ProtectedRoute>
               <ModelosPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/formatos"
+          element={
+            <ProtectedRoute>
+              <FormatosPage />
             </ProtectedRoute>
           }
         />

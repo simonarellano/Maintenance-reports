@@ -3,18 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { Header } from '../components/Header'
 import { usuariosService } from '../api/usuariosService'
 import { useAuthStore } from '../store/authStore'
-
-const ROL_LABELS = {
-  tecnico:    'Técnico',
-  ingeniero:  'Ingeniero',
-  supervisor: 'Supervisor',
-}
-
-const ROL_COLORS = {
-  tecnico:    'bg-blue-100 text-blue-800 border-blue-300',
-  ingeniero:  'bg-purple-100 text-purple-800 border-purple-300',
-  supervisor: 'bg-indigo-100 text-indigo-800 border-indigo-300',
-}
+import { T, ROL_LABELS, ROL_COLOR } from '../tokens/design'
+import {
+  Btn, BtnSm, Card, ErrorBanner, Field, FieldSelect, Hdr, Pill, Spinner,
+} from '../components/ui'
 
 export default function UsuariosPage() {
   const navigate = useNavigate()
@@ -85,64 +77,68 @@ export default function UsuariosPage() {
   if (!esSupervisor) return null
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div style={{ minHeight: '100vh', background: T.bg }}>
       <Header />
-      <main className="container mx-auto px-4 py-8">
-        <button
-          onClick={() => navigate('/dashboard')}
-          className="mb-4 text-blue-600 hover:text-blue-800 flex items-center gap-2"
-        >
-          ← Volver
-        </button>
-
-        <div className="flex justify-between items-start mb-6 flex-wrap gap-3">
-          <div>
-            <h2 className="text-3xl font-bold text-gray-800">Usuarios</h2>
-            <p className="text-sm text-gray-500 mt-1">
-              Gestión de cuentas de técnicos, ingenieros y supervisores
-            </p>
+      <main style={{ maxWidth: 1280, margin: '0 auto', padding: '24px 20px 60px' }}>
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+          gap: 16, flexWrap: 'wrap',
+        }}>
+          <Hdr title="Usuarios" sub="Gestión de cuentas" back={() => navigate('/dashboard')} />
+          <div style={{ paddingTop: 6 }}>
+            <Btn label="+ Nuevo usuario" onClick={() => { setModoAlta(true); setEditando(null) }} />
           </div>
-          <button
-            onClick={() => { setModoAlta(true); setEditando(null) }}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-semibold"
-          >
-            + Nuevo usuario
-          </button>
         </div>
+        <p style={{ color: T.sub, fontSize: 13, marginTop: -8, marginBottom: 20 }}>
+          Gestión de cuentas de técnicos, ingenieros y supervisores
+        </p>
 
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-            {error}
-            <button className="float-right font-bold" onClick={() => setError('')}>×</button>
-          </div>
-        )}
+        <ErrorBanner onClose={() => setError('')}>{error}</ErrorBanner>
 
         {/* Filtros */}
-        <div className="bg-white rounded-lg shadow p-4 mb-6 flex items-center gap-3 flex-wrap">
-          <div className="flex gap-2">
-            {['todos', 'tecnico', 'ingeniero', 'supervisor'].map(r => (
-              <button
-                key={r}
-                onClick={() => setFiltroRol(r)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                  filtroRol === r
-                    ? 'bg-blue-600 text-white shadow'
-                    : 'bg-gray-100 text-gray-700 border border-gray-300 hover:border-blue-500'
-                }`}
-              >
-                {r === 'todos' ? 'Todos' : ROL_LABELS[r]}
-              </button>
-            ))}
+        <Card padding={14} style={{ marginBottom: 18 }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', justifyContent: 'space-between',
+          }}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {[
+                { v: 'todos', label: 'Todos' },
+                { v: 'tecnico', label: 'Técnicos' },
+                { v: 'ingeniero', label: 'Ingenieros' },
+                { v: 'supervisor', label: 'Supervisores' },
+              ].map((opt) => {
+                const active = filtroRol === opt.v
+                return (
+                  <button
+                    key={opt.v}
+                    onClick={() => setFiltroRol(opt.v)}
+                    style={{
+                      padding: '7px 14px', borderRadius: 999,
+                      background: active ? T.cD : T.s2,
+                      color: active ? T.cyan : T.sub,
+                      border: active ? `1px solid ${T.cyan}40` : `1px solid ${T.border}`,
+                      fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                      letterSpacing: '0.04em', textTransform: 'uppercase',
+                      fontFamily: T.font,
+                    }}
+                  >{opt.label}</button>
+                )
+              })}
+            </div>
+            <label style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              fontSize: 13, color: T.sub, cursor: 'pointer',
+            }}>
+              <input
+                type="checkbox"
+                checked={incluirInactivos}
+                onChange={(e) => setIncluirInactivos(e.target.checked)}
+                style={{ width: 16, height: 16 }}
+              />
+              Incluir inactivos
+            </label>
           </div>
-          <label className="flex items-center gap-2 text-sm text-gray-700 ml-auto">
-            <input
-              type="checkbox"
-              checked={incluirInactivos}
-              onChange={(e) => setIncluirInactivos(e.target.checked)}
-            />
-            Incluir inactivos
-          </label>
-        </div>
+        </Card>
 
         {(modoAlta || editando) && (
           <FormularioUsuario
@@ -153,73 +149,103 @@ export default function UsuariosPage() {
         )}
 
         {loading ? (
-          <div className="text-center py-10">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <p className="text-gray-600 mt-2">Cargando…</p>
-          </div>
+          <Spinner label="Cargando…" />
         ) : usuarios.length === 0 ? (
-          <div className="bg-white rounded-lg shadow p-10 text-center text-gray-600">
-            No hay usuarios registrados con estos filtros.
-          </div>
+          <Card padding={40} style={{ textAlign: 'center' }}>
+            <p style={{ color: T.sub }}>No hay usuarios registrados con estos filtros.</p>
+          </Card>
         ) : (
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200 text-left">
-                <tr className="text-gray-700">
-                  <th className="px-4 py-3 font-semibold">Nombre</th>
-                  <th className="px-4 py-3 font-semibold">Email</th>
-                  <th className="px-4 py-3 font-semibold">Rol</th>
-                  <th className="px-4 py-3 font-semibold">Licencia</th>
-                  <th className="px-4 py-3 font-semibold">Teléfono</th>
-                  <th className="px-4 py-3 font-semibold text-center">Estado</th>
-                  <th className="px-4 py-3 font-semibold text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {usuarios.map((u) => (
-                  <tr key={u.id} className={`border-b border-gray-100 hover:bg-gray-50 ${
-                    !u.activo ? 'opacity-60' : ''
-                  }`}>
-                    <td className="px-4 py-3 font-semibold text-gray-800">{u.nombre}</td>
-                    <td className="px-4 py-3 text-gray-600 text-sm">{u.email}</td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-1 text-xs font-semibold border rounded ${ROL_COLORS[u.rol]}`}>
-                        {ROL_LABELS[u.rol]}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-gray-600 font-mono text-xs">{u.licenciaNum || '—'}</td>
-                    <td className="px-4 py-3 text-gray-600 text-sm">{u.telefono || '—'}</td>
-                    <td className="px-4 py-3 text-center">
-                      <span className={`inline-block px-2 py-1 rounded-full text-xs font-semibold ${
-                        u.activo ? 'bg-green-100 text-green-800' : 'bg-gray-200 text-gray-700'
-                      }`}>
-                        {u.activo ? 'Activo' : 'Inactivo'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
-                      <button
-                        onClick={() => { setEditando(u); setModoAlta(false) }}
-                        className="px-3 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded border border-gray-300"
-                      >
-                        Editar
-                      </button>
-                      {u.activo && u.id !== user?.id && (
-                        <button
-                          onClick={() => desactivar(u)}
-                          className="px-3 py-1 text-xs bg-red-100 hover:bg-red-200 text-red-700 rounded border border-red-300"
-                        >
-                          Desactivar
-                        </button>
-                      )}
-                    </td>
+          <Card padding={0} style={{ overflow: 'hidden' }}>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: T.s2 }}>
+                    <Th>Nombre</Th>
+                    <Th>Email</Th>
+                    <Th>Rol</Th>
+                    <Th>Licencia</Th>
+                    <Th>Teléfono</Th>
+                    <Th align="center">Estado</Th>
+                    <Th align="right">Acciones</Th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {usuarios.map((u) => {
+                    const rolColor = ROL_COLOR[u.rol] || { c: T.sub, bg: T.s2 }
+                    return (
+                      <tr key={u.id} style={{
+                        borderTop: `1px solid ${T.border}`,
+                        opacity: !u.activo ? 0.55 : 1,
+                      }}>
+                        <Td>
+                          <span style={{ fontWeight: 600, color: T.text }}>{u.nombre}</span>
+                        </Td>
+                        <Td>
+                          <span style={{ color: T.sub, fontSize: 12 }}>{u.email}</span>
+                        </Td>
+                        <Td>
+                          <Pill small label={ROL_LABELS[u.rol]} color={rolColor.c} bg={rolColor.bg} />
+                        </Td>
+                        <Td>
+                          <span style={{ fontFamily: T.mono, fontSize: 12, color: T.sub }}>
+                            {u.licenciaNum || '—'}
+                          </span>
+                        </Td>
+                        <Td>
+                          <span style={{ color: T.sub, fontSize: 12 }}>{u.telefono || '—'}</span>
+                        </Td>
+                        <Td align="center">
+                          {u.activo ? (
+                            <Pill small label="Activo" color={T.green} bg={T.gD} />
+                          ) : (
+                            <Pill small label="Inactivo" color={T.sub} bg={T.s1} />
+                          )}
+                        </Td>
+                        <Td align="right">
+                          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                            <BtnSm
+                              variant="surface"
+                              label="Editar"
+                              onClick={() => { setEditando(u); setModoAlta(false) }}
+                            />
+                            {u.activo && u.id !== user?.id && (
+                              <BtnSm
+                                variant="danger"
+                                label="Desactivar"
+                                onClick={() => desactivar(u)}
+                              />
+                            )}
+                          </div>
+                        </Td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         )}
       </main>
     </div>
+  )
+}
+
+function Th({ children, align }) {
+  return (
+    <th style={{
+      padding: '12px 14px', textAlign: align || 'left',
+      fontSize: 10, color: T.sub, fontWeight: 600,
+      letterSpacing: '0.07em', textTransform: 'uppercase',
+    }}>{children}</th>
+  )
+}
+
+function Td({ children, align }) {
+  return (
+    <td style={{
+      padding: '14px 14px', textAlign: align || 'left',
+      color: T.text, fontSize: 13, verticalAlign: 'middle',
+    }}>{children}</td>
   )
 }
 
@@ -269,139 +295,90 @@ function FormularioUsuario({ inicial, onCancelar, onGuardar }) {
   }
 
   return (
-    <form
-      onSubmit={submit}
-      className="bg-white rounded-lg shadow p-5 mb-6 border-l-4 border-l-blue-500 space-y-3"
-    >
-      <h3 className="text-lg font-bold text-gray-800">
-        {inicial ? `Editar usuario: ${inicial.nombre}` : 'Nuevo usuario'}
-      </h3>
-
-      {errorLocal && (
-        <div className="bg-red-100 border border-red-300 text-red-700 px-3 py-2 rounded text-sm">
-          {errorLocal}
+    <Card padding={20} style={{ marginBottom: 18, borderLeft: `3px solid ${T.cyan}` }}>
+      <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>
+          {inicial ? `Editar usuario: ${inicial.nombre}` : 'Nuevo usuario'}
         </div>
-      )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Nombre completo <span className="text-red-600">*</span>
-          </label>
-          <input
-            type="text"
-            value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
+        {errorLocal && (
+          <div style={{
+            background: T.rD, border: `1px solid rgba(255,69,69,0.30)`,
+            color: T.red, borderRadius: 10, padding: '8px 12px', fontSize: 12,
+          }}>{errorLocal}</div>
+        )}
+
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12,
+        }}>
+          <Field label="Nombre completo" required value={nombre} onChange={setNombre} />
+          <Field label="Email" required type="email" value={email} onChange={setEmail} />
+        </div>
+
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12,
+        }}>
+          <FieldSelect
+            label="Rol"
             required
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Email <span className="text-red-600">*</span>
-          </label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Rol <span className="text-red-600">*</span>
-          </label>
-          <select
             value={rol}
-            onChange={(e) => setRol(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-          >
-            <option value="tecnico">Técnico</option>
-            <option value="ingeniero">Ingeniero</option>
-            <option value="supervisor">Supervisor</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Licencia</label>
-          <input
-            type="text"
-            value={licenciaNum}
-            onChange={(e) => setLicenciaNum(e.target.value)}
-            placeholder="TEC-123"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg font-mono"
+            onChange={setRol}
+            options={[
+              { value: 'tecnico',    label: 'Técnico' },
+              { value: 'ingeniero',  label: 'Ingeniero' },
+              { value: 'supervisor', label: 'Supervisor' },
+            ]}
           />
+          <Field label="Licencia" value={licenciaNum} onChange={setLicenciaNum} placeholder="TEC-123" mono />
+          <Field label="Teléfono" type="tel" value={telefono} onChange={setTelefono} />
         </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
-          <input
-            type="tel"
-            value={telefono}
-            onChange={(e) => setTelefono(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-          />
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Contraseña {!inicial && <span className="text-red-600">*</span>}
-            {inicial && <span className="text-xs text-gray-500 ml-2">(dejar vacío para no cambiar)</span>}
-          </label>
-          <input
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12,
+        }}>
+          <Field
+            label={inicial ? 'Contraseña (dejar vacío para no cambiar)' : 'Contraseña'}
+            required={!inicial}
             type="password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="new-password"
+            onChange={setPassword}
             placeholder={inicial ? '••••••••' : 'Mínimo 6 caracteres'}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+            autoComplete="new-password"
           />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Confirmar contraseña
-          </label>
-          <input
+          <Field
+            label="Confirmar contraseña"
             type="password"
             value={passwordConfirm}
-            onChange={(e) => setPasswordConfirm(e.target.value)}
+            onChange={setPasswordConfirm}
             autoComplete="new-password"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg"
           />
         </div>
-      </div>
 
-      {inicial && (
-        <label className="flex items-center gap-2 text-sm text-gray-700">
-          <input
-            type="checkbox"
-            checked={activo}
-            onChange={(e) => setActivo(e.target.checked)}
+        {inicial && (
+          <label style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            fontSize: 13, color: T.sub, cursor: 'pointer',
+          }}>
+            <input
+              type="checkbox"
+              checked={activo}
+              onChange={(e) => setActivo(e.target.checked)}
+              style={{ width: 16, height: 16 }}
+            />
+            Usuario activo
+          </label>
+        )}
+
+        <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+          <Btn variant="ghost" label="Cancelar" onClick={onCancelar} style={{ flex: 1 }} />
+          <Btn
+            type="submit"
+            label={saving ? 'Guardando…' : (inicial ? 'Guardar cambios' : 'Crear usuario')}
+            disabled={saving}
+            style={{ flex: 1 }}
           />
-          Usuario activo
-        </label>
-      )}
-
-      <div className="flex gap-2 pt-2">
-        <button
-          type="button"
-          onClick={onCancelar}
-          className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-        >
-          Cancelar
-        </button>
-        <button
-          type="submit"
-          disabled={saving}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold disabled:bg-blue-400"
-        >
-          {saving ? 'Guardando…' : (inicial ? 'Guardar cambios' : 'Crear usuario')}
-        </button>
-      </div>
-    </form>
+        </div>
+      </form>
+    </Card>
   )
 }

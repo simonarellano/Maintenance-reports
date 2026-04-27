@@ -1,5 +1,12 @@
 import * as svc from '../services/ordenesService.js'
 import prisma from '../lib/prisma.js'
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname  = path.dirname(__filename)
+const UPLOADS_DIR = path.resolve(__dirname, '../../uploads')
 
 const ESTADOS_VALIDOS = ['borrador', 'en_proceso', 'pendiente_firma', 'cerrada']
 const ESTADOS_OBS_OBLIGATORIA = ['correcto_con_danos', 'requiere_atencion']
@@ -318,19 +325,30 @@ export async function firmarCierre(req, res, next) {
 
 const COMPANY = {
   nombre: 'AEROMX',
-  lema: 'Sistema de Gestión de Mantenimiento Aeronáutico',
-  direccion: 'Aeropuerto Internacional · México',
+  lema: 'Gestion de mantenimiento de RPAs',
+  direccion: 'Planta 20 City · México',
   telefono: '+52 (55) 0000-0000',
-  email: 'mantenimiento@aeromx.com',
+  email: 'soporte@aeromx.com',
 }
 
+// Paleta alineada con la app web (tokens en frontend/src/tokens/design.js)
+// El PDF se imprime, así que mantenemos fondo blanco; el cyan/dark se usan
+// como acento en bandas y cabeceras para coincidir con la identidad visual.
 const COLOR = {
-  primary: '#0b3d91',   // azul aeronáutico
-  accent:  '#cc0000',   // rojo acento
-  light:   '#eef3fb',
-  gray:    '#6b7280',
-  dark:    '#111827',
-  border:  '#cbd5e1',
+  primary:    '#00d0e8',  // cian (acento de la app)
+  primaryDk:  '#04525e',  // cian oscuro para texto sobre fondos cyan-light
+  bandBg:     '#0f172a',  // dark del web — fondo del header del documento
+  bandText:   '#dde8f8',  // texto sobre la banda dark
+  accent:     '#ff4545',  // rojo crítico
+  amber:      '#f0a030',  // ámbar
+  green:      '#28d980',  // verde
+  light:      '#e6faff',  // cian muy diluido (fondo de section title / chips)
+  rowDanos:   '#fff8e8',  // fondo de fila "con daños"
+  rowAten:    '#ffeded',  // fondo de fila "requiere atención"
+  rowOk:      '#eafbf3',  // fondo de fila completada
+  gray:       '#ffffff',  // sub del web — texto secundario
+  dark:       '#0f172a',  // texto principal (legible en blanco)
+  border:     '#cbd5e1',  // líneas de tablas
 }
 
 const ESTADO_LABELS_PDF = {
@@ -418,9 +436,22 @@ export async function generarPDF(req, res, next) {
     ], M, CONTENT_W)
 
     // ═══════════════════════════════════════════════════════════════════════
-    // BLOQUE 3 — Personal responsable
+    // BLOQUE 3 — Alcance, objetivo y prácticas de mantenimiento
     // ═══════════════════════════════════════════════════════════════════════
-    sectionTitle(doc, '3. PERSONAL RESPONSABLE', M, CONTENT_W)
+    sectionTitle(doc, '3. ALCANCE, OBJETIVO Y PRÁCTICAS DE MANTENIMIENTO', M, CONTENT_W)
+
+    const alcanceTxt = `Servicio de ${orden.formato.nombre} (versión ${orden.formato.version}) ejecutado sobre la aeronave ${orden.aeronave.matricula}${orden.aeronave.modelo?.nombre ? ` · ${orden.aeronave.modelo.nombre}` : ''}. Cubre la totalidad de los puntos de inspección definidos en el formato vigente.`
+    drawTextBlock(doc, 'Alcance del servicio', alcanceTxt, M, CONTENT_W)
+    drawTextBlock(doc, 'Objetivo', orden.formato.objetivo, M, CONTENT_W)
+    drawTextBlock(doc, 'Prácticas de mantenimiento', orden.formato.instrucciones, M, CONTENT_W)
+    if (orden.formato.definiciones) {
+      drawTextBlock(doc, 'Definiciones aplicables', orden.formato.definiciones, M, CONTENT_W)
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // BLOQUE 4 — Personal responsable
+    // ═══════════════════════════════════════════════════════════════════════
+    sectionTitle(doc, '4. PERSONAL RESPONSABLE', M, CONTENT_W)
 
     drawKVGrid(doc, [
       ['Técnico / Ingeniero', orden.tecnico?.nombre || '—'],
@@ -432,9 +463,9 @@ export async function generarPDF(req, res, next) {
     ], M, CONTENT_W)
 
     // ═══════════════════════════════════════════════════════════════════════
-    // BLOQUE 4 — Trabajos realizados (la lista)
+    // BLOQUE 5 — Trabajos realizados (la lista)
     // ═══════════════════════════════════════════════════════════════════════
-    sectionTitle(doc, '4. TRABAJOS REALIZADOS', M, CONTENT_W)
+    sectionTitle(doc, '5. TRABAJOS REALIZADOS', M, CONTENT_W)
 
     const resultadosPorPunto = Object.fromEntries(orden.resultados.map(r => [r.puntoId, r]))
     let totalPuntos = 0
@@ -446,10 +477,12 @@ export async function generarPDF(req, res, next) {
       ensureSpace(doc, 60)
       const secY = doc.y
       doc.save()
-      doc.rect(M, secY, CONTENT_W, 18).fill(COLOR.primary)
+      // Banda dark con texto cian — replica el header del web app
+      doc.rect(M, secY, CONTENT_W, 18).fill(COLOR.bandBg)
+      doc.rect(M, secY, 3, 18).fill(COLOR.primary)
       doc.restore()
-      doc.fillColor('#fff').font('Helvetica-Bold').fontSize(10)
-        .text(seccion.nombre.toUpperCase(), M + 8, secY + 5, { width: CONTENT_W - 16, lineBreak: false, ellipsis: true })
+      doc.fillColor(COLOR.primary).font('Helvetica-Bold').fontSize(10)
+        .text(seccion.nombre.toUpperCase(), M + 10, secY + 5, { width: CONTENT_W - 16, lineBreak: false, ellipsis: true })
       doc.fillColor(COLOR.dark)
       doc.y = secY + 22
 
@@ -490,10 +523,15 @@ export async function generarPDF(req, res, next) {
     doc.fillColor(COLOR.dark)
 
     // ═══════════════════════════════════════════════════════════════════════
-    // BLOQUE 5 — Observaciones y defectos
+    // BLOQUE 6 — Evidencia fotográfica
+    // ═══════════════════════════════════════════════════════════════════════
+    drawEvidenciaFotografica(doc, orden, M, CONTENT_W)
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // BLOQUE 7 — Observaciones y defectos
     // ═══════════════════════════════════════════════════════════════════════
     if (orden.cierre) {
-      sectionTitle(doc, '5. DICTAMEN Y OBSERVACIONES GENERALES', M, CONTENT_W)
+      sectionTitle(doc, '7. DICTAMEN Y OBSERVACIONES GENERALES', M, CONTENT_W)
 
       const c = orden.cierre
       drawKVGrid(doc, [
@@ -512,9 +550,9 @@ export async function generarPDF(req, res, next) {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // BLOQUE 6 — Firmas
+    // BLOQUE 8 — Firmas
     // ═══════════════════════════════════════════════════════════════════════
-    sectionTitle(doc, '6. FIRMAS DE CONFORMIDAD', M, CONTENT_W)
+    sectionTitle(doc, '8. FIRMAS DE CONFORMIDAD', M, CONTENT_W)
     drawFirmas(doc, orden, M, CONTENT_W)
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -535,30 +573,52 @@ export async function generarPDF(req, res, next) {
 // ────────────────────────────────────────────────────────────────────────────
 
 function drawHeader(doc, orden, M, W) {
-  // Banda azul superior
-  doc.rect(0, 0, doc.page.width, 70).fill(COLOR.primary)
+  // Banda dark superior (replica del header del web app)
+  doc.rect(0, 0, doc.page.width, 70).fill(COLOR.bandBg)
 
-  // Logo / nombre de compañía
-  doc.fillColor('#fff').font('Helvetica-Bold').fontSize(22)
-    .text(COMPANY.nombre, M, 18)
-  doc.font('Helvetica').fontSize(9)
-    .text(COMPANY.lema, M, 44)
+  // Línea cian inferior de la banda — acento de la app
+  doc.rect(0, 70, doc.page.width, 2).fill(COLOR.primary)
+
+  // Logo de la empresa (lado izquierdo) — formato horizontal
+  const logoPath = path.join(process.cwd(), 'public/logo.png')
+  const logoWidth = 100   // Más ancho
+  const logoHeight = 40  // Un poco menos alto
+  const logoX = M
+  const logoY = 10
+  
+  try {
+    if (fs.existsSync(logoPath)) {
+      doc.image(logoPath, logoX, logoY, { width: logoWidth, height: logoHeight })
+    } else {
+      // Fallback: mostrar nombre en texto si no hay logo
+      doc.fillColor(COLOR.bandText).font('Helvetica-Bold').fontSize(20)
+        .text(COMPANY.nombre, M, 18)
+    }
+  } catch (e) {
+    // Si hay error, mostrar nombre
+    doc.fillColor(COLOR.bandText).font('Helvetica-Bold').fontSize(20)
+      .text(COMPANY.nombre, M, 18)
+  }
+
+  // Lema debajo del logo
+  doc.font('Helvetica').fontSize(8).fillColor(COLOR.gray)
+    .text(COMPANY.lema, M, logoY + logoHeight + 2)
 
   // Datos de contacto (columna derecha)
-  doc.fontSize(8).fillColor('#e2e8f0')
+  doc.fontSize(8).fillColor(COLOR.gray)
     .text(COMPANY.direccion, M, 18, { width: W, align: 'right' })
     .text(`${COMPANY.telefono} · ${COMPANY.email}`, M, 32, { width: W, align: 'right' })
 
   // Título del documento
   doc.fillColor(COLOR.dark)
-  doc.y = 82
+  doc.y = 86
   doc.font('Helvetica-Bold').fontSize(14)
     .text('ORDEN DE TRABAJO DE MANTENIMIENTO', M, doc.y, { width: W, align: 'center' })
 
-  // N.º OT en recuadro destacado
+  // N.º OT en recuadro destacado (fondo cian-light, borde y texto cian-dark)
   const boxY = doc.y + 4
   doc.rect(M, boxY, W, 26).fill(COLOR.light).stroke(COLOR.primary)
-  doc.fillColor(COLOR.primary).font('Helvetica-Bold').fontSize(13)
+  doc.fillColor(COLOR.primaryDk).font('Helvetica-Bold').fontSize(13)
     .text(`N.º ${orden.numeroOt}`, M, boxY + 7, { width: W, align: 'center' })
   doc.fillColor(COLOR.dark)
   doc.y = boxY + 34
@@ -568,11 +628,47 @@ function sectionTitle(doc, txt, M, W) {
   ensureSpace(doc, 40)
   doc.moveDown(0.4)
   const titleY = doc.y
-  doc.rect(M, titleY, W, 18).fill(COLOR.light)
-  doc.fillColor(COLOR.primary).font('Helvetica-Bold').fontSize(11)
-    .text(txt, M + 8, titleY + 4, { width: W - 16, lineBreak: false })
+  // Fondo cian-light + barra acento cian a la izquierda (como los borderLeft del web)
+  doc.rect(M, titleY, W, 20).fill(COLOR.light)
+  doc.rect(M, titleY, 3, 20).fill(COLOR.primary)
+  doc.fillColor(COLOR.primaryDk).font('Helvetica-Bold').fontSize(11)
+    .text(txt, M + 10, titleY + 5, { width: W - 16, lineBreak: false })
   doc.fillColor(COLOR.dark)
-  doc.y = titleY + 22
+  doc.y = titleY + 24
+}
+
+// Bloque de texto largo (alcance, objetivo, prácticas) — sub-encabezado
+// en cian + texto justificado en gris oscuro. Maneja saltos de página.
+function drawTextBlock(doc, label, body, M, W) {
+  const txt = (body && String(body).trim()) || 'No especificado.'
+  const labelH = 14
+  const padding = 4
+
+  // Calcular altura del texto con la fuente final
+  doc.font('Helvetica').fontSize(9.5)
+  const bodyH = doc.heightOfString(txt, { width: W - 12, align: 'justify' })
+  const totalH = labelH + bodyH + padding * 2 + 4
+
+  ensureSpace(doc, totalH + 8)
+  const startY = doc.y
+
+  // Barra acento cian a la izquierda + sub-fondo cian-light
+  doc.save()
+  doc.rect(M, startY, 3, totalH).fill(COLOR.primary)
+  doc.restore()
+
+  doc.font('Helvetica-Bold').fontSize(8).fillColor(COLOR.primaryDk)
+    .text(label.toUpperCase(), M + 10, startY + padding, {
+      width: W - 16, lineBreak: false, ellipsis: true,
+      characterSpacing: 0.6,
+    })
+
+  doc.font('Helvetica').fontSize(9.5).fillColor(COLOR.dark)
+    .text(txt, M + 10, startY + padding + labelH, {
+      width: W - 16, align: 'justify',
+    })
+
+  doc.y = startY + totalH + 2
 }
 
 function drawKVGrid(doc, pairs, M, W) {
@@ -615,11 +711,11 @@ function drawTableHeader(doc, cols, M) {
   const headerY = doc.y
   const totalW = cols.reduce((a, c) => a + c.w, 0)
   doc.save()
-  doc.rect(M, headerY, totalW, 16).fill(COLOR.dark)
+  doc.rect(M, headerY, totalW, 16).fill(COLOR.bandBg)
   doc.restore()
 
   let x = M
-  doc.fillColor('#fff').font('Helvetica-Bold').fontSize(TABLE_HEADER_FONT_SIZE)
+  doc.fillColor(COLOR.bandText).font('Helvetica-Bold').fontSize(TABLE_HEADER_FONT_SIZE)
   for (const c of cols) {
     doc.text(c.label, x + TABLE_PAD_X, headerY + TABLE_PAD_Y, {
       width: c.w - TABLE_PAD_X * 2,
@@ -658,9 +754,9 @@ function drawTableRow(doc, cols, M, values, r) {
   const rowY = doc.y
 
   // Fondo de fila según estado — usamos save/restore para no contaminar fillColor
-  const bg = r?.estadoResultado === 'requiere_atencion' ? '#fff4f4'
-    : r?.estadoResultado === 'correcto_con_danos' ? '#fffbea'
-    : r?.completado ? '#f7fbf7'
+  const bg = r?.estadoResultado === 'requiere_atencion' ? COLOR.rowAten
+    : r?.estadoResultado === 'correcto_con_danos' ? COLOR.rowDanos
+    : r?.completado ? COLOR.rowOk
     : null
   if (bg) {
     doc.save()
@@ -707,8 +803,10 @@ function drawFirmas(doc, orden, M, W) {
 
   const firmaBox = (x, y, titulo, nombre, fecha, rol, licencia) => {
     doc.rect(x, y, boxW, 100).stroke(COLOR.border)
-    doc.font('Helvetica-Bold').fontSize(9).fillColor(COLOR.primary)
-      .text(titulo, x + 6, y + 6, { width: boxW - 12, lineBreak: false })
+    // Encabezado del recuadro con barra cian a la izquierda
+    doc.rect(x, y, 3, 100).fill(COLOR.primary)
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(COLOR.primaryDk)
+      .text(titulo, x + 8, y + 6, { width: boxW - 14, lineBreak: false })
 
     // Línea de firma
     doc.moveTo(x + 10, y + 60).lineTo(x + boxW - 10, y + 60).stroke(COLOR.dark)
@@ -723,7 +821,7 @@ function drawFirmas(doc, orden, M, W) {
         .text(`Firmado: ${fmtFechaHora(fecha)}`, x + 6, y + 42, { width: boxW - 12, align: 'center', lineBreak: false })
     }
     if (nombre) {
-      doc.fontSize(14).fillColor(COLOR.primary).font('Helvetica-Oblique')
+      doc.fontSize(14).fillColor(COLOR.green).font('Helvetica-Oblique')
         .text('✓ Firmado', x + 6, y + 22, { width: boxW - 12, align: 'center', lineBreak: false })
       doc.fillColor(COLOR.dark)
     }
@@ -768,4 +866,125 @@ function ensureSpace(doc, needed) {
   if (doc.y + needed > bottom) {
     doc.addPage()
   }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Evidencia fotográfica — bloque que incrusta las fotos capturadas por punto
+// ────────────────────────────────────────────────────────────────────────────
+
+// Extensiones soportadas por pdfkit (PNG y JPEG). El resto se descarta.
+const EXT_IMG_VALIDAS = new Set(['.png', '.jpg', '.jpeg'])
+
+function resolverArchivoFoto(urlArchivo) {
+  if (!urlArchivo) return null
+  // urlArchivo viene como '/uploads/<filename>' — usamos solo el basename
+  // y lo resolvemos contra el directorio absoluto para evitar path-traversal.
+  const filename = path.basename(urlArchivo)
+  const abs = path.resolve(UPLOADS_DIR, filename)
+  if (!abs.startsWith(UPLOADS_DIR)) return null
+  if (!fs.existsSync(abs)) return null
+  const ext = path.extname(abs).toLowerCase()
+  if (!EXT_IMG_VALIDAS.has(ext)) return null
+  return abs
+}
+
+function drawEvidenciaFotografica(doc, orden, M, W) {
+  // Recolectar puntos con fotos respetando el orden del formato
+  const resultadosPorPunto = Object.fromEntries(orden.resultados.map(r => [r.puntoId, r]))
+  const grupos = []
+  for (const seccion of orden.formato.secciones) {
+    for (const punto of seccion.puntos) {
+      const r = resultadosPorPunto[punto.id]
+      if (!r || !r.fotos || r.fotos.length === 0) continue
+      grupos.push({ seccion, punto, resultado: r })
+    }
+  }
+  if (grupos.length === 0) return
+
+  sectionTitle(doc, '6. EVIDENCIA FOTOGRÁFICA', M, W)
+
+  const COLS = 3
+  const GAP = 8
+  const CELL_W = (W - GAP * (COLS - 1)) / COLS
+  const IMG_H = 110
+  const CAPTION_H = 22
+  const CELL_H = IMG_H + CAPTION_H
+
+  for (const g of grupos) {
+    // Encabezado del punto (título de subgrupo)
+    ensureSpace(doc, 28)
+    const titY = doc.y + 2
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(COLOR.dark)
+      .text(
+        `${g.seccion.nombre} · ${g.punto.nombreComponente}${g.punto.esCritico ? ' ★' : ''}`,
+        M, titY,
+        { width: W, lineBreak: false, ellipsis: true },
+      )
+    doc.y = titY + 14
+
+    // Grid de imágenes
+    let col = 0
+    let rowY = doc.y
+    for (let i = 0; i < g.resultado.fotos.length; i++) {
+      const foto = g.resultado.fotos[i]
+      const archivo = resolverArchivoFoto(foto.urlArchivo)
+
+      if (col === 0) {
+        ensureSpace(doc, CELL_H + 6)
+        rowY = doc.y
+      }
+      const x = M + col * (CELL_W + GAP)
+
+      // Marco de la imagen
+      doc.lineWidth(0.5).strokeColor(COLOR.border)
+      doc.rect(x, rowY, CELL_W, IMG_H).stroke()
+
+      if (archivo) {
+        try {
+          doc.image(archivo, x + 2, rowY + 2, {
+            fit: [CELL_W - 4, IMG_H - 4],
+            align: 'center',
+            valign: 'center',
+          })
+        } catch (e) {
+          // Si pdfkit no logra leer el archivo (corrupto, formato raro),
+          // mostramos un placeholder en vez de tumbar la generación.
+          dibujarPlaceholderFoto(doc, x, rowY, CELL_W, IMG_H, 'Imagen ilegible')
+        }
+      } else {
+        dibujarPlaceholderFoto(doc, x, rowY, CELL_W, IMG_H, 'Archivo no disponible')
+      }
+
+      // Caption (nombre + fecha de captura)
+      const fecha = foto.fechaCaptura ? fmtFecha(foto.fechaCaptura) : ''
+      const captionY = rowY + IMG_H + 3
+      doc.font('Helvetica').fontSize(7).fillColor(COLOR.gray)
+        .text(
+          `${i + 1}. ${foto.nombreArchivo || 'foto'}${fecha ? ` · ${fecha}` : ''}`,
+          x + 2, captionY,
+          { width: CELL_W - 4, lineBreak: false, ellipsis: true },
+        )
+      doc.fillColor(COLOR.dark)
+
+      col++
+      if (col >= COLS) {
+        col = 0
+        doc.y = rowY + CELL_H + 6
+      }
+    }
+    // Si la última fila quedó incompleta, igual avanzar
+    if (col !== 0) {
+      doc.y = rowY + CELL_H + 6
+    }
+    doc.moveDown(0.2)
+  }
+}
+
+function dibujarPlaceholderFoto(doc, x, y, w, h, label) {
+  doc.save()
+  doc.rect(x + 1, y + 1, w - 2, h - 2).fill(COLOR.light)
+  doc.restore()
+  doc.font('Helvetica-Oblique').fontSize(8).fillColor(COLOR.gray)
+    .text(label, x, y + h / 2 - 6, { width: w, align: 'center', lineBreak: false })
+  doc.fillColor(COLOR.dark)
 }

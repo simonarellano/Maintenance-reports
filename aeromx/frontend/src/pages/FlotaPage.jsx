@@ -3,13 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { Header } from '../components/Header'
 import { aeronavesService } from '../api/aeronavesService'
 import { ordenesService } from '../api/ordenesService'
-
-const ESTADO_COLORS = {
-  borrador:        'bg-gray-100 text-gray-800 border-gray-300',
-  en_proceso:      'bg-blue-100 text-blue-800 border-blue-300',
-  pendiente_firma: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-  cerrada:         'bg-green-100 text-green-800 border-green-300',
-}
+import { T, STATUS } from '../tokens/design'
+import {
+  Btn, Card, ErrorBanner, Hdr, Pill, Spinner,
+} from '../components/ui'
 
 export default function FlotaPage() {
   const navigate = useNavigate()
@@ -38,14 +35,12 @@ export default function FlotaPage() {
     }
   }
 
-  // Agrupar O/T por aeronaveId
   const ordenesPorAeronave = useMemo(() => {
     const m = new Map()
     for (const o of ordenes) {
       if (!m.has(o.aeronaveId)) m.set(o.aeronaveId, [])
       m.get(o.aeronaveId).push(o)
     }
-    // Ordenar cada grupo por fecha de creación descendente
     for (const v of m.values()) {
       v.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     }
@@ -65,98 +60,127 @@ export default function FlotaPage() {
   const toggle = (id) => setExpandido(prev => ({ ...prev, [id]: !prev[id] }))
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div style={{ minHeight: '100vh', background: T.bg }}>
       <Header />
-      <main className="container mx-auto px-4 py-8">
-        <button
-          onClick={() => navigate('/dashboard')}
-          className="mb-4 text-blue-600 hover:text-blue-800 flex items-center gap-2"
-        >
-          ← Volver
-        </button>
+      <main style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 20px 60px' }}>
+        <Hdr
+          title="Flota por aeronave"
+          sub="Histórico de operaciones"
+          back={() => navigate('/dashboard')}
+        />
+        <p style={{ color: T.sub, fontSize: 13, marginTop: -8, marginBottom: 20 }}>
+          Histórico de órdenes de mantenimiento agrupadas por aeronave
+        </p>
 
-        <div className="mb-6">
-          <h2 className="text-3xl font-bold text-gray-800">Flota por aeronave</h2>
-          <p className="text-sm text-gray-500 mt-1">
-            Histórico de órdenes de mantenimiento agrupadas por aeronave
-          </p>
-        </div>
-
-        <div className="bg-white rounded-lg shadow p-4 mb-6">
-          <input
-            type="text"
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="🔎 Buscar por matrícula, modelo o serie…"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-            {error}
+        <Card padding={14} style={{ marginBottom: 18 }}>
+          <div style={{ position: 'relative' }}>
+            <input
+              type="text"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Buscar por matrícula, modelo o número de serie…"
+              style={{
+                width: '100%',
+                background: T.s2, border: `1px solid ${T.border}`, borderRadius: 10,
+                padding: '11px 38px', color: T.text, fontSize: 14, outline: 'none',
+              }}
+            />
+            <span style={{
+              position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)',
+              color: T.sub, pointerEvents: 'none',
+            }}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <circle cx="7" cy="7" r="5.2" stroke={T.sub} strokeWidth="1.5"/>
+                <path d="M11 11l3 3" stroke={T.sub} strokeWidth="1.7" strokeLinecap="round"/>
+              </svg>
+            </span>
           </div>
-        )}
+        </Card>
+
+        <ErrorBanner onClose={() => setError('')}>{error}</ErrorBanner>
 
         {loading ? (
-          <div className="text-center py-10">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <p className="text-gray-600 mt-2">Cargando flota…</p>
-          </div>
+          <Spinner label="Cargando flota…" />
         ) : aeronavesFiltradas.length === 0 ? (
-          <div className="bg-white rounded-lg shadow p-10 text-center text-gray-600">
-            No hay aeronaves registradas.
-          </div>
+          <Card padding={40} style={{ textAlign: 'center' }}>
+            <p style={{ color: T.sub }}>No hay aeronaves registradas.</p>
+          </Card>
         ) : (
-          <div className="space-y-3">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {aeronavesFiltradas.map((a) => {
               const ords = ordenesPorAeronave.get(a.id) || []
               const isOpen = Boolean(expandido[a.id])
               const enProceso = ords.filter(o => o.estado !== 'cerrada' && !o.archivada).length
               const cerradas = ords.filter(o => o.estado === 'cerrada').length
+
               return (
-                <section key={a.id} className="bg-white rounded-lg shadow overflow-hidden">
+                <section key={a.id} style={{
+                  background: T.s1, border: `1px solid ${T.border}`,
+                  borderRadius: 14, overflow: 'hidden',
+                }}>
                   <button
                     onClick={() => toggle(a.id)}
-                    className="w-full px-5 py-4 flex justify-between items-center bg-gradient-to-r from-blue-50 to-blue-100 border-b border-blue-200 hover:from-blue-100 transition text-left"
+                    style={{
+                      width: '100%',
+                      padding: '16px 18px',
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      gap: 12, flexWrap: 'wrap',
+                      background: T.s2, border: 'none',
+                      cursor: 'pointer', textAlign: 'left',
+                      fontFamily: T.font,
+                      borderBottom: isOpen ? `1px solid ${T.border}` : 'none',
+                    }}
                   >
-                    <div>
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <h3 className="text-xl font-bold text-gray-800 font-mono">
-                          {a.matricula}
-                        </h3>
-                        <span className="text-sm text-gray-600">
-                          {a.modelo?.nombre}{a.modelo?.fabricante ? ` · ${a.modelo.fabricante}` : ''}
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                        <span style={{
+                          fontSize: 18, fontWeight: 700, color: T.text,
+                          fontFamily: T.mono, letterSpacing: '0.02em',
+                        }}>{a.matricula}</span>
+                        <span style={{ fontSize: 13, color: T.sub }}>
+                          {a.modelo?.nombre}
+                          {a.modelo?.fabricante ? ` · ${a.modelo.fabricante}` : ''}
                         </span>
                         {a.activa === false && (
-                          <span className="px-2 py-0.5 bg-gray-200 text-gray-700 text-xs rounded-full font-semibold">
-                            Inactiva
-                          </span>
+                          <Pill small label="Inactiva" color={T.sub} bg={T.s1} />
                         )}
                       </div>
-                      <div className="text-xs text-gray-500 mt-1">
+                      <div style={{ fontSize: 11, color: T.sub, marginTop: 5, fontFamily: T.mono }}>
                         {a.numeroSerie ? `S/N ${a.numeroSerie} · ` : ''}
-                        Horas totales: {a.horasTotales ?? 0}h · Motor D: {a.horasMotorDer ?? 0}h · Motor I: {a.horasMotorIzq ?? 0}h
+                        Total: {a.horasTotales ?? 0}h · M.D: {a.horasMotorDer ?? 0}h · M.I: {a.horasMotorIzq ?? 0}h
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <div className="text-right text-xs">
-                        <div className="text-blue-700 font-semibold">{enProceso} activas</div>
-                        <div className="text-green-700">{cerradas} cerradas</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: 11, color: T.cyan, fontWeight: 600 }}>
+                          {enProceso} activas
+                        </div>
+                        <div style={{ fontSize: 11, color: T.green, fontWeight: 600 }}>
+                          {cerradas} cerradas
+                        </div>
                       </div>
-                      <span className="text-gray-500">{isOpen ? '▼' : '▶'}</span>
+                      <span style={{ color: T.sub, fontSize: 12, fontFamily: T.mono }}>
+                        {isOpen ? '▼' : '▶'}
+                      </span>
                     </div>
                   </button>
 
                   {isOpen && (
-                    <div className="divide-y divide-gray-100">
+                    <div>
                       {ords.length === 0 ? (
-                        <div className="p-6 text-center text-gray-500 text-sm">
+                        <div style={{
+                          padding: 28, textAlign: 'center',
+                          color: T.sub, fontSize: 13,
+                        }}>
                           Esta aeronave aún no tiene órdenes registradas.
                         </div>
                       ) : (
                         ords.map((o) => (
-                          <ResumenOrden key={o.id} orden={o} onClick={() => navigate(`/ordenes/${o.id}/inspeccion`)} />
+                          <ResumenOrden
+                            key={o.id}
+                            orden={o}
+                            onClick={() => navigate(`/ordenes/${o.id}/inspeccion`)}
+                          />
                         ))
                       )}
                     </div>
@@ -173,37 +197,53 @@ export default function FlotaPage() {
 
 function ResumenOrden({ orden, onClick }) {
   const fecha = orden.createdAt ? new Date(orden.createdAt) : null
+  const st = STATUS[orden.estado] || { label: orden.estado, c: T.sub, bg: T.s2 }
   return (
     <button
       onClick={onClick}
-      className="w-full px-5 py-3 text-left hover:bg-gray-50 flex justify-between items-center gap-3 flex-wrap"
+      style={{
+        width: '100%', padding: '12px 18px', textAlign: 'left',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        gap: 14, flexWrap: 'wrap',
+        background: 'transparent', border: 'none',
+        borderTop: `1px solid ${T.border}`,
+        cursor: 'pointer', fontFamily: T.font,
+        transition: 'background .15s',
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = T.s2 }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
     >
-      <div className="flex-1 min-w-[260px]">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-semibold text-gray-800">{orden.numeroOt}</span>
-          <span className={`px-2 py-0.5 rounded-full text-xs font-bold border ${ESTADO_COLORS[orden.estado] || ''}`}>
-            {orden.estado?.replace(/_/g, ' ')}
-          </span>
+      <div style={{ flex: 1, minWidth: 240 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{
+            fontFamily: T.mono, fontSize: 13, color: T.text, fontWeight: 600,
+          }}>{orden.numeroOt}</span>
+          <Pill small label={st.label} color={st.c} bg={st.bg} />
           {orden.archivada && (
-            <span className="px-2 py-0.5 bg-gray-200 text-gray-700 text-xs rounded-full font-semibold">
-              Archivada
-            </span>
+            <Pill small label="Archivada" color={T.sub} bg={T.s2} />
           )}
         </div>
-        <div className="text-xs text-gray-600 mt-1 space-x-3">
-          <span>Técnico: <strong>{orden.tecnico?.nombre || '—'}</strong></span>
-          <span>Supervisor: <strong>{orden.supervisor?.nombre || '—'}</strong></span>
-          {orden.lugarMantenimiento && <span>Lugar: <strong>{orden.lugarMantenimiento}</strong></span>}
+        <div style={{
+          fontSize: 11, color: T.sub, marginTop: 6,
+          display: 'flex', flexWrap: 'wrap', gap: 14,
+        }}>
+          <span>Técnico: <strong style={{ color: T.text }}>{orden.tecnico?.nombre || '—'}</strong></span>
+          <span>Supervisor: <strong style={{ color: T.text }}>{orden.supervisor?.nombre || '—'}</strong></span>
+          {orden.lugarMantenimiento && (
+            <span>📍 <strong style={{ color: T.text }}>{orden.lugarMantenimiento}</strong></span>
+          )}
         </div>
       </div>
-      <div className="text-right text-xs text-gray-500">
-        {fecha && (
-          <>
-            <div>{fecha.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
-            <div>{fecha.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}</div>
-          </>
-        )}
-      </div>
+      {fecha && (
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: 11, color: T.text, fontFamily: T.mono }}>
+            {fecha.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
+          </div>
+          <div style={{ fontSize: 10, color: T.sub, fontFamily: T.mono, marginTop: 2 }}>
+            {fecha.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+          </div>
+        </div>
+      )}
     </button>
   )
 }

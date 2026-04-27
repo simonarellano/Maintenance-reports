@@ -7,6 +7,10 @@ import { aeronavesService } from '../api/aeronavesService'
 import { ordenesService } from '../api/ordenesService'
 import { usuariosService } from '../api/usuariosService'
 import { useAuthStore } from '../store/authStore'
+import { T } from '../tokens/design'
+import {
+  Btn, Card, ErrorBanner, Field, FieldSelect, Hdr, Spinner,
+} from '../components/ui'
 
 export default function CrearOTPage() {
   const navigate = useNavigate()
@@ -46,7 +50,6 @@ export default function CrearOTPage() {
     cargarDatos()
   }, [])
 
-  // Auto-prellenar horas con las de la aeronave al seleccionar
   useEffect(() => {
     if (!aeronaveSeleccionada) return
     const a = aeronaves.find(x => x.id === aeronaveSeleccionada)
@@ -107,259 +110,197 @@ export default function CrearOTPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div style={{ minHeight: '100vh', background: T.bg }}>
         <Header />
-        <div className="flex items-center justify-center h-96">
-          <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <p className="text-gray-600 mt-2">Cargando...</p>
-          </div>
-        </div>
+        <Spinner label="Cargando datos…" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div style={{ minHeight: '100vh', background: T.bg }}>
       <Header />
-
-      <main className="container mx-auto px-4 py-8">
-        <button
-          onClick={() => navigate('/dashboard')}
-          className="mb-6 text-blue-600 hover:text-blue-800 flex items-center gap-2"
-        >
-          ← Volver
-        </button>
-
-        <div className="max-w-3xl mx-auto bg-white rounded-lg shadow-lg p-8">
-          <div className="flex justify-between items-start mb-6 flex-wrap gap-4">
-            <div>
-              <h2 className="text-3xl font-bold text-gray-800">Nueva Orden de Mantenimiento</h2>
-              <p className="text-sm text-gray-500 mt-1 capitalize">
-                📅 Fecha de creación: <span className="font-semibold">{hoyLegible}</span>
-              </p>
-              <p className="text-xs text-gray-500 mt-1">
-                La recepción de la aeronave y el inicio del mantenimiento se registran como hitos
-                posteriores dentro de la orden.
-              </p>
+      <main style={{ maxWidth: 880, margin: '0 auto', padding: '24px 20px 60px' }}>
+        <Hdr
+          title="Nueva Orden de Mantenimiento"
+          sub="Paso inicial · Datos generales"
+          back={() => navigate('/dashboard')}
+          right={
+            <div style={{
+              background: T.cD, border: `1px solid ${T.cyan}30`,
+              borderRadius: 10, padding: '8px 12px',
+              fontFamily: T.mono, fontSize: 12, color: T.cyan,
+            }}>
+              {hoyISO}
             </div>
-            <div className="bg-blue-50 border border-blue-200 text-blue-800 px-3 py-2 rounded-lg text-sm">
-              <div className="font-semibold">Hoy: {hoyISO}</div>
+          }
+        />
+        <p style={{ color: T.sub, fontSize: 13, marginTop: -8, marginBottom: 20, textTransform: 'capitalize' }}>
+          📅 Fecha de creación: <span style={{ color: T.text, fontWeight: 600 }}>{hoyLegible}</span>
+        </p>
+        <p style={{ color: T.sub, fontSize: 12, marginBottom: 24, lineHeight: 1.55 }}>
+          La recepción de la aeronave y el inicio del mantenimiento se registran como hitos posteriores
+          dentro de la orden.
+        </p>
+
+        <ErrorBanner onClose={() => setError('')}>{error}</ErrorBanner>
+
+        <form onSubmit={handleSubmit(onSubmit)} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Tipo de mantenimiento */}
+          <Card padding={20}>
+            <SectionTitle>Tipo de mantenimiento</SectionTitle>
+            <FieldSelect
+              label="Formato"
+              required
+              register={register('formatoId', { required: 'Selecciona un formato' })}
+              error={errors.formatoId?.message}
+              placeholder="-- Selecciona un formato --"
+              options={formatos.map(f => ({ value: f.id, label: f.nombre }))}
+            />
+          </Card>
+
+          {/* Aeronave + horas */}
+          <Card padding={20}>
+            <SectionTitle>Aeronave y horas</SectionTitle>
+            <FieldSelect
+              label="Aeronave"
+              required
+              register={register('aeronaveId', { required: 'Selecciona una aeronave' })}
+              error={errors.aeronaveId?.message}
+              placeholder="-- Selecciona una aeronave --"
+              options={aeronaves.map(a => ({
+                value: a.id,
+                label: `${a.matricula} (${a.modelo?.nombre || 'Sin modelo'})`,
+              }))}
+            />
+            <div style={{
+              display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
+              gap: 12, marginTop: 14,
+            }}>
+              <Field
+                label="Horas totales (celda)"
+                type="number"
+                placeholder="0.0"
+                register={register('horasAlMomento')}
+                mono
+                inputProps={{ step: '0.1', min: '0' }}
+              />
+              <Field
+                label="Horas motor derecho"
+                type="number"
+                placeholder="0.0"
+                register={register('horasMotorDer')}
+                mono
+                inputProps={{ step: '0.1', min: '0' }}
+              />
+              <Field
+                label="Horas motor izquierdo"
+                type="number"
+                placeholder="0.0"
+                register={register('horasMotorIzq')}
+                mono
+                inputProps={{ step: '0.1', min: '0' }}
+              />
             </div>
-          </div>
+            <p style={{ fontSize: 11, color: T.sub, marginTop: 10, lineHeight: 1.5 }}>
+              Al seleccionar la aeronave se precargan sus horas actuales. Puedes ajustarlas antes de crear la orden.
+            </p>
+          </Card>
 
-          {error && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-            {/* ─── Datos del formato ─── */}
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-4">
-              <h3 className="font-semibold text-gray-700 text-sm uppercase tracking-wide">
-                Tipo de mantenimiento
-              </h3>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Formato <span className="text-red-600">*</span>
-                </label>
-                <select
-                  {...register('formatoId', { required: 'Selecciona un formato' })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">-- Selecciona un formato --</option>
-                  {formatos.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.nombre}
-                    </option>
-                  ))}
-                </select>
-                {errors.formatoId && (
-                  <p className="text-red-500 text-sm mt-1">{errors.formatoId.message}</p>
-                )}
-              </div>
-            </div>
-
-            {/* ─── Aeronave + horas ─── */}
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-4">
-              <h3 className="font-semibold text-gray-700 text-sm uppercase tracking-wide">
-                Aeronave y horas
-              </h3>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Aeronave <span className="text-red-600">*</span>
-                </label>
-                <select
-                  {...register('aeronaveId', { required: 'Selecciona una aeronave' })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">-- Selecciona una aeronave --</option>
-                  {aeronaves.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.matricula} ({a.modelo?.nombre})
-                    </option>
-                  ))}
-                </select>
-                {errors.aeronaveId && (
-                  <p className="text-red-500 text-sm mt-1">{errors.aeronaveId.message}</p>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Horas totales (celda)
-                  </label>
-                  <input
-                    type="number" step="0.1" min="0"
-                    {...register('horasAlMomento')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="0.0"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Horas Motor Derecho
-                  </label>
-                  <input
-                    type="number" step="0.1" min="0"
-                    {...register('horasMotorDer')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="0.0"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Horas Motor Izquierdo
-                  </label>
-                  <input
-                    type="number" step="0.1" min="0"
-                    {...register('horasMotorIzq')}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="0.0"
-                  />
-                </div>
-              </div>
-              <p className="text-xs text-gray-500">
-                Al seleccionar la aeronave se precargan sus horas actuales. Puedes ajustarlas antes de crear la orden.
-              </p>
-            </div>
-
-            {/* ─── Asignación ─── */}
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-4">
-              <h3 className="font-semibold text-gray-700 text-sm uppercase tracking-wide">
-                Asignación
-              </h3>
-
+          {/* Asignación */}
+          <Card padding={20}>
+            <SectionTitle>Asignación</SectionTitle>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {esSupervisor && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Técnico / Ingeniero responsable
-                  </label>
-                  <select
-                    {...register('tecnicoId')}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">-- Asignarme a mí --</option>
-                    {tecnicos.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.nombre} · {t.rol}{t.licenciaNum ? ` · ${t.licenciaNum}` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-gray-500 mt-1">
+                  <FieldSelect
+                    label="Técnico / Ingeniero responsable"
+                    register={register('tecnicoId')}
+                    placeholder="-- Asignarme a mí --"
+                    options={tecnicos.map(t => ({
+                      value: t.id,
+                      label: `${t.nombre} · ${t.rol}${t.licenciaNum ? ` · ${t.licenciaNum}` : ''}`,
+                    }))}
+                  />
+                  <p style={{ fontSize: 11, color: T.sub, marginTop: 6 }}>
                     Solo el técnico asignado podrá capturar los resultados de la inspección.
                   </p>
                 </div>
               )}
-
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Supervisor asignado
-                </label>
-                <select
-                  {...register('supervisorId')}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">-- Sin asignar --</option>
-                  {supervisores.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.nombre}{s.licenciaNum ? ` · Lic. ${s.licenciaNum}` : ''}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-gray-500 mt-1">
+                <FieldSelect
+                  label="Supervisor asignado"
+                  register={register('supervisorId')}
+                  placeholder="-- Sin asignar --"
+                  options={supervisores.map(s => ({
+                    value: s.id,
+                    label: `${s.nombre}${s.licenciaNum ? ` · Lic. ${s.licenciaNum}` : ''}`,
+                  }))}
+                />
+                <p style={{ fontSize: 11, color: T.sub, marginTop: 6 }}>
                   Puedes dejarlo vacío y asignarlo después al momento del cierre.
                 </p>
               </div>
             </div>
+          </Card>
 
-            {/* ─── Datos de servicio ─── */}
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-4">
-              <h3 className="font-semibold text-gray-700 text-sm uppercase tracking-wide">
-                Datos del servicio
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Cliente
-                  </label>
-                  <input
-                    type="text"
-                    {...register('cliente')}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Nombre del cliente"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Orden de Servicio
-                  </label>
-                  <input
-                    type="text"
-                    {...register('ordenServicio')}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Número de orden de servicio"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  📍 Lugar donde se realiza el mantenimiento
-                </label>
-                <input
-                  type="text"
-                  {...register('lugarMantenimiento')}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Ej. Hangar 3 · Aeropuerto Toluca · Rampa Norte"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Hangar, base operativa, rampa o ubicación específica donde se ejecutará el servicio.
-                </p>
-              </div>
+          {/* Datos del servicio */}
+          <Card padding={20}>
+            <SectionTitle>Datos del servicio</SectionTitle>
+            <div style={{
+              display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12,
+            }}>
+              <Field
+                label="Cliente"
+                placeholder="Nombre del cliente"
+                register={register('cliente')}
+              />
+              <Field
+                label="Orden de servicio"
+                placeholder="Número de orden de servicio"
+                register={register('ordenServicio')}
+                mono
+              />
             </div>
-
-            <div className="flex gap-4 pt-2">
-              <button
-                type="button"
-                onClick={() => navigate('/dashboard')}
-                className="flex-1 px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition duration-200"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={submitLoading}
-                className="flex-1 px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-lg transition duration-200"
-              >
-                {submitLoading ? 'Creando...' : 'Crear Orden'}
-              </button>
+            <div style={{ marginTop: 14 }}>
+              <Field
+                label="📍 Lugar donde se realiza el mantenimiento"
+                placeholder="Ej. Hangar 3 · Aeropuerto Toluca · Rampa Norte"
+                register={register('lugarMantenimiento')}
+              />
+              <p style={{ fontSize: 11, color: T.sub, marginTop: 6, lineHeight: 1.5 }}>
+                Hangar, base operativa, rampa o ubicación específica donde se ejecutará el servicio.
+              </p>
             </div>
-          </form>
-        </div>
+          </Card>
+
+          {/* Acciones */}
+          <div style={{ display: 'flex', gap: 12, marginTop: 6 }}>
+            <Btn
+              variant="ghost"
+              label="Cancelar"
+              onClick={() => navigate('/dashboard')}
+              style={{ flex: 1 }}
+            />
+            <Btn
+              type="submit"
+              label={submitLoading ? 'Creando…' : 'Crear Orden →'}
+              disabled={submitLoading}
+              style={{ flex: 1 }}
+            />
+          </div>
+        </form>
       </main>
     </div>
+  )
+}
+
+function SectionTitle({ children }) {
+  return (
+    <div style={{
+      fontSize: 11, color: T.sub, letterSpacing: '0.08em',
+      textTransform: 'uppercase', fontWeight: 600,
+      marginBottom: 14, fontFamily: T.font,
+    }}>{children}</div>
   )
 }
