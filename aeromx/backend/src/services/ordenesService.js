@@ -51,6 +51,7 @@ export function obtenerOrden(id) {
             orderBy: { orden: 'asc' },
             include: { puntos: { orderBy: { orden: 'asc' } } },
           },
+          bloquesTexto: { orderBy: { orden: 'asc' } },
         },
       },
       aeronave: { include: { modelo: true } },

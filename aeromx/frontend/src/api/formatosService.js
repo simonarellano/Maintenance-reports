@@ -40,4 +40,18 @@ export const formatosService = {
 
   eliminarPunto: (formatoId, seccionId, puntoId) =>
     client.delete(`/formatos/${formatoId}/secciones/${seccionId}/puntos/${puntoId}`),
+
+  // Bloques de texto del documento
+  crearBloqueTexto: (formatoId, datos) =>
+    client.post(`/formatos/${formatoId}/bloques`, datos),
+
+  actualizarBloqueTexto: (formatoId, bloqueId, datos) =>
+    client.put(`/formatos/${formatoId}/bloques/${bloqueId}`, datos),
+
+  eliminarBloqueTexto: (formatoId, bloqueId) =>
+    client.delete(`/formatos/${formatoId}/bloques/${bloqueId}`),
+
+  // Secuencia (orden) de los elementos del documento
+  actualizarSecuencia: (formatoId, secuencia) =>
+    client.put(`/formatos/${formatoId}/secuencia`, { secuencia }),
 }

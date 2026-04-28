@@ -105,14 +105,41 @@ model Formato {
   instrucciones String?
   definiciones  String?
   activo        Boolean   @default(true)
+  // Secuencia ordenada de elementos del documento (después de las secciones
+  // fijas 1-Datos generales y 2-Datos de aeronave). Cada item tiene la forma:
+  //   { tipo: 'personal' | 'trabajos' | 'fotos' | 'dictamen' | 'firmas', id?: null }
+  //   { tipo: 'bloque', id: '<bloqueId>' }
+  // Si es null/[], se usa el orden por defecto:
+  //   [personal, trabajos, fotos, dictamen, firmas]
+  // Bloques creados que no aparezcan en la secuencia se anexan al final.
+  secuenciaDocumento Json? @map("secuencia_documento")
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
   // Relaciones
   secciones     SeccionFormato[]
+  bloquesTexto  BloqueTextoFormato[]
   ordenes       OrdenTrabajo[]
 
   @@map("formatos")
+}
+
+// Bloques de texto libres por formato — alcance, descripciones, notas legales,
+// advertencias, etc. Permite que el supervisor agregue cualquier sección textual
+// al documento sin requerir cambios de schema.
+model BloqueTextoFormato {
+  id        String   @id @default(uuid())
+  formatoId String   @map("formato_id")
+  titulo    String
+  contenido String
+  orden     Int
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  formato   Formato  @relation(fields: [formatoId], references: [id], onDelete: Cascade)
+
+  @@index([formatoId])
+  @@map("bloques_texto_formato")
 }
 
 model SeccionFormato {

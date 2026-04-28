@@ -1,15 +1,81 @@
 import prisma from '../lib/prisma.js'
 
+// ─── Secuencia del documento ────────────────────────────────────────────────
+// Tipos de elementos built-in que pueden aparecer en el PDF (después de las
+// secciones fijas 1-Datos generales y 2-Datos de aeronave). El orden default
+// reproduce el comportamiento histórico del PDF.
+export const BUILTINS_SECUENCIA = ['personal', 'trabajos', 'fotos', 'dictamen', 'firmas']
+
+// Resuelve la secuencia efectiva del documento para un formato cargado.
+// Es tolerante a datos viejos/incompletos: garantiza que TODOS los built-ins
+// y TODOS los bloques del formato terminen en el resultado, en algún orden.
+export function resolverSecuencia(formato) {
+  const stored = Array.isArray(formato?.secuenciaDocumento) ? formato.secuenciaDocumento : null
+  const bloques = formato?.bloquesTexto || []
+  const bloqueIds = new Set(bloques.map((b) => b.id))
+
+  // Empezamos con lo almacenado (filtrando items inválidos), o con el default.
+  let items = stored && stored.length > 0
+    ? stored.filter((item) => {
+        if (!item || typeof item !== 'object') return false
+        if (item.tipo === 'bloque') return typeof item.id === 'string' && bloqueIds.has(item.id)
+        return BUILTINS_SECUENCIA.includes(item.tipo)
+      }).map((item) => item.tipo === 'bloque'
+        ? { tipo: 'bloque', id: item.id }
+        : { tipo: item.tipo })
+    : BUILTINS_SECUENCIA.map((t) => ({ tipo: t }))
+
+  // Asegurar que cada built-in esté presente (anexar al final si falta).
+  for (const tipo of BUILTINS_SECUENCIA) {
+    if (!items.some((i) => i.tipo === tipo)) items.push({ tipo })
+  }
+
+  // Asegurar que cada bloque esté presente (anexar al final si falta).
+  const presentes = new Set(items.filter((i) => i.tipo === 'bloque').map((i) => i.id))
+  for (const b of bloques) {
+    if (!presentes.has(b.id)) items.push({ tipo: 'bloque', id: b.id })
+  }
+
+  return items
+}
+
+// Actualiza la secuencia de un formato. Valida la estructura mínima y deja
+// que `resolverSecuencia` complete cualquier omisión cuando se renderice.
+export async function actualizarSecuencia(formatoId, secuencia) {
+  if (!Array.isArray(secuencia)) {
+    throw Object.assign(new Error('secuencia debe ser un array'), { code: 'BAD_INPUT' })
+  }
+  for (const item of secuencia) {
+    if (!item || typeof item !== 'object') {
+      throw Object.assign(new Error('Cada item de la secuencia debe ser un objeto'), { code: 'BAD_INPUT' })
+    }
+    if (item.tipo === 'bloque') {
+      if (typeof item.id !== 'string') {
+        throw Object.assign(new Error('Item bloque requiere id'), { code: 'BAD_INPUT' })
+      }
+    } else if (!BUILTINS_SECUENCIA.includes(item.tipo)) {
+      throw Object.assign(new Error(`Tipo de item inválido: ${item.tipo}`), { code: 'BAD_INPUT' })
+    }
+  }
+  return prisma.formato.update({
+    where: { id: formatoId },
+    data: { secuenciaDocumento: secuencia },
+  })
+}
+
 // ─── Formatos ───────────────────────────────────────────────────────────────
 
 export function listarFormatos(soloActivos = true) {
   return prisma.formato.findMany({
     where: soloActivos ? { activo: true } : {},
     orderBy: { nombre: 'asc' },
-    select: {
-      id: true, nombre: true, version: true, fechaVersion: true,
-      objetivo: true, activo: true, createdAt: true, updatedAt: true,
-      _count: { select: { secciones: true, ordenes: true } },
+    include: {
+      secciones: {
+        orderBy: { orden: 'asc' },
+        include: { puntos: { orderBy: { orden: 'asc' } } },
+      },
+      bloquesTexto: { orderBy: { orden: 'asc' } },
+      _count: { select: { ordenes: true } },
     },
   })
 }
@@ -24,6 +90,7 @@ export function obtenerFormato(id) {
           puntos: { orderBy: { orden: 'asc' } },
         },
       },
+      bloquesTexto: { orderBy: { orden: 'asc' } },
     },
   })
 }
@@ -69,4 +136,20 @@ export function actualizarPunto(id, data) {
 
 export function eliminarPunto(id) {
   return prisma.puntoInspeccion.delete({ where: { id } })
+}
+
+// ─── Bloques de texto del documento ─────────────────────────────────────────
+
+export function crearBloqueTexto(formatoId, data) {
+  return prisma.bloqueTextoFormato.create({
+    data: { ...data, formatoId },
+  })
+}
+
+export function actualizarBloqueTexto(id, data) {
+  return prisma.bloqueTextoFormato.update({ where: { id }, data })
+}
+
+export function eliminarBloqueTexto(id) {
+  return prisma.bloqueTextoFormato.delete({ where: { id } })
 }

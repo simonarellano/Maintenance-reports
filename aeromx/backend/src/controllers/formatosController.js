@@ -16,12 +16,12 @@ export async function obtener(req, res) {
 
 export async function crear(req, res) {
   const { nombre, version, fechaVersion, objetivo, instrucciones, definiciones } = req.body
-  if (!nombre || !version || !fechaVersion) {
-    return res.status(400).json({ error: 'nombre, version y fechaVersion son requeridos' })
+  if (!nombre || !version) {
+    return res.status(400).json({ error: 'nombre y version son requeridos' })
   }
   const formato = await svc.crearFormato({
     nombre, version,
-    fechaVersion: new Date(fechaVersion),
+    fechaVersion: fechaVersion ? new Date(fechaVersion) : new Date(),
     objetivo, instrucciones, definiciones,
   })
   res.status(201).json(formato)
@@ -135,6 +135,60 @@ export async function eliminarPunto(req, res) {
     res.status(204).send()
   } catch (e) {
     if (e.code === 'P2025') return res.status(404).json({ error: 'Punto no encontrado' })
+    throw e
+  }
+}
+
+// ─── Secuencia del documento ────────────────────────────────────────────────
+
+export async function actualizarSecuencia(req, res) {
+  try {
+    const formato = await svc.actualizarSecuencia(req.params.id, req.body?.secuencia)
+    res.json(formato)
+  } catch (e) {
+    if (e.code === 'BAD_INPUT') return res.status(400).json({ error: e.message })
+    if (e.code === 'P2025') return res.status(404).json({ error: 'Formato no encontrado' })
+    throw e
+  }
+}
+
+// ─── Bloques de texto ───────────────────────────────────────────────────────
+
+export async function crearBloqueTexto(req, res) {
+  const { titulo, contenido, orden } = req.body
+  if (!titulo?.trim() || !contenido?.trim() || orden === undefined) {
+    return res.status(400).json({ error: 'titulo, contenido y orden son requeridos' })
+  }
+  const bloque = await svc.crearBloqueTexto(req.params.id, {
+    titulo: titulo.trim(),
+    contenido,
+    orden: Number(orden),
+  })
+  res.status(201).json(bloque)
+}
+
+export async function actualizarBloqueTexto(req, res) {
+  const { titulo, contenido, orden } = req.body
+  const data = {}
+  if (titulo !== undefined) data.titulo = titulo
+  if (contenido !== undefined) data.contenido = contenido
+  if (orden !== undefined) data.orden = Number(orden)
+
+  try {
+    const bloque = await svc.actualizarBloqueTexto(req.params.bloqueId, data)
+    res.json(bloque)
+  } catch (e) {
+    if (e.code === 'P2025') return res.status(404).json({ error: 'Bloque no encontrado' })
+    throw e
+  }
+}
+
+export async function eliminarBloqueTexto(req, res) {
+  try {
+    await svc.eliminarBloqueTexto(req.params.bloqueId)
+    res.status(204).send()
+  } catch (e) {
+    if (e.code === 'P2025') return res.status(404).json({ error: 'Bloque no encontrado' })
     throw e
   }
 }

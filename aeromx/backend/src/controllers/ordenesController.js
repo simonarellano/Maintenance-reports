@@ -1,5 +1,7 @@
 import * as svc from '../services/ordenesService.js'
 import prisma from '../lib/prisma.js'
+import { resolverSecuencia } from '../services/formatosService.js'
+import { renderMarkdown } from '../pdf/markdown.js'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -346,7 +348,7 @@ const COLOR = {
   rowDanos:   '#fff8e8',  // fondo de fila "con daños"
   rowAten:    '#ffeded',  // fondo de fila "requiere atención"
   rowOk:      '#eafbf3',  // fondo de fila completada
-  gray:       '#ffffff',  // sub del web — texto secundario
+  gray:       '#64748b',  // slate-500 — texto secundario legible sobre blanco
   dark:       '#0f172a',  // texto principal (legible en blanco)
   border:     '#cbd5e1',  // líneas de tablas
 }
@@ -436,124 +438,34 @@ export async function generarPDF(req, res, next) {
     ], M, CONTENT_W)
 
     // ═══════════════════════════════════════════════════════════════════════
-    // BLOQUE 3 — Alcance, objetivo y prácticas de mantenimiento
+    // SECCIONES 3+ — Definidas por la secuencia del formato
+    // Las secciones 1 y 2 son fijas (datos generales y aeronave). El resto se
+    // ordena según `formato.secuenciaDocumento` que el supervisor edita desde
+    // la UI. Built-ins disponibles: personal, trabajos, fotos, dictamen, firmas.
+    // Bloques de texto se intercalan en cualquier posición.
     // ═══════════════════════════════════════════════════════════════════════
-    sectionTitle(doc, '3. ALCANCE, OBJETIVO Y PRÁCTICAS DE MANTENIMIENTO', M, CONTENT_W)
-
-    const alcanceTxt = `Servicio de ${orden.formato.nombre} (versión ${orden.formato.version}) ejecutado sobre la aeronave ${orden.aeronave.matricula}${orden.aeronave.modelo?.nombre ? ` · ${orden.aeronave.modelo.nombre}` : ''}. Cubre la totalidad de los puntos de inspección definidos en el formato vigente.`
-    drawTextBlock(doc, 'Alcance del servicio', alcanceTxt, M, CONTENT_W)
-    drawTextBlock(doc, 'Objetivo', orden.formato.objetivo, M, CONTENT_W)
-    drawTextBlock(doc, 'Prácticas de mantenimiento', orden.formato.instrucciones, M, CONTENT_W)
-    if (orden.formato.definiciones) {
-      drawTextBlock(doc, 'Definiciones aplicables', orden.formato.definiciones, M, CONTENT_W)
+    const totales = calcularTotales(orden)
+    const secuencia = resolverSecuencia(orden.formato)
+    // Numerador de secciones (1 y 2 ya consumidas) — empieza en 3 y avanza por
+    // built-in. Los bloques no consumen un número de sección: aparecen como
+    // contenido propio con su título-heading.
+    let nextSectionNum = 3
+    const ctx = {
+      M, W: CONTENT_W,
+      nextSectionNum: () => nextSectionNum++,
+      totales,
     }
+    const bloquesPorId = Object.fromEntries((orden.formato.bloquesTexto || []).map((b) => [b.id, b]))
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // BLOQUE 4 — Personal responsable
-    // ═══════════════════════════════════════════════════════════════════════
-    sectionTitle(doc, '4. PERSONAL RESPONSABLE', M, CONTENT_W)
-
-    drawKVGrid(doc, [
-      ['Técnico / Ingeniero', orden.tecnico?.nombre || '—'],
-      ['Rol',                 (orden.tecnico?.rol || '').toUpperCase() || '—'],
-      ['Licencia',            orden.tecnico?.licenciaNum || '—'],
-      ['Supervisor',          orden.supervisor?.nombre || 'No asignado'],
-      ['Rol supervisor',      (orden.supervisor?.rol || '').toUpperCase() || '—'],
-      ['Licencia supervisor', orden.supervisor?.licenciaNum || '—'],
-    ], M, CONTENT_W)
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // BLOQUE 5 — Trabajos realizados (la lista)
-    // ═══════════════════════════════════════════════════════════════════════
-    sectionTitle(doc, '5. TRABAJOS REALIZADOS', M, CONTENT_W)
-
-    const resultadosPorPunto = Object.fromEntries(orden.resultados.map(r => [r.puntoId, r]))
-    let totalPuntos = 0
-    let completados = 0
-
-    for (const seccion of orden.formato.secciones) {
-      // Header de sección
-      doc.moveDown(0.2)
-      ensureSpace(doc, 60)
-      const secY = doc.y
-      doc.save()
-      // Banda dark con texto cian — replica el header del web app
-      doc.rect(M, secY, CONTENT_W, 18).fill(COLOR.bandBg)
-      doc.rect(M, secY, 3, 18).fill(COLOR.primary)
-      doc.restore()
-      doc.fillColor(COLOR.primary).font('Helvetica-Bold').fontSize(10)
-        .text(seccion.nombre.toUpperCase(), M + 10, secY + 5, { width: CONTENT_W - 16, lineBreak: false, ellipsis: true })
-      doc.fillColor(COLOR.dark)
-      doc.y = secY + 22
-
-      // Tabla de puntos: # | Componente | Descripción | Estado | Obs | Firma
-      // El ancho total debe ser igual a CONTENT_W (doc.page.width - 2*M)
-      const cols = [
-        { w: 24,  label: '#'           },
-        { w: 130, label: 'COMPONENTE'  },
-        { w: 175, label: 'DESCRIPCIÓN' },
-        { w: 85,  label: 'CONDICIÓN'   },
-        { w: 80,  label: 'FIRMA'       },
-        { w: 41,  label: 'FOTOS'       },
-      ]
-      drawTableHeader(doc, cols, M)
-
-      let idx = 1
-      for (const punto of seccion.puntos) {
-        const r = resultadosPorPunto[punto.id]
-        if (!r) continue
-        totalPuntos++
-        if (r.completado) completados++
-
-        drawTableRow(doc, cols, M, [
-          String(idx++),
-          `${punto.nombreComponente}${punto.esCritico ? ' ★' : ''}`,
-          punto.descripcion || '—',
-          ESTADO_LABELS_PDF[r.estadoResultado] || r.estadoResultado,
-          r.firmadoPor ? (r.firmante?.nombre || 'Firmado') : '—',
-          String(r.fotos?.length || 0),
-        ], r)
+    for (const item of secuencia) {
+      if (item.tipo === 'bloque') {
+        const bloque = bloquesPorId[item.id]
+        if (bloque) drawMarkdownBlock(doc, bloque.titulo, bloque.contenido, M, CONTENT_W)
+        continue
       }
+      const renderer = BUILTIN_RENDERERS[item.tipo]
+      if (renderer) renderer(doc, orden, ctx)
     }
-
-    doc.moveDown(0.3)
-    ensureSpace(doc, 40)
-    doc.font('Helvetica-Oblique').fontSize(8).fillColor(COLOR.gray)
-      .text('★ = Punto crítico — requiere firma individual del técnico.', M, doc.y)
-    doc.fillColor(COLOR.dark)
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // BLOQUE 6 — Evidencia fotográfica
-    // ═══════════════════════════════════════════════════════════════════════
-    drawEvidenciaFotografica(doc, orden, M, CONTENT_W)
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // BLOQUE 7 — Observaciones y defectos
-    // ═══════════════════════════════════════════════════════════════════════
-    if (orden.cierre) {
-      sectionTitle(doc, '7. DICTAMEN Y OBSERVACIONES GENERALES', M, CONTENT_W)
-
-      const c = orden.cierre
-      drawKVGrid(doc, [
-        ['Puntos ejecutados',     `${completados} de ${totalPuntos}`],
-        ['¿Se encontró defecto?', c.seEncontroDefecto ? 'SÍ' : 'NO'],
-        ['Doc. correctivo',       c.refDocCorrectivo || '—'],
-      ], M, CONTENT_W)
-
-      if (c.observacionesGenerales) {
-        ensureSpace(doc, 60)
-        doc.font('Helvetica-Bold').fontSize(9).fillColor(COLOR.dark)
-          .text('Observaciones:', M, doc.y + 4)
-        doc.font('Helvetica').fontSize(9)
-          .text(c.observacionesGenerales, M, doc.y + 2, { width: CONTENT_W, align: 'justify' })
-      }
-    }
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // BLOQUE 8 — Firmas
-    // ═══════════════════════════════════════════════════════════════════════
-    sectionTitle(doc, '8. FIRMAS DE CONFORMIDAD', M, CONTENT_W)
-    drawFirmas(doc, orden, M, CONTENT_W)
 
     // ═══════════════════════════════════════════════════════════════════════
     // Pie + numeración en todas las páginas
@@ -566,6 +478,127 @@ export async function generarPDF(req, res, next) {
 
     doc.end()
   } catch (e) { next(e) }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Renderers de built-ins — uno por cada tipo de elemento del documento.
+// Cada renderer toma (doc, orden, ctx) donde ctx ofrece M, W, nextSectionNum()
+// y totales. Esto permite que el orden lo decida la secuenciaDocumento del
+// formato sin que estos helpers conozcan en qué posición van.
+// ────────────────────────────────────────────────────────────────────────────
+
+function calcularTotales(orden) {
+  let totalPuntos = 0
+  let completados = 0
+  for (const r of orden.resultados || []) {
+    totalPuntos++
+    if (r.completado) completados++
+  }
+  return { totalPuntos, completados }
+}
+
+function renderPersonal(doc, orden, ctx) {
+  sectionTitle(doc, `${ctx.nextSectionNum()}. PERSONAL RESPONSABLE`, ctx.M, ctx.W)
+  drawKVGrid(doc, [
+    ['Técnico / Ingeniero', orden.tecnico?.nombre || '—'],
+    ['Rol',                 (orden.tecnico?.rol || '').toUpperCase() || '—'],
+    ['Licencia',            orden.tecnico?.licenciaNum || '—'],
+    ['Supervisor',          orden.supervisor?.nombre || 'No asignado'],
+    ['Rol supervisor',      (orden.supervisor?.rol || '').toUpperCase() || '—'],
+    ['Licencia supervisor', orden.supervisor?.licenciaNum || '—'],
+  ], ctx.M, ctx.W)
+}
+
+function renderTrabajos(doc, orden, ctx) {
+  sectionTitle(doc, `${ctx.nextSectionNum()}. TRABAJOS REALIZADOS`, ctx.M, ctx.W)
+
+  const resultadosPorPunto = Object.fromEntries(orden.resultados.map((r) => [r.puntoId, r]))
+
+  for (const seccion of orden.formato.secciones || []) {
+    doc.moveDown(0.2)
+    ensureSpace(doc, 60)
+    const secY = doc.y
+    doc.save()
+    doc.rect(ctx.M, secY, ctx.W, 18).fill(COLOR.bandBg)
+    doc.rect(ctx.M, secY, 3, 18).fill(COLOR.primary)
+    doc.restore()
+    doc.fillColor(COLOR.primary).font('Helvetica-Bold').fontSize(10)
+      .text(seccion.nombre.toUpperCase(), ctx.M + 10, secY + 5, {
+        width: ctx.W - 16, lineBreak: false, ellipsis: true,
+      })
+    doc.fillColor(COLOR.dark)
+    doc.y = secY + 22
+
+    const cols = [
+      { w: 24,  label: '#'           },
+      { w: 130, label: 'COMPONENTE'  },
+      { w: 175, label: 'DESCRIPCIÓN' },
+      { w: 85,  label: 'CONDICIÓN'   },
+      { w: 80,  label: 'FIRMA'       },
+      { w: 41,  label: 'FOTOS'       },
+    ]
+    drawTableHeader(doc, cols, ctx.M)
+
+    let idx = 1
+    for (const punto of seccion.puntos || []) {
+      const r = resultadosPorPunto[punto.id]
+      if (!r) continue
+      drawTableRow(doc, cols, ctx.M, [
+        String(idx++),
+        `${punto.nombreComponente}${punto.esCritico ? ' ★' : ''}`,
+        punto.descripcion || '—',
+        ESTADO_LABELS_PDF[r.estadoResultado] || r.estadoResultado,
+        r.firmadoPor ? (r.firmante?.nombre || 'Firmado') : '—',
+        String(r.fotos?.length || 0),
+      ], r)
+    }
+  }
+
+  doc.moveDown(0.3)
+  ensureSpace(doc, 40)
+  doc.font('Helvetica-Oblique').fontSize(8).fillColor(COLOR.gray)
+    .text('★ = Punto crítico — requiere firma individual del técnico.', ctx.M, doc.y)
+  doc.fillColor(COLOR.dark)
+}
+
+function renderFotos(doc, orden, ctx) {
+  // drawEvidenciaFotografica decide internamente si hay algo que renderizar.
+  // Si no hay fotos, no consume número de sección.
+  const hayFotos = (orden.resultados || []).some((r) => (r.fotos || []).length > 0)
+  if (!hayFotos) return
+  drawEvidenciaFotografica(doc, orden, ctx.M, ctx.W, `${ctx.nextSectionNum()}. EVIDENCIA FOTOGRÁFICA`)
+}
+
+function renderDictamen(doc, orden, ctx) {
+  if (!orden.cierre) return
+  sectionTitle(doc, `${ctx.nextSectionNum()}. DICTAMEN Y OBSERVACIONES GENERALES`, ctx.M, ctx.W)
+  const c = orden.cierre
+  drawKVGrid(doc, [
+    ['Puntos ejecutados',     `${ctx.totales.completados} de ${ctx.totales.totalPuntos}`],
+    ['¿Se encontró defecto?', c.seEncontroDefecto ? 'SÍ' : 'NO'],
+    ['Doc. correctivo',       c.refDocCorrectivo || '—'],
+  ], ctx.M, ctx.W)
+
+  if (c.observacionesGenerales) {
+    ensureSpace(doc, 60)
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(COLOR.dark)
+      .text('Observaciones:', ctx.M, doc.y + 4)
+    doc.font('Helvetica').fontSize(9)
+      .text(c.observacionesGenerales, ctx.M, doc.y + 2, { width: ctx.W, align: 'justify' })
+  }
+}
+
+function renderFirmas(doc, orden, ctx) {
+  sectionTitle(doc, `${ctx.nextSectionNum()}. FIRMAS DE CONFORMIDAD`, ctx.M, ctx.W)
+  drawFirmas(doc, orden, ctx.M, ctx.W)
+}
+
+const BUILTIN_RENDERERS = {
+  personal: renderPersonal,
+  trabajos: renderTrabajos,
+  fotos:    renderFotos,
+  dictamen: renderDictamen,
+  firmas:   renderFirmas,
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -600,12 +633,12 @@ function drawHeader(doc, orden, M, W) {
       .text(COMPANY.nombre, M, 18)
   }
 
-  // Lema debajo del logo
-  doc.font('Helvetica').fontSize(8).fillColor(COLOR.gray)
+  // Lema debajo del logo (sobre la banda dark — usa bandText, no gray)
+  doc.font('Helvetica').fontSize(8).fillColor(COLOR.bandText)
     .text(COMPANY.lema, M, logoY + logoHeight + 2)
 
-  // Datos de contacto (columna derecha)
-  doc.fontSize(8).fillColor(COLOR.gray)
+  // Datos de contacto (columna derecha, sobre la banda dark)
+  doc.fontSize(8).fillColor(COLOR.bandText)
     .text(COMPANY.direccion, M, 18, { width: W, align: 'right' })
     .text(`${COMPANY.telefono} · ${COMPANY.email}`, M, 32, { width: W, align: 'right' })
 
@@ -669,6 +702,37 @@ function drawTextBlock(doc, label, body, M, W) {
     })
 
   doc.y = startY + totalH + 2
+}
+
+// Renderiza un bloque de texto con título limpio (sin recuadro ni barra)
+// seguido del contenido en markdown. El título sirve como heading h2.
+function drawMarkdownBlock(doc, label, body, M, W) {
+  ensureSpace(doc, 30)
+  doc.moveDown(0.3)
+
+  // Título del bloque como heading limpio: bold, 13pt, color dark, sin caja.
+  // Una línea sutil debajo separa visualmente del contenido sin "cajarlo".
+  doc.font('Helvetica-Bold').fontSize(13).fillColor(COLOR.dark)
+    .text(label, M, doc.y, { width: W, lineBreak: true })
+
+  const underlineY = doc.y + 2
+  doc.lineWidth(0.5).strokeColor(COLOR.border)
+    .moveTo(M, underlineY).lineTo(M + W, underlineY).stroke()
+  doc.y = underlineY + 6
+  doc.x = M
+
+  // Cuerpo en markdown — fluye natural, sin contenedor.
+  renderMarkdown(doc, body, {
+    M, W,
+    colorText:   COLOR.dark,
+    colorAccent: COLOR.primaryDk,
+    colorMuted:  COLOR.gray,
+    colorRule:   COLOR.border,
+  })
+
+  doc.fillColor(COLOR.dark).font('Helvetica')
+  doc.moveDown(0.4)
+  doc.x = M
 }
 
 function drawKVGrid(doc, pairs, M, W) {
@@ -888,7 +952,7 @@ function resolverArchivoFoto(urlArchivo) {
   return abs
 }
 
-function drawEvidenciaFotografica(doc, orden, M, W) {
+function drawEvidenciaFotografica(doc, orden, M, W, titulo = 'EVIDENCIA FOTOGRÁFICA') {
   // Recolectar puntos con fotos respetando el orden del formato
   const resultadosPorPunto = Object.fromEntries(orden.resultados.map(r => [r.puntoId, r]))
   const grupos = []
@@ -901,7 +965,7 @@ function drawEvidenciaFotografica(doc, orden, M, W) {
   }
   if (grupos.length === 0) return
 
-  sectionTitle(doc, '6. EVIDENCIA FOTOGRÁFICA', M, W)
+  sectionTitle(doc, titulo, M, W)
 
   const COLS = 3
   const GAP = 8

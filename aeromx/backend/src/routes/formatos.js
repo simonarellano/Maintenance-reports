@@ -22,4 +22,12 @@ router.post('/:id/secciones/:seccionId/puntos', requireRole('supervisor'), ctrl.
 router.put('/:id/secciones/:seccionId/puntos/:puntoId', requireRole('supervisor'), ctrl.actualizarPunto)
 router.delete('/:id/secciones/:seccionId/puntos/:puntoId', requireRole('supervisor'), ctrl.eliminarPunto)
 
+// Bloques de texto del documento (alcance, descripciones, notas, etc.)
+router.post('/:id/bloques', requireRole('supervisor'), ctrl.crearBloqueTexto)
+router.put('/:id/bloques/:bloqueId', requireRole('supervisor'), ctrl.actualizarBloqueTexto)
+router.delete('/:id/bloques/:bloqueId', requireRole('supervisor'), ctrl.eliminarBloqueTexto)
+
+// Secuencia/orden del documento (ordena built-ins + bloques entre sí)
+router.put('/:id/secuencia', requireRole('supervisor'), ctrl.actualizarSecuencia)
+
 export default router
