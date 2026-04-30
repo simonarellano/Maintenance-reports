@@ -12,8 +12,12 @@ export async function obtener(req, res) {
   res.json(aeronave)
 }
 
-export async function crear(req, res) {
-  const { modeloId, matricula, numeroSerie, horasTotales, horasMotorDer, horasMotorIzq } = req.body
+export async function crear(req, res, next) {
+  const {
+    modeloId, matricula, numeroSerie, horasTotales,
+    horasMotorDer, horasMotorIzq,
+    horasMotorDel, horasMotorTras,
+  } = req.body
   if (!modeloId || !matricula) {
     return res.status(400).json({ error: 'modeloId y matricula son requeridos' })
   }
@@ -24,19 +28,23 @@ export async function crear(req, res) {
       matricula: matricula.toUpperCase(),
       numeroSerie,
       horasTotales: horasTotales ?? 0,
-      horasMotorDer: horasMotorDer ?? 0,
-      horasMotorIzq: horasMotorIzq ?? 0,
+      horasMotorDer: horasMotorDer ?? horasMotorDel ?? 0,
+      horasMotorIzq: horasMotorIzq ?? horasMotorTras ?? 0,
     })
     res.status(201).json(aeronave)
   } catch (e) {
     if (e.code === 'P2002') return res.status(409).json({ error: 'Ya existe una aeronave con esa matrícula' })
     if (e.code === 'P2003') return res.status(400).json({ error: 'El modelo indicado no existe' })
-    throw e
+    next(e)
   }
 }
 
-export async function actualizar(req, res) {
-  const { modeloId, matricula, numeroSerie, horasTotales, horasMotorDer, horasMotorIzq } = req.body
+export async function actualizar(req, res, next) {
+  const {
+    modeloId, matricula, numeroSerie, horasTotales,
+    horasMotorDer, horasMotorIzq,
+    horasMotorDel, horasMotorTras,
+  } = req.body
   const data = {}
   if (modeloId !== undefined) data.modeloId = modeloId
   if (matricula !== undefined) data.matricula = matricula.toUpperCase()
@@ -44,6 +52,8 @@ export async function actualizar(req, res) {
   if (horasTotales !== undefined) data.horasTotales = horasTotales
   if (horasMotorDer !== undefined) data.horasMotorDer = horasMotorDer
   if (horasMotorIzq !== undefined) data.horasMotorIzq = horasMotorIzq
+  if (horasMotorDel !== undefined) data.horasMotorDer = horasMotorDel
+  if (horasMotorTras !== undefined) data.horasMotorIzq = horasMotorTras
 
   try {
     const aeronave = await svc.actualizarAeronave(req.params.id, data)
@@ -51,16 +61,16 @@ export async function actualizar(req, res) {
   } catch (e) {
     if (e.code === 'P2025') return res.status(404).json({ error: 'Aeronave no encontrada' })
     if (e.code === 'P2002') return res.status(409).json({ error: 'Ya existe una aeronave con esa matrícula' })
-    throw e
+    next(e)
   }
 }
 
-export async function desactivar(req, res) {
+export async function desactivar(req, res, next) {
   try {
     await svc.desactivarAeronave(req.params.id)
     res.status(204).send()
   } catch (e) {
     if (e.code === 'P2025') return res.status(404).json({ error: 'Aeronave no encontrada' })
-    throw e
+    next(e)
   }
 }

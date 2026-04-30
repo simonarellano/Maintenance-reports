@@ -63,8 +63,12 @@ export async function obtener(req, res, next) {
 }
 
 export async function crear(req, res, next) {
-  const { formatoId, aeronaveId, supervisorId, cliente, ordenServicio, lugarMantenimiento,
-    horasAlMomento, horasMotorDer, horasMotorIzq, tecnicoId: tecnicoIdBody } = req.body
+  const {
+    formatoId, aeronaveId, supervisorId, cliente, ordenServicio, lugarMantenimiento,
+    horasAlMomento, horasMotorDer, horasMotorIzq,
+    horasMotorDel, horasMotorTras,
+    tecnicoId: tecnicoIdBody,
+  } = req.body
 
   // Supervisores pueden asignar la orden a otro técnico al crearla;
   // técnicos e ingenieros sólo pueden crear órdenes a su nombre.
@@ -80,7 +84,9 @@ export async function crear(req, res, next) {
     const orden = await svc.crearOrden({
       formatoId, aeronaveId, tecnicoId, supervisorId,
       cliente, ordenServicio, lugarMantenimiento,
-      horasAlMomento, horasMotorDer, horasMotorIzq,
+      horasAlMomento,
+      horasMotorDer: horasMotorDer ?? horasMotorDel,
+      horasMotorIzq: horasMotorIzq ?? horasMotorTras,
     })
     res.status(201).json(orden)
   } catch (e) {
@@ -399,57 +405,16 @@ export async function generarPDF(req, res, next) {
     drawHeader(doc, orden, M, CONTENT_W)
 
     // ═══════════════════════════════════════════════════════════════════════
-    // BLOQUE 1 — Datos generales
-    // ═══════════════════════════════════════════════════════════════════════
-    sectionTitle(doc, '1. DATOS GENERALES DEL SERVICIO', M, CONTENT_W)
-
-    const fechaCreacion  = orden.createdAt      ? fmtFechaHora(orden.createdAt)      : '—'
-    const fechaRecepcion = orden.fechaRecepcion ? fmtFechaHora(orden.fechaRecepcion) : 'Pendiente'
-    const fechaInicio    = orden.fechaInicio    ? fmtFechaHora(orden.fechaInicio)    : 'Pendiente'
-    const fechaCierre    = orden.fechaCierre    ? fmtFechaHora(orden.fechaCierre)    : 'Pendiente'
-
-    drawKVGrid(doc, [
-      ['N.º Orden',              orden.numeroOt],
-      ['Formato',                `${orden.formato.nombre} · v${orden.formato.version}`],
-      ['Cliente',                orden.cliente || '—'],
-      ['Orden de servicio',      orden.ordenServicio || '—'],
-      ['Lugar de mantenimiento', orden.lugarMantenimiento || '—'],
-      ['Estado actual',          orden.estado.replace(/_/g, ' ').toUpperCase()],
-      ['1. Creación de orden',   fechaCreacion],
-      ['2. Recepción aeronave',  fechaRecepcion],
-      ['3. Inicio mantenimiento', fechaInicio],
-      ['4. Cierre / firma',      fechaCierre],
-    ], M, CONTENT_W)
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // BLOQUE 2 — Aeronave
-    // ═══════════════════════════════════════════════════════════════════════
-    sectionTitle(doc, '2. DATOS DE LA AERONAVE', M, CONTENT_W)
-
-    drawKVGrid(doc, [
-      ['Matrícula',       orden.aeronave.matricula],
-      ['Modelo',          orden.aeronave.modelo?.nombre || '—'],
-      ['Fabricante',      orden.aeronave.modelo?.fabricante || '—'],
-      ['N.º de serie',    orden.aeronave.numeroSerie || '—'],
-      ['Horas totales',   `${orden.horasAlMomento} h`],
-      ['Horas Motor Der.', `${orden.horasMotorDer} h`],
-      ['Horas Motor Izq.', `${orden.horasMotorIzq} h`],
-      ['Fecha medición',  fechaInicio !== '—' ? fechaInicio : fechaCreacion],
-    ], M, CONTENT_W)
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // SECCIONES 3+ — Definidas por la secuencia del formato
-    // Las secciones 1 y 2 son fijas (datos generales y aeronave). El resto se
-    // ordena según `formato.secuenciaDocumento` que el supervisor edita desde
-    // la UI. Built-ins disponibles: personal, trabajos, fotos, dictamen, firmas.
-    // Bloques de texto se intercalan en cualquier posición.
+    // CONTENIDO DEL DOCUMENTO — 100% data-driven por la secuencia del formato
+    // El supervisor controla el orden de TODAS las secciones (incluyendo
+    // datos generales y aeronave) desde la UI. Built-ins disponibles:
+    // datos_generales, datos_aeronave, personal, trabajos, fotos, dictamen,
+    // firmas. Los bloques de texto del supervisor se intercalan en cualquier
+    // posición y aparecen como contenido propio (no consumen número de sección).
     // ═══════════════════════════════════════════════════════════════════════
     const totales = calcularTotales(orden)
     const secuencia = resolverSecuencia(orden.formato)
-    // Numerador de secciones (1 y 2 ya consumidas) — empieza en 3 y avanza por
-    // built-in. Los bloques no consumen un número de sección: aparecen como
-    // contenido propio con su título-heading.
-    let nextSectionNum = 3
+    let nextSectionNum = 1
     const ctx = {
       M, W: CONTENT_W,
       nextSectionNum: () => nextSectionNum++,
@@ -497,16 +462,96 @@ function calcularTotales(orden) {
   return { totalPuntos, completados }
 }
 
+function renderDatosGenerales(doc, orden, ctx) {
+  sectionTitle(doc, `${ctx.nextSectionNum()}. DATOS GENERALES DEL SERVICIO`, ctx.M, ctx.W)
+  const fechaCreacion  = orden.createdAt      ? fmtFechaHora(orden.createdAt)      : '—'
+  const fechaRecepcion = orden.fechaRecepcion ? fmtFechaHora(orden.fechaRecepcion) : 'Pendiente'
+  const fechaInicio    = orden.fechaInicio    ? fmtFechaHora(orden.fechaInicio)    : 'Pendiente'
+  const fechaCierre    = orden.fechaCierre    ? fmtFechaHora(orden.fechaCierre)    : 'Pendiente'
+
+  drawKVGrid(doc, [
+    ['N.º Orden',              orden.numeroOt],
+    ['Formato',                `${orden.formato.nombre} · v${orden.formato.version}`],
+    ['Cliente',                orden.cliente || '—'],
+    ['Orden de servicio',      orden.ordenServicio || '—'],
+    ['Lugar de mantenimiento', orden.lugarMantenimiento || '—'],
+    ['Estado actual',          orden.estado.replace(/_/g, ' ').toUpperCase()],
+    ['1. Creación de orden',   fechaCreacion],
+    ['2. Recepción aeronave',  fechaRecepcion],
+    ['3. Inicio mantenimiento', fechaInicio],
+    ['4. Cierre / firma',      fechaCierre],
+  ], ctx.M, ctx.W)
+}
+
+function renderDatosAeronave(doc, orden, ctx) {
+  sectionTitle(doc, `${ctx.nextSectionNum()}. DATOS DE LA AERONAVE`, ctx.M, ctx.W)
+  const fechaCreacion = orden.createdAt   ? fmtFechaHora(orden.createdAt)   : '—'
+  const fechaInicio   = orden.fechaInicio ? fmtFechaHora(orden.fechaInicio) : '—'
+
+  drawKVGrid(doc, [
+    ['Matrícula',                orden.aeronave.matricula],
+    ['Modelo',                   orden.aeronave.modelo?.nombre || '—'],
+    ['Fabricante',               orden.aeronave.modelo?.fabricante || '—'],
+    ['N.º de serie',             orden.aeronave.numeroSerie || '—'],
+    ['Horas totales',            `${orden.horasAlMomento} h`],
+    ['Horas Motor delantero',    `${orden.horasMotorDer} h`],
+    ['Horas Motor trasero',      `${orden.horasMotorIzq} h`],
+    ['Fecha medición',           fechaInicio !== '—' ? fechaInicio : fechaCreacion],
+  ], ctx.M, ctx.W)
+}
+
+// "Quien realiza" y "Quien supervisa" como dos tarjetas separadas, lado a
+// lado, para que los datos del técnico no se mezclen con los del supervisor
+// en la misma cuadrícula.
 function renderPersonal(doc, orden, ctx) {
   sectionTitle(doc, `${ctx.nextSectionNum()}. PERSONAL RESPONSABLE`, ctx.M, ctx.W)
-  drawKVGrid(doc, [
-    ['Técnico / Ingeniero', orden.tecnico?.nombre || '—'],
-    ['Rol',                 (orden.tecnico?.rol || '').toUpperCase() || '—'],
-    ['Licencia',            orden.tecnico?.licenciaNum || '—'],
-    ['Supervisor',          orden.supervisor?.nombre || 'No asignado'],
-    ['Rol supervisor',      (orden.supervisor?.rol || '').toUpperCase() || '—'],
-    ['Licencia supervisor', orden.supervisor?.licenciaNum || '—'],
-  ], ctx.M, ctx.W)
+
+  const gap = 14
+  const cardW = (ctx.W - gap) / 2
+  const cardH = 110
+  ensureSpace(doc, cardH + 14)
+  const startY = doc.y + 4
+
+  drawPersonaCard(doc, ctx.M,                 startY, cardW, cardH, 'QUIEN REALIZA',  orden.tecnico,    '—')
+  drawPersonaCard(doc, ctx.M + cardW + gap,   startY, cardW, cardH, 'QUIEN SUPERVISA', orden.supervisor, 'No asignado')
+
+  doc.y = startY + cardH + 8
+  doc.x = ctx.M
+}
+
+function drawPersonaCard(doc, x, y, w, h, titulo, persona, fallbackNombre) {
+  doc.lineWidth(0.5).strokeColor(COLOR.border)
+  doc.rect(x, y, w, h).stroke()
+
+  // Banda dark con barra cian (mismo estilo que header de tabla de inspección)
+  doc.save()
+  doc.rect(x, y, w, 18).fill(COLOR.bandBg)
+  doc.rect(x, y, 3, 18).fill(COLOR.primary)
+  doc.restore()
+  doc.fillColor(COLOR.primary).font('Helvetica-Bold').fontSize(9)
+    .text(titulo, x + 10, y + 5, { width: w - 16, lineBreak: false, ellipsis: true })
+
+  // Datos persona — label arriba en gris, valor abajo en dark
+  const items = [
+    ['Nombre',   persona?.nombre || fallbackNombre],
+    ['Rol',      (persona?.rol || '').toUpperCase() || '—'],
+    ['Licencia', persona?.licenciaNum || '—'],
+  ]
+  let curY = y + 24
+  const rowH = (h - 26) / items.length
+  for (const [k, v] of items) {
+    doc.font('Helvetica-Bold').fontSize(7).fillColor(COLOR.gray)
+      .text(k.toUpperCase(), x + 10, curY, {
+        width: w - 20, lineBreak: false, ellipsis: true,
+        characterSpacing: 0.4,
+      })
+    doc.font('Helvetica').fontSize(10).fillColor(COLOR.dark)
+      .text(String(v ?? '—'), x + 10, curY + 9, {
+        width: w - 20, lineBreak: false, ellipsis: true,
+      })
+    curY += rowH
+  }
+  doc.fillColor(COLOR.dark)
 }
 
 function renderTrabajos(doc, orden, ctx) {
@@ -594,11 +639,13 @@ function renderFirmas(doc, orden, ctx) {
 }
 
 const BUILTIN_RENDERERS = {
-  personal: renderPersonal,
-  trabajos: renderTrabajos,
-  fotos:    renderFotos,
-  dictamen: renderDictamen,
-  firmas:   renderFirmas,
+  datos_generales: renderDatosGenerales,
+  datos_aeronave:  renderDatosAeronave,
+  personal:        renderPersonal,
+  trabajos:        renderTrabajos,
+  fotos:           renderFotos,
+  dictamen:        renderDictamen,
+  firmas:          renderFirmas,
 }
 
 // ────────────────────────────────────────────────────────────────────────────

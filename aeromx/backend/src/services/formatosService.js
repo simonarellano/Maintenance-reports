@@ -1,10 +1,19 @@
 import prisma from '../lib/prisma.js'
 
 // ─── Secuencia del documento ────────────────────────────────────────────────
-// Tipos de elementos built-in que pueden aparecer en el PDF (después de las
-// secciones fijas 1-Datos generales y 2-Datos de aeronave). El orden default
-// reproduce el comportamiento histórico del PDF.
-export const BUILTINS_SECUENCIA = ['personal', 'trabajos', 'fotos', 'dictamen', 'firmas']
+// Tipos de elementos built-in que pueden aparecer en el PDF, en su orden
+// por defecto. Todos son reorderables (incluidos los datos del servicio y de
+// la aeronave). Si un formato no tiene secuencia personalizada, se usa este
+// orden como base. Los bloques de texto del supervisor se intercalan.
+export const BUILTINS_SECUENCIA = [
+  'datos_generales',
+  'datos_aeronave',
+  'personal',
+  'trabajos',
+  'fotos',
+  'dictamen',
+  'firmas',
+]
 
 // Resuelve la secuencia efectiva del documento para un formato cargado.
 // Es tolerante a datos viejos/incompletos: garantiza que TODOS los built-ins

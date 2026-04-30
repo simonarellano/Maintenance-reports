@@ -29,8 +29,11 @@ export default function FormatosPage() {
     cargar()
   }, [])
 
-  const cargar = async () => {
-    setLoading(true)
+  // El spinner solo se muestra en la primera carga. Los refetches posteriores
+  // (tras crear/editar/borrar/reordenar) reemplazan la lista en silencio para
+  // que el scroll del usuario no salte al top.
+  const cargar = async ({ silencioso = false } = {}) => {
+    if (!silencioso) setLoading(true)
     try {
       const { data } = await formatosService.listar()
       setFormatos(data || [])
@@ -52,7 +55,7 @@ export default function FormatosPage() {
       }
       setModoAlta(false)
       setEditando(null)
-      await cargar()
+      await cargar({ silencioso: true })
     } catch (e) {
       setError(e.response?.data?.error || 'Error guardando el formato')
     }
@@ -62,7 +65,7 @@ export default function FormatosPage() {
     if (!confirm(`¿Eliminar el formato "${formato.nombre}"? Esta acción es irreversible.`)) return
     try {
       await formatosService.eliminar(formato.id)
-      await cargar()
+      await cargar({ silencioso: true })
     } catch (e) {
       setError(e.response?.data?.error || 'Error eliminando el formato')
     }
@@ -77,7 +80,7 @@ export default function FormatosPage() {
         await formatosService.crearSeccion(formatoId, datos)
       }
       setSeccionEditor(null)
-      await cargar()
+      await cargar({ silencioso: true })
     } catch (e) {
       setError(e.response?.data?.error || 'Error guardando la sección')
     }
@@ -87,7 +90,7 @@ export default function FormatosPage() {
     if (!confirm(`¿Eliminar la sección "${seccion.nombre}" y todos sus puntos? Esta acción no se puede deshacer.`)) return
     try {
       await formatosService.eliminarSeccion(formatoId, seccion.id)
-      await cargar()
+      await cargar({ silencioso: true })
     } catch (e) {
       setError(e.response?.data?.error || 'Error eliminando la sección')
     }
@@ -102,7 +105,7 @@ export default function FormatosPage() {
         await formatosService.crearPunto(formatoId, seccionId, datos)
       }
       setPuntoEditor(null)
-      await cargar()
+      await cargar({ silencioso: true })
     } catch (e) {
       setError(e.response?.data?.error || 'Error guardando el punto')
     }
@@ -112,7 +115,7 @@ export default function FormatosPage() {
     if (!confirm(`¿Eliminar el punto "${punto.nombreComponente}"?`)) return
     try {
       await formatosService.eliminarPunto(formatoId, seccionId, punto.id)
-      await cargar()
+      await cargar({ silencioso: true })
     } catch (e) {
       setError(e.response?.data?.error || 'Error eliminando el punto')
     }
@@ -127,7 +130,7 @@ export default function FormatosPage() {
         await formatosService.crearBloqueTexto(formatoId, datos)
       }
       setBloqueEditor(null)
-      await cargar()
+      await cargar({ silencioso: true })
     } catch (e) {
       setError(e.response?.data?.error || 'Error guardando el bloque')
     }
@@ -137,9 +140,19 @@ export default function FormatosPage() {
     if (!confirm(`¿Eliminar el bloque "${bloque.titulo}"?`)) return
     try {
       await formatosService.eliminarBloqueTexto(formatoId, bloque.id)
-      await cargar()
+      await cargar({ silencioso: true })
     } catch (e) {
       setError(e.response?.data?.error || 'Error eliminando el bloque')
+    }
+  }
+
+  // ── Secuencia (orden del documento) ─────────────────────────────────────
+  const guardarSecuencia = async (formatoId, secuencia) => {
+    try {
+      await formatosService.actualizarSecuencia(formatoId, secuencia)
+      await cargar({ silencioso: true })
+    } catch (e) {
+      setError(e.response?.data?.error || 'Error actualizando el orden del documento')
     }
   }
 
@@ -223,6 +236,7 @@ export default function FormatosPage() {
                   onCrearBloque={() => setBloqueEditor({ formatoId: f.id, bloque: null })}
                   onEditarBloque={(bloque) => setBloqueEditor({ formatoId: f.id, bloque })}
                   onBorrarBloque={(bloque) => borrarBloque(f.id, bloque)}
+                  onGuardarSecuencia={(seq) => guardarSecuencia(f.id, seq)}
                 />
               )
             })}
@@ -258,6 +272,7 @@ function FormatoCard({
   onCrearSeccion, onEditarSeccion, onBorrarSeccion,
   onCrearPunto, onEditarPunto, onBorrarPunto,
   onCrearBloque, onEditarBloque, onBorrarBloque,
+  onGuardarSecuencia,
 }) {
   return (
     <section style={{
@@ -312,6 +327,17 @@ function FormatoCard({
       {/* Cuerpo expandido */}
       {isOpen && (
         <div style={{ padding: '16px 18px' }}>
+          {/* Orden del documento — secuencia de elementos del PDF */}
+          <OrdenDocumentoPanel
+            formato={f}
+            esSupervisor={esSupervisor}
+            onGuardar={onGuardarSecuencia}
+          />
+
+          <div style={{
+            height: 1, background: T.border, margin: '20px 0 16px',
+          }} />
+
           {/* Bloques de texto del documento */}
           <BloquesTextoLista
             bloques={f.bloquesTexto || []}
@@ -367,6 +393,218 @@ function FormatoCard({
         </div>
       )}
     </section>
+  )
+}
+
+// ── Orden del documento ─────────────────────────────────────────────────────
+// Built-ins disponibles, en el orden por defecto. Si el formato no tiene una
+// secuenciaDocumento definida, este es el orden que se usa.
+const BUILTINS_SEQ = [
+  'datos_generales',
+  'datos_aeronave',
+  'personal',
+  'trabajos',
+  'fotos',
+  'dictamen',
+  'firmas',
+]
+
+const BUILTIN_LABELS = {
+  datos_generales: { titulo: 'Datos generales del servicio', desc: 'N.º de orden, cliente, fechas del ciclo de vida' },
+  datos_aeronave:  { titulo: 'Datos de la aeronave',          desc: 'Matrícula, modelo, horas de motor' },
+  personal:        { titulo: 'Personal responsable',          desc: 'Técnico que realiza y supervisor (tarjetas separadas)' },
+  trabajos:        { titulo: 'Trabajos realizados',           desc: 'Tabla de inspección con secciones y puntos' },
+  fotos:           { titulo: 'Evidencia fotográfica',         desc: 'Solo aparece si la O/T tiene fotos' },
+  dictamen:        { titulo: 'Dictamen y observaciones',      desc: 'Solo aparece al cierre de la O/T' },
+  firmas:          { titulo: 'Firmas de conformidad',         desc: 'Bloque de firma del técnico y supervisor' },
+}
+
+// Reproduce la lógica del backend: garantiza que TODOS los built-ins y bloques
+// estén en la secuencia, con la almacenada (si la hay) determinando el orden.
+function resolverSecuenciaCliente(formato) {
+  const stored = Array.isArray(formato?.secuenciaDocumento) ? formato.secuenciaDocumento : null
+  const bloques = formato?.bloquesTexto || []
+  const bloqueIds = new Set(bloques.map((b) => b.id))
+
+  let items = stored && stored.length > 0
+    ? stored.filter((it) => {
+        if (!it || typeof it !== 'object') return false
+        if (it.tipo === 'bloque') return typeof it.id === 'string' && bloqueIds.has(it.id)
+        return BUILTINS_SEQ.includes(it.tipo)
+      }).map((it) => it.tipo === 'bloque' ? { tipo: 'bloque', id: it.id } : { tipo: it.tipo })
+    : BUILTINS_SEQ.map((tipo) => ({ tipo }))
+
+  for (const tipo of BUILTINS_SEQ) {
+    if (!items.some((i) => i.tipo === tipo)) items.push({ tipo })
+  }
+  const presentes = new Set(items.filter((i) => i.tipo === 'bloque').map((i) => i.id))
+  for (const b of bloques) {
+    if (!presentes.has(b.id)) items.push({ tipo: 'bloque', id: b.id })
+  }
+  return items
+}
+
+function OrdenDocumentoPanel({ formato, esSupervisor, onGuardar }) {
+  const [guardando, setGuardando] = useState(false)
+  // Orden visual local — se inicializa desde la secuencia resuelta y se sincroniza
+  // cada vez que el formato cambia. Los reordenamientos optimistas se aplican aquí
+  // primero (UX fluido) y se persisten después.
+  const remoto = resolverSecuenciaCliente(formato)
+  const [items, setItems] = useState(remoto)
+  const [draggingIdx, setDraggingIdx] = useState(null)
+  const [overIdx, setOverIdx] = useState(null)
+  const [refKey, setRefKey] = useState(0)
+  // Resincronizar cuando cambia la secuencia almacenada (e.g. tras añadir
+  // bloques) — comparamos signatures para evitar loops.
+  const remotoSig = remoto.map((it) => `${it.tipo}:${it.id || ''}`).join('|')
+  const localSig  = items.map((it) => `${it.tipo}:${it.id || ''}`).join('|')
+  if (remotoSig !== localSig && draggingIdx === null) {
+    setItems(remoto)
+  }
+
+  const bloquesPorId = Object.fromEntries((formato.bloquesTexto || []).map((b) => [b.id, b]))
+
+  // Pre-calcular el número de sección de cada item: built-ins consumen número
+  // (1, 2, 3…); los bloques no — salen como contenido propio en el PDF.
+  let acc = 0
+  const numeros = items.map((it) => (it.tipo === 'bloque' ? null : ++acc))
+
+  const persistir = async (nueva) => {
+    setGuardando(true)
+    try {
+      await onGuardar(nueva)
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  // ── Drag & drop nativo HTML5 ─────────────────────────────────────────
+  const onDragStart = (idx) => (e) => {
+    setDraggingIdx(idx)
+    e.dataTransfer.effectAllowed = 'move'
+    // Algunos navegadores exigen setData para iniciar el drag
+    try { e.dataTransfer.setData('text/plain', String(idx)) } catch {}
+  }
+
+  const onDragOver = (idx) => (e) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (idx !== overIdx) setOverIdx(idx)
+  }
+
+  const onDrop = (idx) => async (e) => {
+    e.preventDefault()
+    const from = draggingIdx
+    setDraggingIdx(null)
+    setOverIdx(null)
+    if (from === null || from === idx) return
+
+    const next = [...items]
+    const [moved] = next.splice(from, 1)
+    next.splice(idx, 0, moved)
+    setItems(next) // optimistic update
+    setRefKey((k) => k + 1)
+    await persistir(next)
+  }
+
+  const onDragEnd = () => {
+    setDraggingIdx(null)
+    setOverIdx(null)
+  }
+
+  return (
+    <div>
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        marginBottom: 10, flexWrap: 'wrap', gap: 10,
+      }}>
+        <div>
+          <div style={{
+            fontSize: 11, color: T.sub, textTransform: 'uppercase',
+            letterSpacing: '0.08em', fontFamily: T.mono, fontWeight: 600,
+          }}>
+            Orden del documento
+          </div>
+          <div style={{ fontSize: 12, color: T.dim, marginTop: 2 }}>
+            Arrastra cualquier elemento para reordenar el PDF. Datos, personal, trabajos, bloques — todo se mueve.
+          </div>
+        </div>
+        {guardando && (
+          <span style={{ fontSize: 11, color: T.cyan, fontStyle: 'italic' }}>
+            Guardando…
+          </span>
+        )}
+      </div>
+
+      <ol style={{
+        listStyle: 'none', padding: 0, margin: 0,
+        display: 'flex', flexDirection: 'column', gap: 6,
+      }} key={refKey}>
+        {items.map((item, idx) => {
+          const esBloque = item.tipo === 'bloque'
+          const bloque = esBloque ? bloquesPorId[item.id] : null
+          const meta = esBloque
+            ? { titulo: bloque?.titulo || 'Bloque eliminado', desc: 'Bloque de texto del supervisor (Markdown)' }
+            : (BUILTIN_LABELS[item.tipo] || { titulo: item.tipo, desc: '' })
+          const tipoTag = esBloque ? 'BLOQUE' : item.tipo.replace(/_/g, ' ').toUpperCase()
+          const numero = numeros[idx]
+          const isDragging = draggingIdx === idx
+          const isDropTarget = overIdx === idx && draggingIdx !== null && draggingIdx !== idx
+
+          return (
+            <li
+              key={`${item.tipo}-${item.id || item.tipo}-${idx}`}
+              draggable={esSupervisor && !guardando}
+              onDragStart={onDragStart(idx)}
+              onDragOver={onDragOver(idx)}
+              onDrop={onDrop(idx)}
+              onDragEnd={onDragEnd}
+              style={{
+                background: esBloque ? T.s2 : T.s1,
+                border: `1px solid ${isDropTarget ? T.cyan : T.border}`,
+                borderLeft: `3px solid ${esBloque ? T.cyan : T.dim}`,
+                borderRadius: 10, padding: '10px 12px',
+                display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+                cursor: esSupervisor ? (isDragging ? 'grabbing' : 'grab') : 'default',
+                opacity: isDragging ? 0.45 : 1,
+                transform: isDropTarget ? 'translateY(-1px)' : 'none',
+                boxShadow: isDropTarget ? `0 2px 8px ${T.cyan}40` : 'none',
+                transition: 'border-color .12s, transform .12s, box-shadow .12s',
+                userSelect: 'none',
+              }}
+            >
+              {esSupervisor && (
+                <span
+                  title="Arrastrar para reordenar"
+                  style={{
+                    fontSize: 14, color: T.dim, fontFamily: T.mono,
+                    cursor: 'grab', userSelect: 'none', lineHeight: 1,
+                  }}
+                >⋮⋮</span>
+              )}
+              <span style={{
+                fontSize: 11, color: numero ? T.sub : T.dim, fontFamily: T.mono, minWidth: 24,
+              }}>
+                {numero ? `${numero}.` : '·'}
+              </span>
+              <div style={{ flex: 1, minWidth: 180 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <Pill small label={tipoTag} color={esBloque ? T.cyan : T.sub} bg={esBloque ? T.cD : T.s2} />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: T.text }}>
+                    {meta.titulo}
+                  </span>
+                </div>
+                {meta.desc && (
+                  <div style={{ fontSize: 11, color: T.dim, marginTop: 2 }}>
+                    {meta.desc}
+                  </div>
+                )}
+              </div>
+            </li>
+          )
+        })}
+      </ol>
+    </div>
   )
 }
 
