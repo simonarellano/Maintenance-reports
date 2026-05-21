@@ -11,6 +11,7 @@ export async function findUserByEmail(email) {
       email: true,
       passwordHash: true,
       rol: true,
+      superusuario: true,
       licenciaNum: true,
       activo: true,
     },
@@ -23,7 +24,7 @@ export async function validatePassword(plain, hash) {
 
 export function generateToken(user) {
   return jwt.sign(
-    { sub: user.id, email: user.email, rol: user.rol },
+    { sub: user.id, email: user.email, rol: user.rol, superusuario: !!user.superusuario },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   )

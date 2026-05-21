@@ -10,6 +10,51 @@
 
 ---
 
+## Estado de avance (al 2026-05-01, fin de Sesión 10)
+
+| Fase | Estado | Sesión |
+|---|:-:|---|
+| A — Schema + roles + migración + seed + middleware | ✅ done | Sesión 10 |
+| B — Backend: modularizar controller + servicios multiproducto | ✅ done | Sesión 11 |
+| C — Frontend: catálogos por tipo + permisos | ✅ done | Sesión 12 |
+| D — Frontend: O/T multiproducto + asignaciones + reapertura | ⏳ pendiente | Sesión 13 |
+| E — Pulido y QA | ⏳ pendiente | Sesión 14 |
+
+Verificación independiente del estado actual: ejecutar los checks de §0.2.
+
+---
+
+## 0. Cómo retomar este trabajo en una sesión nueva
+
+> Lee esta sección antes que cualquier otra si abres el proyecto sin contexto previo.
+
+### 0.1 Orden de lectura
+1. Este documento completo.
+2. [`CLAUDE.md`](../../CLAUDE.md) — solo para entender el **estado actual del código** (no la dirección).
+3. [`aeromx/backend/prisma/schema.prisma`](../backend/prisma/schema.prisma) — para verificar si la migración ya se aplicó.
+
+### 0.2 Cómo saber en qué fase estamos
+
+Ejecuta estos checks rápidos en orden. El primero que falle te dice dónde retomar.
+
+| Check | Comando / pista | Si pasa → |
+|---|---|---|
+| ¿Schema migrado? | `grep -q "enum TipoProducto" aeromx/backend/prisma/schema.prisma && echo OK` | Fase A completada |
+| ¿BD migrada? | `psql $DATABASE_URL -c "\dt productos"` retorna la tabla | migración aplicada |
+| ¿Seed nuevo aplicado? | `psql $DATABASE_URL -c "SELECT count(*) FROM productos GROUP BY tipo_producto"` muestra los 4 tipos | Fase A completada al 100% |
+| ¿Controller modularizado? | `ls aeromx/backend/src/controllers/ordenes/` lista 6 archivos | Fase B completada parcial |
+| ¿Endpoint productos vivo? | `curl localhost:3000/api/productos?tipoProducto=camion` retorna 200 | Fase B completada |
+| ¿UI con tabs por tipo? | abrir `/modelos` en el browser y ver tabs | Fase C completada |
+| ¿Crear O/T para camión funciona? | flujo manual desde `/dashboard` → "Nueva O/T" → tipo "Camión" | Fase D completada |
+
+> Si hay duda, asumir que la fase está incompleta y revisar el checklist correspondiente en §8.
+
+### 0.3 Mapa rápido de archivos por fase
+
+Ver §8.6 al final de este documento para la tabla detallada.
+
+---
+
 ## 1. Tipos de producto y atributos específicos
 
 | Tipo (enum DB) | Label UI | Atributos específicos | Lectura del medidor (al iniciar mantenimiento) |
@@ -711,13 +756,52 @@ DROP TABLE modelos_aeronave;
 
 1. Editar `schema.prisma` con los modelos nuevos.
 2. `npx prisma migrate dev --name multiproducto_y_roles` en local.
-3. Ajustar `seed.js`:
-   - Roles renombrados.
-   - Crear superusuario `dev@aeromx.com` (`superusuario: true`).
-   - Crear usuarios: 1 gerente, 1 ingeniero soporte, 1 técnico soporte, 1 mecánico, 1 piloto.
-   - Crear un modelo+producto de cada tipo (aeronave, camión, planta, sensor) para QA.
-   - Crear un formato por tipo con 1-2 secciones de muestra.
+3. Ajustar `seed.js` con los datos concretos de §5.3.
 4. `npm run db:seed`.
+
+### 5.3 Datos de seed (concretos — usar exactamente estos)
+
+> Especificar los datos evita que cada sesión invente valores distintos y rompa referencias entre sesiones.
+
+#### Usuarios (todos con password `aeromx123`)
+
+| Email | Nombre | Rol | Superusuario | Licencia |
+|---|---|---|:-:|---|
+| `dev@aeromx.com` | Desarrollador | `gerente_soporte` | ✅ | DEV-000 |
+| `gerente@aeromx.com` | Luis Gerente | `gerente_soporte` | ❌ | GER-001 |
+| `ingeniero@aeromx.com` | Ana Ingeniera | `ingeniero_soporte` | ❌ | ING-001 |
+| `tecnico@aeromx.com` | Carlos Técnico | `tecnico_soporte` | ❌ | TEC-001 |
+| `mecanico@aeromx.com` | Pedro Mecánico | `mecanico` | ❌ | MEC-001 |
+| `piloto@aeromx.com` | María Piloto | `piloto` | ❌ | PIL-001 |
+
+#### Modelos (uno por tipo)
+
+| Tipo | Nombre | Fabricante |
+|---|---|---|
+| `aeronave` | Cessna 172S | Cessna |
+| `camion` | F-350 Super Duty | Ford |
+| `planta` | XQ60 | Cummins |
+| `sensor` | LiDAR VLP-16 | Velodyne |
+
+#### Productos (uno por tipo, todos con su `Modelo` correspondiente)
+
+| Tipo | Identificador | Número de serie | Detalle inicial |
+|---|---|---|---|
+| `aeronave` | `XB-ABC` | `C172S-12345` | horasTotales: 1250.5 |
+| `camion` | `MX-CAM-001` | `FORD-F350-9876` | placas: `MX-CAM-001`, vin: `1FT8W3DT5KEE12345`, odometro: 84200 |
+| `planta` | `PE-001` | `XQ60-2024-001` | horimetro: 320.0 |
+| `sensor` | `SE-001` | `VLP16-78900` | fabricante: `Velodyne`, versionFirmware: `3.2.1`, fechaCalibracion: 2026-01-15 |
+
+#### Formatos (uno por tipo, mínimo viable para QA)
+
+| Tipo | Nombre | Secciones de prueba |
+|---|---|---|
+| `aeronave` | Mantenimiento Menor | usar las 14 secciones reales del seed actual (ya migradas) |
+| `camion` | Inspección Preventiva | 1 sección "Motor" con 3 puntos: nivel de aceite, frenos, llantas |
+| `planta` | Mantenimiento de Horímetro 100h | 1 sección "Motor y eléctrico" con 3 puntos: aceite, batería, conexiones |
+| `sensor` | Calibración y Verificación | 1 sección "Funcional" con 2 puntos: lectura de prueba, firmware |
+
+> Todos los formatos arrancan en versión `1.0` con `fechaVersion = new Date()` y `activo = true`.
 
 ---
 
@@ -835,37 +919,41 @@ Bloque de asignación en el header del PDF: muestra los 4-5 responsables (soport
 
 > Cada fase es una sesión cerrable. Backend y frontend van juntos para que el `dev` no quede roto entre fases.
 
-### Fase A — Schema + roles + migración + seed
-- [ ] Editar `schema.prisma` completo (roles, multiproducto, asignaciones, historial, cierre con piloto).
-- [ ] Migración SQL combinada.
-- [ ] Ajustar `seed.js`: usuarios por rol, superusuario, productos/modelos/formatos de cada tipo.
-- [ ] Actualizar `middleware/auth.js`: `requireRole` deja pasar siempre si `usuario.superusuario === true`.
-- ✅ Done cuando: `migrate dev` corre limpio, `db:seed` repuebla, la app actual queda rota a propósito.
+### Fase A — Schema + roles + migración + seed ✅ COMPLETADA (Sesión 10, 2026-05-01)
+- [x] Editar `schema.prisma` completo (roles, multiproducto, asignaciones, historial, cierre con piloto).
+- [x] Migración SQL combinada → `prisma/migrations/20260501123313_multiproducto_y_roles/migration.sql` (221 líneas).
+- [x] Ajustar `seed.js`: 6 usuarios por rol con superusuario, 4 modelos, 4 productos, 4 formatos.
+- [x] Actualizar `middleware/auth.js`: `requireRole` deja pasar siempre si `usuario.superusuario === true`.
+- [x] Bonus: `authService.js` actualizado para incluir `superusuario` en payload del JWT, y `JWT_SECRET` rotado en `.env` (los tokens viejos con `rol: 'supervisor'` ya no validan).
+- ✅ Done: migración aplicada, seed repuebla, la app actual quedó rota a propósito.
 
-### Fase B — Backend: modularizar controller + servicios multiproducto
-- [ ] Mover `ordenesController.js` a `controllers/ordenes/*.js` (6 archivos).
-- [ ] Extraer `multer` a `middleware/upload.js`.
-- [ ] Adaptar router índice `routes/ordenes.js`.
-- [ ] `productosService.js` con dispatcher por tipo.
-- [ ] `productosController.js` + `routes/productos.js`. Eliminar `aeronaves.js` viejo.
-- [ ] Adaptar `modelosService` para `tipoProducto`.
-- [ ] Adaptar `formatosService` para `tipoProducto`.
-- [ ] Adaptar `ordenesService.crearOrden`: validar 4-5 asignaciones obligatorias + coherencia de tipo + roles correctos.
-- [ ] Adaptar `iniciarMantenimiento` para guardar lecturas según tipo.
-- [ ] Implementar `reabrir` + `historial_estados_ot` (siempre vuelve a `pendiente_firma`).
-- [ ] Adaptar `firmarCierre` para aceptar firma de soporte / gerente / piloto según slot.
-- [ ] Sincronizar lectura del producto al cerrar.
-- [ ] PDF dinámico por tipo + 3 firmas condicionales + bloque de asignaciones.
-- ✅ Done cuando: smoke test cURL para crear/iniciar/cerrar O/T en los 4 tipos pasa.
+> **Estrategia de migración usada** (válida para Fases futuras): `prisma migrate dev` no funciona en Claude Code (requiere TTY). Usar el flujo `migrate diff` → escribir SQL a archivo → `migrate deploy`, descrito en CLAUDE.md sección "Cambios en Sesión 10".
 
-### Fase C — Frontend: catálogos por tipo + permisos
-- [ ] `productosService.js` (frontend) reemplaza `aeronavesService.js`.
-- [ ] `ProductosPage` con tabs + 4 formularios.
-- [ ] `ModelosPage` y `FormatosPage` con tabs.
-- [ ] `Header`: rename "Aeronaves" → "Productos" + visibilidad por rol.
-- [ ] `FlotaPage` con selector de tipo.
-- [ ] `UsuariosPage`: agregar checkbox `superusuario` + soporte para los 5 roles nuevos.
-- ✅ Done cuando: alta de un camión, planta y sensor desde la UI.
+### Fase B — Backend: modularizar controller + servicios multiproducto ✅ COMPLETADA (Sesión 11, 2026-05-21)
+- [x] Mover `ordenesController.js` a `controllers/ordenes/*.js` (6 archivos).
+- [x] Extraer `multer` a `middleware/upload.js`.
+- [x] Adaptar router índice `routes/ordenes.js`.
+- [x] `productosService.js` con dispatcher por tipo.
+- [x] `productosController.js` + `routes/productos.js`. Eliminar `aeronaves.js` viejo.
+- [x] Adaptar `modelosService` para `tipoProducto`.
+- [x] Adaptar `formatosService` para `tipoProducto`.
+- [x] Adaptar `ordenesService.crearOrden`: validar 4-5 asignaciones obligatorias + coherencia de tipo + roles correctos.
+- [x] Adaptar `iniciarMantenimiento` para guardar lecturas según tipo.
+- [x] Implementar `reabrir` + `historial_estados_ot` (siempre vuelve a `pendiente_firma`).
+- [x] Adaptar `firmarCierre` para aceptar firma de soporte / gerente / piloto según slot.
+- [x] Sincronizar lectura del producto al cerrar.
+- [x] PDF dinámico por tipo + 3 firmas condicionales + bloque de asignaciones.
+- ✅ Done: smoke test pasó para los 4 tipos + reapertura + sincronización de lecturas.
+
+### Fase C — Frontend: catálogos por tipo + permisos ✅ COMPLETADA (Sesión 12, 2026-05-21)
+- [x] `productosService.js` (frontend) reemplaza `aeronavesService.js`.
+- [x] `ProductosPage` con tabs + 4 formularios.
+- [x] `ModelosPage` y `FormatosPage` con tabs.
+- [x] `Header`: rename "Aeronaves" → "Productos" + visibilidad por rol.
+- [x] `FlotaPage` con selector de tipo.
+- [x] `UsuariosPage`: agregar checkbox `superusuario` + soporte para los 5 roles nuevos.
+- [x] Bonus: `authController.js` (backend) ahora incluye `superusuario` en la respuesta de login y `/auth/me`.
+- ✅ Done: `npm run build` pasa; alta de camión/planta/sensor desde la UI; catálogos filtran por tipo; header por rol.
 
 ### Fase D — Frontend: O/T multiproducto + asignaciones + reapertura
 - [ ] `CrearOTPage`: selector de tipo → carga modelos+productos+formatos del tipo. Sección de asignación con 4-5 selectores. Quita inputs de horas.
@@ -880,6 +968,78 @@ Bloque de asignación en el header del PDF: muestra los 4-5 responsables (soport
 - [ ] Validaciones de form (rol del seleccionado, exclusión de auxiliar cuando soporte es ingeniero).
 - [ ] Histórico de estados visible en `InspeccionPage`.
 - [ ] Actualizar `CLAUDE.md` con resumen de Sesión 10.
+
+### 8.6 Mapa de archivos por fase
+
+> Lo que cada fase **toca** (modifica/crea/elimina). Archivos no listados no se modifican en esa fase.
+
+#### Fase A — Schema + roles + migración + seed
+
+| Acción | Archivo |
+|---|---|
+| Modifica | `aeromx/backend/prisma/schema.prisma` |
+| Crea | `aeromx/backend/prisma/migrations/<timestamp>_multiproducto_y_roles/migration.sql` (lo genera `prisma migrate dev`) |
+| Modifica | `aeromx/backend/prisma/seed.js` (datos concretos según §5.3) |
+| Modifica | `aeromx/backend/src/middleware/auth.js` (bypass por `superusuario`) |
+
+#### Fase B — Backend completo
+
+| Acción | Archivo |
+|---|---|
+| Crea | `aeromx/backend/src/middleware/upload.js` |
+| Crea | `aeromx/backend/src/controllers/ordenes/ordenesController.js` |
+| Crea | `aeromx/backend/src/controllers/ordenes/workflowController.js` |
+| Crea | `aeromx/backend/src/controllers/ordenes/resultadosController.js` |
+| Crea | `aeromx/backend/src/controllers/ordenes/fotosController.js` |
+| Crea | `aeromx/backend/src/controllers/ordenes/cierreController.js` |
+| Crea | `aeromx/backend/src/controllers/ordenes/pdfController.js` |
+| Elimina | `aeromx/backend/src/controllers/ordenesController.js` |
+| Modifica | `aeromx/backend/src/routes/ordenes.js` (router índice + multer extraído) |
+| Crea | `aeromx/backend/src/services/productosService.js` |
+| Crea | `aeromx/backend/src/controllers/productosController.js` |
+| Crea | `aeromx/backend/src/routes/productos.js` |
+| Elimina | `aeromx/backend/src/services/aeronavesService.js` |
+| Elimina | `aeromx/backend/src/controllers/aeronavesController.js` |
+| Elimina | `aeromx/backend/src/routes/aeronaves.js` |
+| Modifica | `aeromx/backend/src/services/modelosService.js` (filtro `tipoProducto`) |
+| Modifica | `aeromx/backend/src/services/formatosService.js` (filtro `tipoProducto`) |
+| Modifica | `aeromx/backend/src/services/ordenesService.js` (productoId, asignaciones, sincronizar lecturas, reabrir) |
+| Modifica | `aeromx/backend/src/index.js` (registrar router de productos, quitar el de aeronaves) |
+| Modifica | `aeromx/backend/src/pdf/markdown.js` (RENDER_POR_TIPO + 3 firmas condicionales) |
+
+#### Fase C — Frontend: catálogos por tipo
+
+| Acción | Archivo |
+|---|---|
+| Crea | `aeromx/frontend/src/api/productosService.js` |
+| Elimina | `aeromx/frontend/src/api/aeronavesService.js` |
+| Modifica | `aeromx/frontend/src/api/modelosService.js` (param `tipoProducto`) |
+| Modifica | `aeromx/frontend/src/api/formatosService.js` (param `tipoProducto`) |
+| Crea | `aeromx/frontend/src/pages/ProductosPage.jsx` (con tabs y 4 sub-formularios) |
+| Elimina | `aeromx/frontend/src/pages/AeronavesPage.jsx` |
+| Modifica | `aeromx/frontend/src/pages/ModelosPage.jsx` (tabs por tipo) |
+| Modifica | `aeromx/frontend/src/pages/FormatosPage.jsx` (tabs por tipo) |
+| Modifica | `aeromx/frontend/src/pages/FlotaPage.jsx` (tabs por tipo) |
+| Modifica | `aeromx/frontend/src/pages/UsuariosPage.jsx` (5 roles + checkbox `superusuario`) |
+| Modifica | `aeromx/frontend/src/components/Header.jsx` (rename "Aeronaves"→"Productos", visibilidad por rol) |
+| Modifica | `aeromx/frontend/src/App.jsx` (ruta `/productos` reemplaza `/aeronaves`) |
+
+#### Fase D — Frontend: O/T multiproducto
+
+| Acción | Archivo |
+|---|---|
+| Modifica | `aeromx/frontend/src/api/ordenesService.js` (endpoint reabrir, cambios en crear) |
+| Modifica | `aeromx/frontend/src/pages/CrearOTPage.jsx` (selector de tipo + 4-5 selectores de asignación, sin inputs de horas) |
+| Modifica | `aeromx/frontend/src/pages/InspeccionPage.jsx` (panel iniciar mantenimiento con lecturas según tipo, header dinámico, sección historial) |
+| Modifica | `aeromx/frontend/src/pages/CierreOTPage.jsx` (slot de firma de piloto si aeronave) |
+| Modifica | `aeromx/frontend/src/pages/DashboardPage.jsx` (identificador correcto, botón reabrir, modal de reapertura) |
+
+#### Fase E — Pulido
+
+| Acción | Archivo |
+|---|---|
+| Modifica | `CLAUDE.md` (resumen de Sesión 10 al final + actualizar sección "Estado del Proyecto") |
+| Modifica | varios (copy, validaciones de form, etiquetas) |
 
 ---
 

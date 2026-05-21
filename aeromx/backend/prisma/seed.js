@@ -9,58 +9,243 @@ const prisma = new PrismaClient()
 async function main() {
   const hash = (plain) => bcrypt.hash(plain, 10)
 
-  // ── Usuarios ──────────────────────────────────────────────────────────────
+  // ── Usuarios — uno por rol + dev superusuario ─────────────────────────────
   const usuarios = [
-    { nombre: 'Carlos Técnico',  email: 'tecnico@aeromx.com',    passwordHash: await hash('aeromx123'), rol: 'tecnico',    licenciaNum: 'TEC-001' },
-    { nombre: 'Ana Ingeniera',   email: 'ingeniero@aeromx.com',  passwordHash: await hash('aeromx123'), rol: 'ingeniero',  licenciaNum: 'ING-001' },
-    { nombre: 'Luis Supervisor', email: 'supervisor@aeromx.com', passwordHash: await hash('aeromx123'), rol: 'supervisor', licenciaNum: 'SUP-001' },
+    { nombre: 'Desarrollador',   email: 'dev@aeromx.com',        rol: 'gerente_soporte',   superusuario: true,  licenciaNum: 'DEV-000' },
+    { nombre: 'Luis Gerente',    email: 'gerente@aeromx.com',    rol: 'gerente_soporte',   superusuario: false, licenciaNum: 'GER-001' },
+    { nombre: 'Ana Ingeniera',   email: 'ingeniero@aeromx.com',  rol: 'ingeniero_soporte', superusuario: false, licenciaNum: 'ING-001' },
+    { nombre: 'Carlos Técnico',  email: 'tecnico@aeromx.com',    rol: 'tecnico_soporte',   superusuario: false, licenciaNum: 'TEC-001' },
+    { nombre: 'Pedro Mecánico',  email: 'mecanico@aeromx.com',   rol: 'mecanico',          superusuario: false, licenciaNum: 'MEC-001' },
+    { nombre: 'María Piloto',    email: 'piloto@aeromx.com',     rol: 'piloto',            superusuario: false, licenciaNum: 'PIL-001' },
   ]
+
   for (const u of usuarios) {
-    await prisma.usuario.upsert({ where: { email: u.email }, update: {}, create: u })
-    console.log(`✓ Usuario: ${u.email} (${u.rol})`)
+    const passwordHash = await hash('aeromx123')
+    await prisma.usuario.upsert({
+      where: { email: u.email },
+      update: { rol: u.rol, superusuario: u.superusuario, licenciaNum: u.licenciaNum },
+      create: { ...u, passwordHash },
+    })
+    console.log(`✓ Usuario: ${u.email} (${u.rol}${u.superusuario ? ' · superusuario' : ''})`)
   }
 
-  // ── Modelo y aeronave ─────────────────────────────────────────────────────
-  const modelo = await prisma.modeloAeronave.upsert({
-    where: { nombre: 'Cessna 172S' },
-    update: {},
-    create: { nombre: 'Cessna 172S', fabricante: 'Cessna', descripcion: 'Avión de entrenamiento monomotor' },
-  })
-  console.log(`✓ Modelo: ${modelo.nombre}`)
+  // ── Modelos — uno por tipo ────────────────────────────────────────────────
+  const modelosData = [
+    { tipoProducto: 'aeronave', nombre: 'Cessna 172S',     fabricante: 'Cessna',   descripcion: 'Avión de entrenamiento monomotor' },
+    { tipoProducto: 'camion',   nombre: 'F-350 Super Duty', fabricante: 'Ford',     descripcion: 'Camión pesado de servicio en rampa' },
+    { tipoProducto: 'planta',   nombre: 'XQ60',            fabricante: 'Cummins',  descripcion: 'Planta de energía portátil 60 kW' },
+    { tipoProducto: 'sensor',   nombre: 'LiDAR VLP-16',    fabricante: 'Velodyne', descripcion: 'Sensor LiDAR de 16 canales' },
+  ]
 
-  await prisma.aeronave.upsert({
-    where: { matricula: 'XB-ABC' },
-    update: {},
-    create: { modeloId: modelo.id, matricula: 'XB-ABC', numeroSerie: 'C172S-12345', horasTotales: 1250.5, horasMotorDer: 0, horasMotorIzq: 0 },
-  })
-  console.log('✓ Aeronave: XB-ABC')
+  const modelos = {}
+  for (const m of modelosData) {
+    const modelo = await prisma.modelo.upsert({
+      where: { tipoProducto_nombre: { tipoProducto: m.tipoProducto, nombre: m.nombre } },
+      update: { fabricante: m.fabricante, descripcion: m.descripcion },
+      create: m,
+    })
+    modelos[m.tipoProducto] = modelo
+    console.log(`✓ Modelo: ${m.tipoProducto} · ${m.nombre}`)
+  }
 
-  // ── Formato Mantenimiento Menor ───────────────────────────────────────────
-  let formatoMenor = await prisma.formato.findFirst({ where: { nombre: 'Mantenimiento Menor' } })
-  if (!formatoMenor) {
-    formatoMenor = await prisma.formato.create({
+  // ── Productos — uno por tipo, con su detalle ──────────────────────────────
+  const productosData = [
+    {
+      tipoProducto: 'aeronave',
+      modeloId: modelos.aeronave.id,
+      identificador: 'XB-ABC',
+      numeroSerie: 'C172S-12345',
+      detalle: { horasTotales: 1250.5, horasMotorDer: 0, horasMotorIzq: 0 },
+    },
+    {
+      tipoProducto: 'camion',
+      modeloId: modelos.camion.id,
+      identificador: 'MX-CAM-001',
+      numeroSerie: 'FORD-F350-9876',
+      detalle: { placas: 'MX-CAM-001', vin: '1FT8W3DT5KEE12345', odometro: 84200 },
+    },
+    {
+      tipoProducto: 'planta',
+      modeloId: modelos.planta.id,
+      identificador: 'PE-001',
+      numeroSerie: 'XQ60-2024-001',
+      detalle: { horimetro: 320 },
+    },
+    {
+      tipoProducto: 'sensor',
+      modeloId: modelos.sensor.id,
+      identificador: 'SE-001',
+      numeroSerie: 'VLP16-78900',
+      detalle: { fabricante: 'Velodyne', versionFirmware: '3.2.1', fechaCalibracion: new Date('2026-01-15') },
+    },
+  ]
+
+  for (const p of productosData) {
+    const existing = await prisma.producto.findUnique({
+      where: { tipoProducto_identificador: { tipoProducto: p.tipoProducto, identificador: p.identificador } },
+    })
+
+    let producto
+    if (existing) {
+      producto = await prisma.producto.update({
+        where: { id: existing.id },
+        data: { modeloId: p.modeloId, numeroSerie: p.numeroSerie },
+      })
+    } else {
+      producto = await prisma.producto.create({
+        data: {
+          tipoProducto: p.tipoProducto,
+          modeloId: p.modeloId,
+          identificador: p.identificador,
+          numeroSerie: p.numeroSerie,
+        },
+      })
+    }
+
+    // Detalle por tipo
+    const detalleArgs = { where: { productoId: producto.id }, update: p.detalle, create: { productoId: producto.id, ...p.detalle } }
+    if (p.tipoProducto === 'aeronave') await prisma.aeronaveDetalle.upsert(detalleArgs)
+    if (p.tipoProducto === 'camion')   await prisma.camionDetalle.upsert(detalleArgs)
+    if (p.tipoProducto === 'planta')   await prisma.plantaDetalle.upsert(detalleArgs)
+    if (p.tipoProducto === 'sensor')   await prisma.sensorDetalle.upsert(detalleArgs)
+
+    console.log(`✓ Producto: ${p.tipoProducto} · ${p.identificador}`)
+  }
+
+  // ── Formato Aeronave: Mantenimiento Menor (14 secciones reales) ───────────
+  const formatoAeronave = await crearFormato({
+    tipoProducto: 'aeronave',
+    nombre: 'Mantenimiento Menor',
+    objetivo: 'Inspección de mantenimiento preventivo menor',
+    instrucciones: 'Completar todas las secciones y puntos de inspección. Fotografiar componentes indicados.',
+    definiciones: 'CM: Componente Mayor · AC: Aeronavegabilidad Crítica · fotoRequerida: punto que exige evidencia fotográfica',
+  })
+  await poblarFormato(formatoAeronave.id, seccionesMantenimientoMenor())
+
+  // ── Formato Camión: Inspección Preventiva ─────────────────────────────────
+  const formatoCamion = await crearFormato({
+    tipoProducto: 'camion',
+    nombre: 'Inspección Preventiva',
+    objetivo: 'Inspección preventiva de camión de servicio',
+  })
+  await poblarFormato(formatoCamion.id, [
+    {
+      nombre: 'Motor',
+      descripcion: 'Inspección general del motor y componentes asociados',
+      puntos: [
+        p('Nivel de aceite', false, true),
+        p('Frenos',         false, true),
+        p('Llantas',        true,  false, 'Inspección visual y presión'),
+      ],
+    },
+  ])
+
+  // ── Formato Planta: Mantenimiento de Horímetro 100h ───────────────────────
+  const formatoPlanta = await crearFormato({
+    tipoProducto: 'planta',
+    nombre: 'Mantenimiento de Horímetro 100h',
+    objetivo: 'Mantenimiento cada 100 horas de operación',
+  })
+  await poblarFormato(formatoPlanta.id, [
+    {
+      nombre: 'Motor y eléctrico',
+      descripcion: 'Inspección de motor y sistema eléctrico de la planta',
+      puntos: [
+        p('Aceite',      false, true),
+        p('Batería',     false, false),
+        p('Conexiones',  true,  false, 'Verificar apriete y oxidación'),
+      ],
+    },
+  ])
+
+  // ── Formato Sensor: Calibración y Verificación ────────────────────────────
+  const formatoSensor = await crearFormato({
+    tipoProducto: 'sensor',
+    nombre: 'Calibración y Verificación',
+    objetivo: 'Calibración periódica y verificación funcional del sensor',
+  })
+  await poblarFormato(formatoSensor.id, [
+    {
+      nombre: 'Funcional',
+      descripcion: 'Pruebas funcionales del sensor',
+      puntos: [
+        p('Lectura de prueba', true,  false, 'Capturar muestra de salida del sensor'),
+        p('Firmware',          false, false, 'Verificar versión instalada'),
+      ],
+    },
+  ])
+
+  console.log('✅ Seed completado')
+}
+
+// ─────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────
+
+function p(nombre, fotoRequerida = false, esCritico = false, descripcion = '') {
+  return { nombre, fotoRequerida, esCritico, descripcion }
+}
+
+async function crearFormato({ tipoProducto, nombre, objetivo, instrucciones = null, definiciones = null }) {
+  const existente = await prisma.formato.findFirst({ where: { tipoProducto, nombre } })
+  if (existente) {
+    console.log(`✓ Formato ya existe: ${tipoProducto} · ${nombre}`)
+    return existente
+  }
+  const formato = await prisma.formato.create({
+    data: {
+      tipoProducto,
+      nombre,
+      version: '1.0',
+      fechaVersion: new Date(),
+      objetivo,
+      instrucciones,
+      definiciones,
+      activo: true,
+    },
+  })
+  console.log(`✓ Formato: ${tipoProducto} · ${nombre}`)
+  return formato
+}
+
+async function poblarFormato(formatoId, secciones) {
+  // Repoblar limpio (drop secciones previas + sus puntos por cascada lógica)
+  const previas = await prisma.seccionFormato.findMany({ where: { formatoId }, include: { puntos: true } })
+  for (const sec of previas) {
+    await prisma.puntoInspeccion.deleteMany({ where: { seccionId: sec.id } })
+  }
+  await prisma.seccionFormato.deleteMany({ where: { formatoId } })
+
+  let totalPuntos = 0
+  for (let i = 0; i < secciones.length; i++) {
+    const sec = await prisma.seccionFormato.create({
       data: {
-        nombre: 'Mantenimiento Menor',
-        version: '1.0',
-        fechaVersion: new Date(),
-        objetivo: 'Inspección de mantenimiento preventivo menor',
-        instrucciones: 'Completar todas las secciones y puntos de inspección. Fotografiar componentes indicados.',
-        definiciones: 'CM: Componente Mayor · AC: Aeronavegabilidad Crítica · fotoRequerida: punto que exige evidencia fotográfica',
-        activo: true,
+        formatoId,
+        nombre: secciones[i].nombre,
+        descripcion: secciones[i].descripcion,
+        orden: i + 1,
       },
     })
+    for (let j = 0; j < secciones[i].puntos.length; j++) {
+      const pt = secciones[i].puntos[j]
+      await prisma.puntoInspeccion.create({
+        data: {
+          seccionId: sec.id,
+          nombreComponente: pt.nombre,
+          descripcion: pt.descripcion,
+          fotoRequerida: pt.fotoRequerida,
+          esCritico: pt.esCritico,
+          orden: j + 1,
+        },
+      })
+      totalPuntos++
+    }
   }
-  console.log(`✓ Formato: ${formatoMenor.nombre}`)
+  console.log(`  → ${secciones.length} secciones · ${totalPuntos} puntos`)
+}
 
-  // Borrar secciones previas para repoblar limpio
-  await prisma.seccionFormato.deleteMany({ where: { formatoId: formatoMenor.id } })
-
-  // ── Secciones y puntos reales ─────────────────────────────────────────────
-  // p(nombre, fotoRequerida, esCritico, descripcion?)
-  const p = (nombre, fotoRequerida = false, esCritico = false, descripcion = '') =>
-    ({ nombre, fotoRequerida, esCritico, descripcion })
-
-  const secciones = [
+function seccionesMantenimientoMenor() {
+  return [
     {
       nombre: 'Generalidades',
       descripcion: 'Documentación y elementos generales de la aeronave',
@@ -252,54 +437,6 @@ async function main() {
       ],
     },
   ]
-
-  let totalPuntos = 0
-  for (let i = 0; i < secciones.length; i++) {
-    const sec = await prisma.seccionFormato.create({
-      data: {
-        formatoId: formatoMenor.id,
-        nombre: secciones[i].nombre,
-        descripcion: secciones[i].descripcion,
-        orden: i + 1,
-      },
-    })
-
-    for (let j = 0; j < secciones[i].puntos.length; j++) {
-      const pt = secciones[i].puntos[j]
-      await prisma.puntoInspeccion.create({
-        data: {
-          seccionId: sec.id,
-          nombreComponente: pt.nombre,
-          descripcion: pt.descripcion,
-          fotoRequerida: pt.fotoRequerida,
-          esCritico: pt.esCritico,
-          orden: j + 1,
-        },
-      })
-      totalPuntos++
-    }
-  }
-  console.log(`✓ ${secciones.length} secciones · ${totalPuntos} puntos creados`)
-
-  // ── Formatos adicionales (sin puntos por ahora) ───────────────────────────
-  const otrosFormatos = [
-    { nombre: 'Inspección 50 horas',   objetivo: 'Inspección cada 50 horas de vuelo' },
-    { nombre: 'Inspección 60 horas',   objetivo: 'Inspección cada 60 horas de vuelo' },
-    { nombre: 'Mantenimiento Mayor',   objetivo: 'Inspección completa cada 500 horas de vuelo' },
-    { nombre: 'Documento de Entrega',  objetivo: 'Entrega y aceptación de aeronave' },
-    { nombre: 'Cambio de Componente',  objetivo: 'Registro de cambio de componente' },
-    { nombre: 'Inspección Pre/Post vuelo', objetivo: 'Inspección pre-vuelo y post-vuelo' },
-    { nombre: 'Reporte de Anomalía',   objetivo: 'Reporte de defecto o anomalía detectada' },
-  ]
-  for (const f of otrosFormatos) {
-    const existe = await prisma.formato.findFirst({ where: { nombre: f.nombre } })
-    if (!existe) {
-      await prisma.formato.create({
-        data: { nombre: f.nombre, version: '1.0', fechaVersion: new Date(), objetivo: f.objetivo, activo: true },
-      })
-    }
-    console.log(`✓ Formato: ${f.nombre}`)
-  }
 }
 
 main()

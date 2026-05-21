@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Header } from '../components/Header'
 import { modelosService } from '../api/modelosService'
 import { useAuthStore } from '../store/authStore'
-import { T } from '../tokens/design'
+import { T, TIPO_PRODUCTO, TIPOS_PRODUCTO } from '../tokens/design'
 import {
   Btn, BtnSm, Card, ErrorBanner, Field, FieldTextarea, Hdr, Pill, Spinner,
 } from '../components/ui'
 
 export default function ModelosPage() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const user = useAuthStore((s) => s.user)
   const [modelos, setModelos] = useState([])
   const [loading, setLoading] = useState(true)
@@ -17,14 +18,27 @@ export default function ModelosPage() {
   const [editando, setEditando] = useState(null)
   const [modoAlta, setModoAlta] = useState(false)
 
-  const esSupervisor = user?.rol === 'supervisor'
+  const puedeEditar =
+    user?.superusuario === true ||
+    user?.rol === 'gerente_soporte' ||
+    user?.rol === 'ingeniero_soporte'
 
-  useEffect(() => { cargar() }, [])
+  const tipoParam = searchParams.get('tipo')
+  const tipo = TIPOS_PRODUCTO.includes(tipoParam) ? tipoParam : 'aeronave'
+  const meta = TIPO_PRODUCTO[tipo]
+
+  useEffect(() => {
+    setEditando(null)
+    setModoAlta(false)
+    cargar()
+  }, [tipo])
+
+  const cambiarTipo = (t) => setSearchParams(t === 'aeronave' ? {} : { tipo: t })
 
   const cargar = async () => {
     setLoading(true)
     try {
-      const { data } = await modelosService.listar()
+      const { data } = await modelosService.listar({ tipoProducto: tipo })
       setModelos(data || [])
       setError('')
     } catch (e) {
@@ -39,7 +53,7 @@ export default function ModelosPage() {
       if (editando) {
         await modelosService.actualizar(editando.id, datos)
       } else {
-        await modelosService.crear(datos)
+        await modelosService.crear({ tipoProducto: tipo, ...datos })
       }
       setModoAlta(false)
       setEditando(null)
@@ -67,22 +81,47 @@ export default function ModelosPage() {
           display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
           gap: 16, flexWrap: 'wrap',
         }}>
-          <Hdr title="Catálogo de modelos" sub="Familias de aeronaves" back={() => navigate('/dashboard')} />
-          {esSupervisor && (
+          <Hdr title="Catálogo de modelos" sub="Familias de productos" back={() => navigate('/dashboard')} />
+          {puedeEditar && (
             <div style={{ paddingTop: 6 }}>
-              <Btn label="+ Nuevo modelo" onClick={() => { setModoAlta(true); setEditando(null) }} />
+              <Btn label={`+ Nuevo modelo (${meta.label})`} onClick={() => { setModoAlta(true); setEditando(null) }} />
             </div>
           )}
         </div>
-        <p style={{ color: T.sub, fontSize: 13, marginTop: -8, marginBottom: 20 }}>
-          Gestión de modelos de aeronaves utilizados en la flota
+        <p style={{ color: T.sub, fontSize: 13, marginTop: -8, marginBottom: 16 }}>
+          Gestión de modelos de productos utilizados en la flota
         </p>
+
+        {/* Pestañas de tipo */}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 20 }}>
+          {TIPOS_PRODUCTO.map((t) => {
+            const m = TIPO_PRODUCTO[t]
+            const active = tipo === t
+            return (
+              <button
+                key={t}
+                onClick={() => cambiarTipo(t)}
+                style={{
+                  padding: '8px 16px', borderRadius: 999,
+                  background: active ? m.bg : T.s2,
+                  color: active ? m.c : T.sub,
+                  border: active ? `1px solid ${m.c}55` : `1px solid ${T.border}`,
+                  fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  fontFamily: T.font, display: 'inline-flex', alignItems: 'center', gap: 7,
+                }}
+              >
+                <span>{m.icon}</span>{m.label}
+              </button>
+            )
+          })}
+        </div>
 
         <ErrorBanner onClose={() => setError('')}>{error}</ErrorBanner>
 
-        {(modoAlta || editando) && esSupervisor && (
+        {(modoAlta || editando) && puedeEditar && (
           <FormularioModelo
             inicial={editando}
+            tipoLabel={meta.label}
             onCancelar={() => { setModoAlta(false); setEditando(null) }}
             onGuardar={guardar}
           />
@@ -103,8 +142,8 @@ export default function ModelosPage() {
                     <Th>Modelo</Th>
                     <Th>Fabricante</Th>
                     <Th>Descripción</Th>
-                    <Th align="center">Aeronaves</Th>
-                    {esSupervisor && <Th align="right">Acciones</Th>}
+                    <Th align="center">Productos</Th>
+                    {puedeEditar && <Th align="right">Acciones</Th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -130,12 +169,12 @@ export default function ModelosPage() {
                       <Td align="center">
                         <Pill
                           small
-                          label={String(m._count?.aeronaves ?? 0)}
+                          label={String(m._count?.productos ?? 0)}
                           color={T.cyan}
                           bg={T.cD}
                         />
                       </Td>
-                      {esSupervisor && (
+                      {puedeEditar && (
                         <Td align="right">
                           <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
                             <BtnSm
@@ -182,7 +221,7 @@ function Td({ children, align }) {
   )
 }
 
-function FormularioModelo({ inicial, onCancelar, onGuardar }) {
+function FormularioModelo({ inicial, tipoLabel, onCancelar, onGuardar }) {
   const [nombre, setNombre] = useState(inicial?.nombre || '')
   const [fabricante, setFabricante] = useState(inicial?.fabricante || '')
   const [descripcion, setDescripcion] = useState(inicial?.descripcion || '')
@@ -207,7 +246,7 @@ function FormularioModelo({ inicial, onCancelar, onGuardar }) {
     <Card padding={20} style={{ marginBottom: 18, borderLeft: `3px solid ${T.cyan}` }}>
       <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>
-          {inicial ? 'Editar modelo' : 'Nuevo modelo'}
+          {inicial ? 'Editar modelo' : `Nuevo modelo${tipoLabel ? ` · ${tipoLabel}` : ''}`}
         </div>
         <div style={{
           display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12,

@@ -3,14 +3,16 @@ import { listar, obtener, crear, actualizar, eliminar } from '../controllers/mod
 import { verifyToken, requireRole } from '../middleware/auth.js'
 
 const router = Router()
+router.use(verifyToken)
 
-// Todos los autenticados pueden ver modelos
-router.get('/', verifyToken, listar)
-router.get('/:id', verifyToken, obtener)
+// Lectura — cualquier autenticado
+router.get('/',    listar)
+router.get('/:id', obtener)
 
-// Solo supervisor puede crear/editar/eliminar
-router.post('/', verifyToken, requireRole('supervisor'), crear)
-router.put('/:id', verifyToken, requireRole('supervisor'), actualizar)
-router.delete('/:id', verifyToken, requireRole('supervisor'), eliminar)
+// Escritura — gerente o ingeniero
+const GERENTE_O_INGENIERO = ['gerente_soporte', 'ingeniero_soporte']
+router.post('/',      requireRole(GERENTE_O_INGENIERO), crear)
+router.put('/:id',    requireRole(GERENTE_O_INGENIERO), actualizar)
+router.delete('/:id', requireRole(GERENTE_O_INGENIERO), eliminar)
 
 export default router

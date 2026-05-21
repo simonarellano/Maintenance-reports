@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Header } from '../components/Header'
 import { formatosService } from '../api/formatosService'
 import { useAuthStore } from '../store/authStore'
-import { T } from '../tokens/design'
+import { T, TIPO_PRODUCTO, TIPOS_PRODUCTO } from '../tokens/design'
 import {
   Btn, BtnSm, Card, ErrorBanner, Field, FieldTextarea, Hdr, Modal, Pill, Spinner,
 } from '../components/ui'
 
 export default function FormatosPage() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const user = useAuthStore((s) => s.user)
   const [formatos, setFormatos] = useState([])
   const [loading, setLoading] = useState(true)
@@ -23,11 +24,22 @@ export default function FormatosPage() {
   const [puntoEditor, setPuntoEditor] = useState(null)
   const [bloqueEditor, setBloqueEditor] = useState(null)
 
-  const esSupervisor = user?.rol === 'supervisor'
+  const esSupervisor =
+    user?.superusuario === true ||
+    user?.rol === 'gerente_soporte' ||
+    user?.rol === 'ingeniero_soporte'
+
+  const tipoParam = searchParams.get('tipo')
+  const tipo = TIPOS_PRODUCTO.includes(tipoParam) ? tipoParam : 'aeronave'
+  const meta = TIPO_PRODUCTO[tipo]
+  const cambiarTipo = (t) => setSearchParams(t === 'aeronave' ? {} : { tipo: t })
 
   useEffect(() => {
+    setModoAlta(false)
+    setEditando(null)
+    setExpandido(null)
     cargar()
-  }, [])
+  }, [tipo])
 
   // El spinner solo se muestra en la primera carga. Los refetches posteriores
   // (tras crear/editar/borrar/reordenar) reemplazan la lista en silencio para
@@ -35,7 +47,7 @@ export default function FormatosPage() {
   const cargar = async ({ silencioso = false } = {}) => {
     if (!silencioso) setLoading(true)
     try {
-      const { data } = await formatosService.listar()
+      const { data } = await formatosService.listar({ tipoProducto: tipo })
       setFormatos(data || [])
       setError('')
     } catch (e) {
@@ -51,7 +63,7 @@ export default function FormatosPage() {
       if (editando) {
         await formatosService.actualizar(editando.id, datos)
       } else {
-        await formatosService.crear(datos)
+        await formatosService.crear({ tipoProducto: tipo, ...datos })
       }
       setModoAlta(false)
       setEditando(null)
@@ -172,15 +184,39 @@ export default function FormatosPage() {
           {esSupervisor && (
             <div style={{ paddingTop: 6 }}>
               <Btn
-                label="+ Nuevo formato"
+                label={`+ Nuevo formato (${meta.label})`}
                 onClick={() => { setModoAlta(true); setEditando(null) }}
               />
             </div>
           )}
         </div>
-        <p style={{ color: T.sub, fontSize: 13, marginTop: -8, marginBottom: 20 }}>
+        <p style={{ color: T.sub, fontSize: 13, marginTop: -8, marginBottom: 16 }}>
           Gestión de plantillas de órdenes de trabajo
         </p>
+
+        {/* Pestañas de tipo */}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 20 }}>
+          {TIPOS_PRODUCTO.map((t) => {
+            const m = TIPO_PRODUCTO[t]
+            const active = tipo === t
+            return (
+              <button
+                key={t}
+                onClick={() => cambiarTipo(t)}
+                style={{
+                  padding: '8px 16px', borderRadius: 999,
+                  background: active ? m.bg : T.s2,
+                  color: active ? m.c : T.sub,
+                  border: active ? `1px solid ${m.c}55` : `1px solid ${T.border}`,
+                  fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  fontFamily: T.font, display: 'inline-flex', alignItems: 'center', gap: 7,
+                }}
+              >
+                <span>{m.icon}</span>{m.label}
+              </button>
+            )
+          })}
+        </div>
 
         <ErrorBanner onClose={() => setError('')}>{error}</ErrorBanner>
 

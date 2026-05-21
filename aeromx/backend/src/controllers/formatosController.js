@@ -5,7 +5,8 @@ import * as svc from '../services/formatosService.js'
 export async function listar(req, res, next) {
   try {
     const soloActivos = req.query.todos !== 'true'
-    const formatos = await svc.listarFormatos(soloActivos)
+    const { tipoProducto } = req.query
+    const formatos = await svc.listarFormatos({ soloActivos, tipoProducto })
     res.json(formatos)
   } catch (e) { next(e) }
 }
@@ -20,17 +21,21 @@ export async function obtener(req, res, next) {
 
 export async function crear(req, res, next) {
   try {
-    const { nombre, version, fechaVersion, objetivo, instrucciones, definiciones } = req.body
+    const { tipoProducto, nombre, version, fechaVersion, objetivo, instrucciones, definiciones } = req.body
+    if (!tipoProducto) return res.status(400).json({ error: 'tipoProducto es requerido' })
     if (!nombre || !version) {
       return res.status(400).json({ error: 'nombre y version son requeridos' })
     }
     const formato = await svc.crearFormato({
-      nombre, version,
+      tipoProducto, nombre, version,
       fechaVersion: fechaVersion ? new Date(fechaVersion) : new Date(),
       objetivo, instrucciones, definiciones,
     })
     res.status(201).json(formato)
-  } catch (e) { next(e) }
+  } catch (e) {
+    if (e.code === 'BAD_INPUT') return res.status(400).json({ error: e.message })
+    next(e)
+  }
 }
 
 export async function actualizar(req, res, next) {

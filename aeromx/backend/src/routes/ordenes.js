@@ -1,63 +1,42 @@
 import { Router } from 'express'
-import { fileURLToPath } from 'url'
-import path from 'path'
-import fs from 'fs'
-import multer from 'multer'
 import { verifyToken, requireRole } from '../middleware/auth.js'
-import * as ctrl from '../controllers/ordenesController.js'
-
-// Directorio de uploads relativo a la raíz del backend
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const uploadsDir = path.join(__dirname, '../../uploads')
-if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true })
-
-const storage = multer.diskStorage({
-  destination: uploadsDir,
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname)
-    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`)
-  },
-})
-const upload = multer({
-  storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
-  fileFilter: (_req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) return cb(null, true)
-    cb(new Error('Solo se permiten archivos de imagen'))
-  },
-})
+import { upload } from '../middleware/upload.js'
+import * as ordenes    from '../controllers/ordenes/ordenesController.js'
+import * as workflow   from '../controllers/ordenes/workflowController.js'
+import * as resultados from '../controllers/ordenes/resultadosController.js'
+import * as fotos      from '../controllers/ordenes/fotosController.js'
+import * as cierre     from '../controllers/ordenes/cierreController.js'
+import * as pdf        from '../controllers/ordenes/pdfController.js'
 
 const router = Router()
 router.use(verifyToken)
 
-// ── Órdenes de Trabajo ──────────────────────────────────────────────────────
-router.get('/', ctrl.listar)
-router.get('/:id', ctrl.obtener)
-router.post('/', ctrl.crear)
-router.patch('/:id/estado', requireRole(['supervisor', 'ingeniero']), ctrl.actualizarEstado)
+const GERENTE_O_INGENIERO = ['gerente_soporte', 'ingeniero_soporte']
+const SOLO_GERENTE        = ['gerente_soporte']
 
-// ── Hitos del ciclo de vida ────────────────────────────────────────────────
-router.post('/:id/recepcion', ctrl.recepcionarAeronave)
-router.post('/:id/iniciar-mantenimiento', ctrl.iniciarMantenimiento)
-router.patch('/:id/asignacion', requireRole(['supervisor']), ctrl.asignarOrden)
+// ── CRUD base ───────────────────────────────────────────────────────────────
+router.get('/',             ordenes.listar)
+router.get('/:id',          ordenes.obtener)
+router.post('/',            requireRole(GERENTE_O_INGENIERO), ordenes.crear)
+router.patch('/:id/estado', requireRole(GERENTE_O_INGENIERO), ordenes.actualizarEstado)
 
-// ── Archivar / eliminar ────────────────────────────────────────────────────
-router.patch('/:id/archivar', requireRole(['supervisor']), ctrl.archivar)
-router.delete('/:id', requireRole(['supervisor']), ctrl.eliminar)
+// ── Workflow ────────────────────────────────────────────────────────────────
+router.post('/:id/recepcion',             workflow.recepcionar)
+router.post('/:id/iniciar-mantenimiento', workflow.iniciarMantenimiento)
+router.patch('/:id/asignacion',           requireRole(SOLO_GERENTE), workflow.asignar)
+router.patch('/:id/archivar',             requireRole(SOLO_GERENTE), workflow.archivar)
+router.delete('/:id',                     requireRole(SOLO_GERENTE), workflow.eliminar)
+router.post('/:id/reabrir',               requireRole(SOLO_GERENTE), workflow.reabrir)
 
-// ── Resultados de puntos ────────────────────────────────────────────────────
-router.patch('/:id/puntos/:resultadoId', ctrl.actualizarResultado)
-router.post('/:id/puntos/:resultadoId/firmar', ctrl.firmarResultado)
+// ── Resultados / fotos ──────────────────────────────────────────────────────
+router.patch('/:id/puntos/:resultadoId',         resultados.actualizar)
+router.post('/:id/puntos/:resultadoId/firmar',   resultados.firmar)
+router.post('/:id/puntos/:resultadoId/fotos',    upload.single('foto'), fotos.subir)
+router.delete('/:id/puntos/:resultadoId/fotos/:fotoId', fotos.eliminar)
 
-// ── Fotos por punto ─────────────────────────────────────────────────────────
-router.post('/:id/puntos/:resultadoId/fotos', upload.single('foto'), ctrl.subirFoto)
-router.delete('/:id/puntos/:resultadoId/fotos/:fotoId', ctrl.eliminarFoto)
-
-// ── Cierre y firmas ─────────────────────────────────────────────────────────
-router.post('/:id/cierre', ctrl.gestionarCierre)
-router.post('/:id/cierre/firmar', ctrl.firmarCierre)
-
-// ── PDF ─────────────────────────────────────────────────────────────────────
-router.get('/:id/pdf', ctrl.generarPDF)
+// ── Cierre / PDF ────────────────────────────────────────────────────────────
+router.post('/:id/cierre',        cierre.gestionar)
+router.post('/:id/cierre/firmar', cierre.firmar)
+router.get('/:id/pdf',            pdf.generar)
 
 export default router

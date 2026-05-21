@@ -1,8 +1,8 @@
 import client from './client'
 
 export const modelosService = {
-  listar: () =>
-    client.get('/modelos'),
+  listar: (params) =>
+    client.get('/modelos', { params }),
 
   obtener: (id) =>
     client.get(`/modelos/${id}`),

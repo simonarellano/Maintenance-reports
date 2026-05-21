@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { Header } from '../components/Header'
 import { formatosService } from '../api/formatosService'
-import { aeronavesService } from '../api/aeronavesService'
+import { productosService } from '../api/productosService'
 import { ordenesService } from '../api/ordenesService'
 import { usuariosService } from '../api/usuariosService'
 import { useAuthStore } from '../store/authStore'
@@ -64,7 +64,7 @@ export default function CrearOTPage() {
     try {
       const base = [
         formatosService.listar(),
-        aeronavesService.listar(),
+        productosService.listar(),
         usuariosService.listar({ rol: 'supervisor', activo: true }),
       ]
       const requests = esSupervisor

@@ -1,5 +1,7 @@
 # AeroMX — Contexto del Proyecto para Claude
 
+> **IMPORTANTE — Estado del rediseño multiproducto**: las **Fases A y B están aplicadas** (schema + roles + backend completo multiproducto, smoke test pasa para los 4 tipos). El **frontend sigue roto a propósito** hasta completar **Fases C/D**. **Lee primero [`aeromx/docs/ARQUITECTURA-MULTIPRODUCTO.md`](aeromx/docs/ARQUITECTURA-MULTIPRODUCTO.md)** — especialmente §0.2 (cómo saber en qué fase estás) y §8 (plan por fases). Las secciones de este CLAUDE.md sobre roles, schema, formatos y O/T en §"Roles de Usuario", §"Esquema de BD" y similares describen el **estado pre-rediseño** y ya **no son fuente de verdad**. La fuente de verdad ahora es el doc de arquitectura + el `schema.prisma` actual.
+
 ## ¿Qué es este proyecto?
 Sistema web/móvil de gestión de mantenimiento aeronáutico. Reemplaza formatos Word manuales con un flujo digital de órdenes de mantenimiento paso a paso, con captura de evidencia fotográfica por punto de inspección y firma digital.
 
@@ -196,7 +198,11 @@ FORMATO DE MANTENIMIENTO
 - Confirmar si se necesita modo offline
 - Confirmar si `ref_doc_correctivo` es solo texto o también permite adjuntar PDF
 
-## Estado del Proyecto — Última actualización: Sesión 9 (~95% Fase 1)
+## Estado del Proyecto — Última actualización: Sesión 10 (Fase A del rediseño completada)
+
+> ⚠️ **Backend roto a propósito.** El schema fue reescrito a la arquitectura multiproducto + roles nuevos, pero `ordenesController.js`, `aeronavesService.js`, `formatosService.js`, `ordenesService.js` y todos los routes asociados siguen referenciando la API vieja (`aeronaveId`, `tecnicoId`, `supervisorId`, `ModeloAeronave`, enum `Rol` con valores viejos, etc.). El backend **no levanta** (`npm run dev` falla en el primer require de Prisma con la API vieja). El frontend tampoco funciona. Esto es esperado y se arregla en **Fase B** (backend) y **Fases C/D** (frontend). Ver bloque "Cambios en Sesión 10" abajo.
+
+### Estado pre-rediseño (Fase 1 Core ~95%) — para referencia histórica
 
 ### Completado (backend 100% + frontend UI/UX mejorada)
 | Archivo | Descripción |
@@ -458,6 +464,95 @@ npm run dev                   # UI en http://localhost:5173
 - Estado vacío de "Mis órdenes" incluye un botón directo a "Ver todo".
 - El selector de vista está como una barra de pestañas al inicio del dashboard; al cambiar vista, el filtro de estado vuelve a "Todas".
 
+### Cambios en Sesión 10 — Fase A del rediseño multiproducto + roles + superusuario
+**Fecha:** 2026-05-01 | **Rama:** `development` | **Estado:** Fase A done · Backend roto a propósito
+
+> Esta sesión ejecuta exclusivamente la **Fase A** del plan en [`aeromx/docs/ARQUITECTURA-MULTIPRODUCTO.md`](aeromx/docs/ARQUITECTURA-MULTIPRODUCTO.md). La intención es que la app deje de levantar — los controllers/services/frontend siguen referenciando la API vieja y se adaptan en Fases B/C/D. **No intentar levantar el backend hasta empezar Fase B.**
+
+#### Schema (`backend/prisma/schema.prisma`) — reescrito completo
+- Enum `Rol` ahora: `gerente_soporte | ingeniero_soporte | tecnico_soporte | mecanico | piloto` (5 valores). Los nombres viejos (`tecnico/ingeniero/supervisor`) ya no existen.
+- Nuevo enum `TipoProducto`: `aeronave | camion | planta | sensor`.
+- `Usuario.superusuario: Boolean @default(false)` — flag ortogonal al rol que hace bypass de cualquier `requireRole`.
+- `Modelo` (antes `ModeloAeronave`) unificado con discriminador `tipoProducto`. Unique `(tipoProducto, nombre)`.
+- `Producto` (antes `Aeronave`) — tabla padre con `tipoProducto`, `modeloId`, `identificador` (matrícula/placas/serie), `numeroSerie`. Unique `(tipoProducto, identificador)`.
+- 4 detalles 1:1 con `onDelete: Cascade` desde Producto: `AeronaveDetalle` (horas), `CamionDetalle` (placas/vin/odometro), `PlantaDetalle` (horimetro), `SensorDetalle` (fabricante/firmware/calibracion).
+- `Formato` gana `tipoProducto` (formatos no son compartibles entre tipos).
+- `OrdenTrabajo`: `aeronaveId` → `productoId`. `tecnicoId` → `soporteId`. `supervisorId` → `gerenteId` (NOT NULL ahora). Nuevos: `ingenieroAuxiliarId?` (solo si soporte es técnico), `mecanicoId` (NOT NULL), `pilotoId?` (obligatorio si producto = aeronave). `matriculaRecepcion` → `identificadorRecepcion`. Lecturas `horasTotales/horasMotorDer/horasMotorIzq/odometro/horimetro` ahora **opcionales** (se llenan al iniciar mantenimiento, Hito 3).
+- `CierreOT`: 3 firmas — `firmaSoporteId/fechaFirmaSoporte`, `firmaGerenteId/fechaFirmaGerente`, `firmaPilotoId/fechaFirmaPiloto` (esta última solo aplica para aeronave).
+- Nueva tabla `HistorialEstadoOT` — audit trail para reaperturas (id, ordenId, estadoAnterior, estadoNuevo, motivo, usuarioId, createdAt).
+
+#### Migración aplicada
+- Carpeta: `prisma/migrations/20260501123313_multiproducto_y_roles/migration.sql` (221 líneas).
+- **Estrategia usada** (importante para futuras sesiones de Claude Code): `prisma migrate dev` requiere TTY interactivo y **no funciona en Claude Code**. El flujo correcto es:
+  ```bash
+  # 1. Resetear BD (si los datos son de prueba) — esto re-aplica el historial de migraciones existentes
+  npx prisma migrate reset --force --skip-seed
+
+  # 2. Generar SQL del diff (no-interactivo)
+  TIMESTAMP=$(date +%Y%m%d%H%M%S)
+  MIGDIR="prisma/migrations/${TIMESTAMP}_<nombre>"
+  mkdir -p "$MIGDIR"
+  npx prisma migrate diff \
+    --from-url "$DATABASE_URL" \
+    --to-schema-datamodel prisma/schema.prisma \
+    --script > "$MIGDIR/migration.sql"
+
+  # 3. Aplicar
+  npx prisma migrate deploy
+
+  # 4. Regenerar cliente
+  npx prisma generate
+  ```
+- `migrate reset --force` también funciona después en sesiones posteriores (datos siguen siendo de prueba).
+
+#### Seed (`backend/prisma/seed.js`) — reescrito
+- 6 usuarios (todos password `aeromx123`). Ver tabla "Usuarios de prueba" más abajo.
+- 4 modelos (uno por tipo): Cessna 172S, F-350 Super Duty, XQ60, LiDAR VLP-16.
+- 4 productos (uno por tipo): `XB-ABC` (aeronave), `MX-CAM-001` (camión), `PE-001` (planta), `SE-001` (sensor) — cada uno con su detalle correspondiente.
+- 4 formatos:
+  - **aeronave** · "Mantenimiento Menor" — las 14 secciones reales con 106 puntos (igual que antes).
+  - **camion** · "Inspección Preventiva" — 1 sección (Motor) con 3 puntos.
+  - **planta** · "Mantenimiento de Horímetro 100h" — 1 sección con 3 puntos.
+  - **sensor** · "Calibración y Verificación" — 1 sección con 2 puntos.
+
+#### Middleware y auth
+- `backend/src/middleware/auth.js` — `requireRole` hace **bypass total** si `req.user.superusuario === true`.
+- `backend/src/services/authService.js` — `findUserByEmail` ahora devuelve `superusuario`, y `generateToken` lo incluye en el payload del JWT.
+
+#### `.env`
+- **JWT_SECRET rotado** a 96 chars random. Cualquier token JWT emitido antes del rediseño ya no validará — los usuarios deben volver a hacer login. Esto era necesario porque los tokens viejos llevan `rol: 'supervisor'` que ya no existe en el enum.
+
+#### Verificación post-Fase A (todos pasan)
+- `grep -q "enum TipoProducto" prisma/schema.prisma` → ✅
+- `SELECT tipo_producto, COUNT(*) FROM productos GROUP BY tipo_producto` → ✅ 1 fila por cada uno de los 4 tipos.
+- Seed corre limpio (`npm run db:seed`) sin errores.
+
+#### Lo que NO se tocó en Sesión 10 (queda para fases siguientes)
+- ❌ `backend/src/controllers/ordenesController.js` (1101 líneas — se modulariza en Fase B)
+- ❌ `backend/src/services/ordenesService.js`, `aeronavesService.js`, `formatosService.js`, `modelosService.js`
+- ❌ `backend/src/routes/*.js` (excepto el implícito de auth)
+- ❌ `backend/src/controllers/*.js` (excepto auth)
+- ❌ Todo el frontend (Fases C/D)
+- ❌ El PDF (`backend/src/pdf/markdown.js`)
+
+#### Usuarios de prueba (Sesión 10+) — todos con password `aeromx123`
+| Email | Rol | Superusuario |
+|---|---|:-:|
+| `dev@aeromx.com` | gerente_soporte | ✅ |
+| `gerente@aeromx.com` | gerente_soporte | ❌ |
+| `ingeniero@aeromx.com` | ingeniero_soporte | ❌ |
+| `tecnico@aeromx.com` | tecnico_soporte | ❌ |
+| `mecanico@aeromx.com` | mecanico | ❌ |
+| `piloto@aeromx.com` | piloto | ❌ |
+
+#### Productos de prueba creados
+| Tipo | Identificador | Modelo | Detalle |
+|---|---|---|---|
+| aeronave | `XB-ABC` | Cessna 172S | horasTotales=1250.5 |
+| camion | `MX-CAM-001` | F-350 Super Duty | placas=MX-CAM-001, vin=1FT8W3DT5KEE12345, odometro=84200 |
+| planta | `PE-001` | XQ60 | horimetro=320 |
+| sensor | `SE-001` | LiDAR VLP-16 | versionFirmware=3.2.1, fechaCalibracion=2026-01-15 |
+
 ## ⚠️ Regeneración del cliente Prisma (obligatorio tras pull)
 
 Cada sesión agrega campos al `schema.prisma`. Si al correr el backend ves
@@ -473,9 +568,160 @@ npx prisma db push
 
 Luego reinicia `npm run dev`.
 
-### Siguiente paso — Sesión 10+
-1. **Fase 2 — Operaciones**: Dashboard de flota con alertas de vencimiento, asignación automática por carga de trabajo.
-2. **Fase 3 — Gestión**: Inventario de partes, reportes y estadísticas, notificaciones email/push.
-3. **Pruebas UAT**: Con usuarios reales en flota (técnicos en rampa, supervisores en oficina).
-4. **Limpieza técnica**: revisar `backend/uploads/`, agregar `.gitignore`, auditoría de seguridad, rate-limit, input sanitization.
-5. **Roadmap de despliegue**: backend/DB estable, UI en ajuste (vistas recién entregadas), funcionalidad en ajuste (firma/descarga separados), seguridad estable.
+### Cambios en Sesión 11 — Fase B completada (backend multiproducto)
+**Fecha:** 2026-05-21 | **Rama:** `development` | **Estado:** Fase B done · backend funcional para los 4 tipos
+
+#### Modularización de `ordenesController.js`
+- Nuevo `backend/src/middleware/upload.js` (multer extraído desde `routes/ordenes.js`).
+- Nueva carpeta `backend/src/controllers/ordenes/` con 6 sub-controllers:
+  - `ordenesController.js` — listar, obtener, crear, actualizarEstado
+  - `workflowController.js` — recepcionar, iniciarMantenimiento, asignar, archivar, eliminar, **reabrir** (nuevo)
+  - `resultadosController.js` — actualizar, firmar
+  - `fotosController.js` — subir, eliminar
+  - `cierreController.js` — gestionar, firmar
+  - `pdfController.js` — generar (con `RENDER_POR_TIPO` y firmas condicionales)
+- `routes/ordenes.js` reescrito como router índice limpio.
+- `backend/src/controllers/ordenesController.js` viejo **eliminado**.
+- `recepcionarAeronave` renombrado a `recepcionar`.
+- `verificarPermisoEdicion` ahora considera asignado a soporte/auxiliar/mecánico/gerente (5 slots) y respeta superusuario.
+
+#### `productos*` reemplazan a `aeronaves*`
+- Nuevo `backend/src/services/productosService.js` con dispatcher por tipo: maneja `aeronave`/`camion`/`planta`/`sensor` y CRUD de `*Detalle` 1:1.
+- Nuevo `controllers/productosController.js` + `routes/productos.js` registrado en `index.js`.
+- Eliminados: `services/aeronavesService.js`, `controllers/aeronavesController.js`, `routes/aeronaves.js`.
+- Endpoints: `GET /api/productos?tipoProducto=camion&activo=true`, `GET /api/productos/:id` (incluye detalle), `POST/PUT/DELETE`.
+- Body de POST: `{ tipoProducto, modeloId, identificador, numeroSerie, detalle: {…} }`. `detalle` se valida por tipo (placas obligatorias en camión, etc.).
+
+#### Servicios adaptados al schema multiproducto
+- `modelosService.js`: usa `prisma.modelo` (no `modeloAeronave`), acepta filtro `tipoProducto`, valida tipo al crear, devuelve `_count.productos`.
+- `formatosService.js`: `listarFormatos` acepta `{ tipoProducto, soloActivos }`. `crearFormato` valida `tipoProducto`.
+- `usuariosService.js`: `ROLES_VALIDOS` ahora son los 5 nuevos roles. Acepta y persiste el flag `superusuario` (booleano, default false).
+
+#### `ordenesService.js` reescrito
+- `crearOrden(data)` valida coherencia `formato.tipoProducto === producto.tipoProducto` (400 si no), y las 4-5 asignaciones obligatorias:
+  - `soporteId`: rol ∈ {tecnico_soporte, ingeniero_soporte} — obligatorio.
+  - `mecanicoId`, `gerenteId`: obligatorios con rol correspondiente.
+  - `pilotoId`: obligatorio solo si tipo=aeronave, prohibido en otros.
+  - `ingenieroAuxiliarId`: opcional, solo si soporte es técnico (rechaza si soporte es ingeniero).
+  - Cada FK debe ser usuario activo con el rol esperado.
+- `iniciarMantenimiento(id, lecturas)` ahora exige la lectura correspondiente al tipo:
+  - aeronave → `horasTotales` (motor der/izq opcionales)
+  - camión → `odometro`
+  - planta → `horimetro`
+  - sensor → ninguna
+- `registrarRecepcion(id, { identificadorConfirmado })` valida contra `producto.identificador` (antes contra matrícula).
+- `asignarOrden(id, parcial)` fusiona con la asignación actual y revalida coherencia antes de aplicar.
+- **Nuevo `reabrirOrden(id, { motivo, usuarioId })`**: borra firmas del cierre, devuelve estado a `pendiente_firma`, limpia `fechaCierre`, registra evento en `historial_estados_ot`. Motivo obligatorio.
+- `firmarCierre(ordenId, usuarioId)`: el slot a firmar se infiere del rol del usuario (gerente → gerente, técnico/ingeniero → soporte/auxiliar, piloto → piloto). Solo el usuario asignado al slot puede firmar (o superusuario). Aeronave requiere 3 firmas para cerrar; resto requiere 2. Al cerrar:
+  - Sincroniza lecturas al `*Detalle` del producto (solo si la nueva ≥ la actual, no permite retroceso).
+  - Registra el cambio de estado en `historial_estados_ot`.
+- `eliminarOrden` ahora también borra `historial_estados_ot` en cascada.
+
+#### PDF dinámico por tipo (`controllers/ordenes/pdfController.js`)
+- `filasDatosProducto(orden)` genera el bloque "Datos del producto" según `tipoProducto`:
+  - aeronave: matrícula + modelo + serie + 3 columnas de horas
+  - camión: placas + VIN + serie + odómetro
+  - planta: serie + modelo + horímetro
+  - sensor: serie + modelo + fabricante + firmware + fecha de calibración
+- `renderPersonal` ahora dibuja 4-5 cards: SOPORTE, INGENIERO AUXILIAR (si hay), MECÁNICO, GERENTE, PILOTO (si aeronave).
+- `drawFirmas` pinta 3 cajas para aeronave (soporte + gerente + piloto) y 2 para el resto.
+- Encabezado del PDF usa `producto.identificador` en lugar de `aeronave.matricula`.
+- Compatibilidad: el renderer viejo `datos_aeronave` queda como alias de `datos_producto` para no romper formatos con secuencia guardada.
+
+#### Permisos (routes)
+- `requireRole(['supervisor','ingeniero'])` → `requireRole(['gerente_soporte','ingeniero_soporte'])` en todos los routes de `productos`, `modelos`, `formatos` y `ordenes` (escritura).
+- **Excepción**: `routes/usuarios.js` solo permite escritura a `gerente_soporte` (no a ingeniero), conforme §2.3 del doc.
+- `verifyToken` y `requireRole` ya tenían bypass por `superusuario`; los superusuarios pasan todos los checks.
+
+#### Smoke test (cURL/Python en `tmp-smoke/`)
+- Reset BD + seed limpio (6 usuarios, 4 productos, 4 formatos).
+- Login con `dev@aeromx.com` (superusuario) → JWT.
+- Para cada uno de los 4 tipos (aeronave, camión, planta, sensor):
+  1. POST `/api/ordenes` con asignaciones completas (soporte=técnico, auxiliar=ingeniero, mecánico, gerente, +piloto si aeronave).
+  2. POST `/recepcion` validando `identificador`.
+  3. POST `/iniciar-mantenimiento` con la lectura del tipo (aeronave: 1300h, camión: 85000km, planta: 350h, sensor: nada).
+  4. PATCH todos los puntos con `completado:true`, `estadoResultado:'bueno'`.
+  5. POST `/cierre` con `seEncontroDefecto:false`.
+  6. POST `/cierre/firmar` haciendo login como cada usuario asignado al slot (técnico para soporte, gerente para gerente, piloto para piloto).
+  7. Verificar estado=`cerrada` y descargar PDF (`Content-Type: application/pdf`, header `%PDF-`).
+- Reapertura: POST `/reabrir` sobre la O/T de aeronave con `motivo` → estado vuelve a `pendiente_firma`, las 3 firmas se borran, `historial_estados_ot` registra 2 entradas (cierre por firmas + reapertura).
+- Sincronización de lecturas al cerrar: aeronave 1250.5 → 1300, camión 84200 → 85000, planta 320 → 350. ✓
+
+#### Smoke test PASS ✅
+Los 5 PDFs generados quedaron en `tmp-smoke/OT-*.pdf` (52-68 KB). Esta carpeta es scratch — se puede borrar.
+
+#### Lo que NO se tocó en Sesión 11 (queda para Fase C/D/E)
+- ❌ Todo el frontend (`frontend/src/**`). Tira 404s contra el backend porque sigue llamando a `/api/aeronaves`, manda `aeronaveId`/`tecnicoId`/`supervisorId` al crear O/T, no envía mecánico ni piloto, etc.
+- ❌ `frontend/src/api/aeronavesService.js` aún existe (lo elimina Fase C).
+
+#### Sesiones siguientes
+- **Sesión 12 = Fase C** — Frontend catálogos: `ProductosPage` con tabs, `ModelosPage`/`FormatosPage` con tabs, `Header` con visibilidad por rol, `UsuariosPage` con superusuario.
+- **Sesión 13 = Fase D** — Frontend O/T: `CrearOTPage` con selector de tipo + 4-5 selectores de asignación, `InspeccionPage` con lecturas según tipo + sección historial, `CierreOTPage` con slot piloto si aeronave, `DashboardPage` con botón Reabrir.
+- **Sesión 14 = Fase E** — Pulido y QA final.
+
+### Sesión 11 — Setup verificado
+```bash
+cd aeromx
+docker compose up -d                           # Postgres :5433 + MinIO
+cd backend
+npx prisma migrate deploy                       # OK (5 migraciones aplicadas)
+npm run db:seed                                 # 6 usuarios + 4 productos + 4 formatos
+npm run dev                                     # API en :3001
+# Smoke test:
+cd ../../tmp-smoke
+python smoke.py                                 # ✅ pasa los 4 tipos + reapertura
+```
+
+### Cambios en Sesión 12 — Fase C completada (frontend catálogos por tipo + permisos)
+**Fecha:** 2026-05-21 | **Rama:** `development` | **Estado:** Fase C done · catálogos UI multiproducto funcionando
+
+> Esta sesión ejecutó la **Fase C** del plan en [`aeromx/docs/ARQUITECTURA-MULTIPRODUCTO.md`](aeromx/docs/ARQUITECTURA-MULTIPRODUCTO.md). El frontend de catálogos ya habla con el backend multiproducto. Las páginas de O/T siguen rotas a propósito hasta Fase D.
+
+#### Fundacional
+- `frontend/src/tokens/design.js`: `ROL_LABELS`/`ROL_COLOR` reescritos con los **5 roles nuevos** (`gerente_soporte`, `ingeniero_soporte`, `tecnico_soporte`, `mecanico`, `piloto`). Nuevos exports: `ROLES` (lista para selects), `TIPO_PRODUCTO` (label/ícono/color por tipo) y `TIPOS_PRODUCTO`.
+- **Backend `authController.js`**: `superusuario` ahora viaja en la respuesta de `POST /api/auth/login` (objeto `user`) y `GET /api/auth/me`. Antes solo iba en el JWT; sin esto el frontend no podía aplicar permisos de superusuario. (Ajuste mínimo necesario, no contemplado originalmente en el plan de Fase C.)
+
+#### API frontend
+- **Nuevo** `frontend/src/api/productosService.js` (listar/obtener/crear/actualizar/desactivar contra `/api/productos`). POST/PUT envían `detalle:{…}` según tipo.
+- **Eliminados** `frontend/src/api/aeronavesService.js` y `frontend/src/pages/AeronavesPage.jsx`.
+- `modelosService.listar` y `formatosService.listar` ahora aceptan `{ tipoProducto }` como query param.
+
+#### Páginas / componentes
+- **Nuevo** `frontend/src/pages/ProductosPage.jsx` (reemplaza `AeronavesPage`): pestañas por tipo persistidas en query string (`?tipo=`), tabla con columna "Detalle" dinámica por tipo, y un `FormularioProducto` que muta sus campos según el tipo (aeronave: horas; camión: placas\*/vin/odómetro; planta: horímetro; sensor: fabricante/firmware/fecha calibración). Envía `{ tipoProducto, modeloId, identificador, numeroSerie, detalle }`.
+- `ModelosPage.jsx`: tabs por tipo, `listar({ tipoProducto })`, `crear` inyecta `tipoProducto` del tab activo, `_count.aeronaves` → `_count.productos`, permiso `puedeEditar` (gerente/ingeniero/super).
+- `FormatosPage.jsx`: tabs por tipo, `listar({ tipoProducto })`, `crear` inyecta `tipoProducto`. `esSupervisor` redefinido a gerente/ingeniero/super.
+- `FlotaPage.jsx`: reescrita — tabs por tipo, usa `productosService`, agrupa O/T por `productoId`, muestra `identificador` y detalle por tipo; el resumen de O/T usa `soporte`/`gerente` (antes `tecnico`/`supervisor`).
+- `UsuariosPage.jsx`: filtros y selector de rol generados desde `ROLES` (5 valores), checkbox **⚡ Superusuario** en el form (se persiste vía `superusuario` en el body), badge "⚡ Super" en la tabla. Permiso de página: gerente_soporte o superusuario.
+- `Header.jsx`: link "Aeronaves" → "Productos" (`/productos`); visibilidad por rol — catálogos (Productos/Modelos/Formatos) para gerente/ingeniero/super, Usuarios solo gerente/super, Flota/Órdenes para todos.
+- `App.jsx`: ruta `/productos` reemplaza `/aeronaves`.
+
+#### Ajuste mínimo fuera de alcance (para no romper el build)
+- `CrearOTPage.jsx` importaba el `aeronavesService` eliminado → se cambió **solo** el import y la llamada a `productosService.listar()`. Su lógica completa (envía `aeronaveId`/`tecnicoId`/`supervisorId`, roles viejos) sigue siendo **Fase D** y está rota en runtime, como estaba previsto.
+
+#### Verificación
+- `npm run build` (Vite) del frontend: ✅ 120 módulos transformados, sin errores de imports.
+- Grep de seguridad: no quedan referencias a `aeronavesService`/`AeronavesPage`/`_count.aeronaves`/`/aeronaves` en archivos de Fase C. Los `'supervisor'`/`rol === 'tecnico'` restantes viven solo en `CrearOTPage`/`CierreOTPage`/`DashboardPage`/`InspeccionPage` (Fase D).
+
+#### Lo que NO se tocó en Sesión 12 (queda para Fase D/E)
+- ❌ `CrearOTPage` (salvo el import), `InspeccionPage`, `CierreOTPage`, `DashboardPage`, `frontend/src/api/ordenesService.js`. Siguen rotas contra el backend nuevo.
+
+### Siguiente paso — Sesión 13 = **Fase D** (frontend O/T multiproducto)
+
+> **Antes de empezar**: leer §2.2, §6.4 y §7.4 de [`aeromx/docs/ARQUITECTURA-MULTIPRODUCTO.md`](aeromx/docs/ARQUITECTURA-MULTIPRODUCTO.md). Verificar §0.2 — Fases A, B y C deberían estar done.
+
+**Setup inicial de la sesión** (no destructivo, solo verifica):
+```bash
+cd aeromx
+docker compose ps                              # postgres :5433 + minio :9000/9001
+cd backend && npm run dev                       # API en :3001
+cd ../frontend && npm run build                 # debería pasar (Fase C verde)
+```
+
+**Plan de Fase D** (O/T multiproducto en UI + reapertura):
+- **Fase D**: `CrearOTPage` con selector de tipo (carga modelos/productos/formatos del tipo) + sección de asignación con 4-5 selectores (`soporteId`, `ingenieroAuxiliarId` condicional, `mecanicoId`, `gerenteId`, `pilotoId` si aeronave) — quitar inputs de horas. `InspeccionPage` con panel "Iniciar mantenimiento" que pide lecturas según tipo + header dinámico + sección "Historial de estados". `CierreOTPage` con slot de firma de piloto si aeronave. `DashboardPage` con `identificador` correcto + botón "Reabrir" (gerente) + modal de motivo. `ordenesService.js` adaptado (endpoint `reabrir`, body de `crear`).
+- **Fase E**: pulido (copy, validaciones, etiquetas, actualizar este CLAUDE.md con resumen final).
+
+**Notas vigentes (NO borrar — siguen aplicando)**:
+- ⚠️ Ya no existen los roles `tecnico/ingeniero/supervisor` — solo `gerente_soporte/ingeniero_soporte/tecnico_soporte/mecanico/piloto`. Cualquier referencia hardcoded en frontend rompe.
+- ⚠️ El JWT ahora lleva `superusuario: boolean` en el payload. Aprovecharlo en el frontend para mostrar/ocultar acciones administrativas.
+- 💡 Token de prueba con superusuario: login `dev@aeromx.com / aeromx123`.

@@ -74,10 +74,16 @@ export async function actualizarSecuencia(formatoId, secuencia) {
 
 // ─── Formatos ───────────────────────────────────────────────────────────────
 
-export function listarFormatos(soloActivos = true) {
+const TIPOS_VALIDOS = ['aeronave', 'camion', 'planta', 'sensor']
+
+export function listarFormatos({ soloActivos = true, tipoProducto } = {}) {
+  const where = {}
+  if (soloActivos) where.activo = true
+  if (tipoProducto) where.tipoProducto = tipoProducto
+
   return prisma.formato.findMany({
-    where: soloActivos ? { activo: true } : {},
-    orderBy: { nombre: 'asc' },
+    where,
+    orderBy: [{ tipoProducto: 'asc' }, { nombre: 'asc' }],
     include: {
       secciones: {
         orderBy: { orden: 'asc' },
@@ -105,6 +111,12 @@ export function obtenerFormato(id) {
 }
 
 export function crearFormato(data) {
+  if (!TIPOS_VALIDOS.includes(data.tipoProducto)) {
+    throw Object.assign(
+      new Error(`tipoProducto inválido. Debe ser uno de: ${TIPOS_VALIDOS.join(', ')}`),
+      { code: 'BAD_INPUT' },
+    )
+  }
   return prisma.formato.create({ data })
 }
 

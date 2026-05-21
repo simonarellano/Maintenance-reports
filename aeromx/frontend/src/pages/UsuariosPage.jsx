@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Header } from '../components/Header'
 import { usuariosService } from '../api/usuariosService'
 import { useAuthStore } from '../store/authStore'
-import { T, ROL_LABELS, ROL_COLOR } from '../tokens/design'
+import { T, ROL_LABELS, ROL_COLOR, ROLES } from '../tokens/design'
 import {
   Btn, BtnSm, Card, ErrorBanner, Field, FieldSelect, Hdr, Pill, Spinner,
 } from '../components/ui'
@@ -11,7 +11,9 @@ import {
 export default function UsuariosPage() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
-  const esSupervisor = user?.rol === 'supervisor'
+  const esSuper = user?.superusuario === true
+  // Gestión de usuarios: solo gerente de soporte o superusuario.
+  const esSupervisor = esSuper || user?.rol === 'gerente_soporte'
 
   const [usuarios, setUsuarios] = useState([])
   const [loading, setLoading] = useState(true)
@@ -90,7 +92,7 @@ export default function UsuariosPage() {
           </div>
         </div>
         <p style={{ color: T.sub, fontSize: 13, marginTop: -8, marginBottom: 20 }}>
-          Gestión de cuentas de técnicos, ingenieros y supervisores
+          Gestión de cuentas: gerentes, ingenieros, técnicos, mecánicos y pilotos
         </p>
 
         <ErrorBanner onClose={() => setError('')}>{error}</ErrorBanner>
@@ -103,9 +105,7 @@ export default function UsuariosPage() {
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {[
                 { v: 'todos', label: 'Todos' },
-                { v: 'tecnico', label: 'Técnicos' },
-                { v: 'ingeniero', label: 'Ingenieros' },
-                { v: 'supervisor', label: 'Supervisores' },
+                ...ROLES.map((r) => ({ v: r, label: ROL_LABELS[r] })),
               ].map((opt) => {
                 const active = filtroRol === opt.v
                 return (
@@ -184,7 +184,10 @@ export default function UsuariosPage() {
                           <span style={{ color: T.sub, fontSize: 12 }}>{u.email}</span>
                         </Td>
                         <Td>
-                          <Pill small label={ROL_LABELS[u.rol]} color={rolColor.c} bg={rolColor.bg} />
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <Pill small label={ROL_LABELS[u.rol] || u.rol} color={rolColor.c} bg={rolColor.bg} />
+                            {u.superusuario && <Pill small label="⚡ Super" color={T.amber} bg={T.aD} />}
+                          </div>
                         </Td>
                         <Td>
                           <span style={{ fontFamily: T.mono, fontSize: 12, color: T.sub }}>
@@ -252,12 +255,13 @@ function Td({ children, align }) {
 function FormularioUsuario({ inicial, onCancelar, onGuardar }) {
   const [nombre, setNombre] = useState(inicial?.nombre || '')
   const [email, setEmail] = useState(inicial?.email || '')
-  const [rol, setRol] = useState(inicial?.rol || 'tecnico')
+  const [rol, setRol] = useState(inicial?.rol || 'tecnico_soporte')
   const [licenciaNum, setLicenciaNum] = useState(inicial?.licenciaNum || '')
   const [telefono, setTelefono] = useState(inicial?.telefono || '')
   const [password, setPassword] = useState('')
   const [passwordConfirm, setPasswordConfirm] = useState('')
   const [activo, setActivo] = useState(inicial?.activo ?? true)
+  const [superusuario, setSuperusuario] = useState(inicial?.superusuario ?? false)
   const [saving, setSaving] = useState(false)
   const [errorLocal, setErrorLocal] = useState('')
 
@@ -283,6 +287,7 @@ function FormularioUsuario({ inicial, onCancelar, onGuardar }) {
         nombre: nombre.trim(),
         email: email.trim().toLowerCase(),
         rol,
+        superusuario,
         licenciaNum: licenciaNum.trim() || null,
         telefono: telefono.trim() || null,
       }
@@ -323,11 +328,7 @@ function FormularioUsuario({ inicial, onCancelar, onGuardar }) {
             required
             value={rol}
             onChange={setRol}
-            options={[
-              { value: 'tecnico',    label: 'Técnico' },
-              { value: 'ingeniero',  label: 'Ingeniero' },
-              { value: 'supervisor', label: 'Supervisor' },
-            ]}
+            options={ROLES.map((r) => ({ value: r, label: ROL_LABELS[r] }))}
           />
           <Field label="Licencia" value={licenciaNum} onChange={setLicenciaNum} placeholder="TEC-123" mono />
           <Field label="Teléfono" type="tel" value={telefono} onChange={setTelefono} />
@@ -354,20 +355,34 @@ function FormularioUsuario({ inicial, onCancelar, onGuardar }) {
           />
         </div>
 
-        {inicial && (
+        <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+          {inicial && (
+            <label style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              fontSize: 13, color: T.sub, cursor: 'pointer',
+            }}>
+              <input
+                type="checkbox"
+                checked={activo}
+                onChange={(e) => setActivo(e.target.checked)}
+                style={{ width: 16, height: 16 }}
+              />
+              Usuario activo
+            </label>
+          )}
           <label style={{
             display: 'flex', alignItems: 'center', gap: 8,
-            fontSize: 13, color: T.sub, cursor: 'pointer',
-          }}>
+            fontSize: 13, color: T.amber, cursor: 'pointer',
+          }} title="Hace bypass de cualquier verificación de rol">
             <input
               type="checkbox"
-              checked={activo}
-              onChange={(e) => setActivo(e.target.checked)}
+              checked={superusuario}
+              onChange={(e) => setSuperusuario(e.target.checked)}
               style={{ width: 16, height: 16 }}
             />
-            Usuario activo
+            ⚡ Superusuario (acceso administrativo total)
           </label>
-        )}
+        </div>
 
         <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
           <Btn variant="ghost" label="Cancelar" onClick={onCancelar} style={{ flex: 1 }} />

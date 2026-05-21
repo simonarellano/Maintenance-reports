@@ -2,8 +2,8 @@ import client from './client'
 
 export const formatosService = {
   // Formatos
-  listar: () =>
-    client.get('/formatos'),
+  listar: (params) =>
+    client.get('/formatos', { params }),
 
   obtener: (id) =>
     client.get(`/formatos/${id}`),

@@ -6,7 +6,7 @@ import path from 'path'
 import authRoutes from './routes/auth.js'
 import usuariosRoutes from './routes/usuarios.js'
 import modelosRoutes from './routes/modelos.js'
-import aeronavesRoutes from './routes/aeronaves.js'
+import productosRoutes from './routes/productos.js'
 import formatosRoutes from './routes/formatos.js'
 import ordenesRoutes from './routes/ordenes.js'
 
@@ -25,7 +25,7 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')))
 app.use('/api/auth', authRoutes)
 app.use('/api/usuarios', usuariosRoutes)
 app.use('/api/modelos', modelosRoutes)
-app.use('/api/aeronaves', aeronavesRoutes)
+app.use('/api/productos', productosRoutes)
 app.use('/api/formatos', formatosRoutes)
 app.use('/api/ordenes', ordenesRoutes)
 

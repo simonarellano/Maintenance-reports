@@ -9,7 +9,7 @@ import CrearOTPage from './pages/CrearOTPage'
 import InspeccionPage from './pages/InspeccionPage'
 import CierreOTPage from './pages/CierreOTPage'
 import ModelosPage from './pages/ModelosPage'
-import AeronavesPage from './pages/AeronavesPage'
+import ProductosPage from './pages/ProductosPage'
 import UsuariosPage from './pages/UsuariosPage'
 import FlotaPage from './pages/FlotaPage'
 import FormatosPage from './pages/FormatosPage'
@@ -74,10 +74,10 @@ function App() {
           }
         />
         <Route
-          path="/aeronaves"
+          path="/productos"
           element={
             <ProtectedRoute>
-              <AeronavesPage />
+              <ProductosPage />
             </ProtectedRoute>
           }
         />

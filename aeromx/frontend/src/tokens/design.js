@@ -49,15 +49,32 @@ export const PUNTO_STATUS = {
   requiere_atencion:   { label: 'Req. Atención',     c: T.red,   bg: T.rD },
 }
 
-// Roles de usuario
+// Roles de usuario (rediseño multiproducto — 5 roles funcionales)
 export const ROL_LABELS = {
-  tecnico:    'Técnico',
-  ingeniero:  'Ingeniero',
-  supervisor: 'Supervisor',
+  gerente_soporte:   'Gerente de soporte',
+  ingeniero_soporte: 'Ingeniero de soporte',
+  tecnico_soporte:   'Técnico de soporte',
+  mecanico:          'Mecánico',
+  piloto:            'Piloto',
 }
 
 export const ROL_COLOR = {
-  tecnico:    { c: T.cyan,   bg: T.cD },
-  ingeniero:  { c: T.purple, bg: T.pD },
-  supervisor: { c: T.amber,  bg: T.aD },
+  gerente_soporte:   { c: T.amber,  bg: T.aD },
+  ingeniero_soporte: { c: T.purple, bg: T.pD },
+  tecnico_soporte:   { c: T.cyan,   bg: T.cD },
+  mecanico:          { c: T.green,  bg: T.gD },
+  piloto:            { c: T.text,   bg: T.s2 },
 }
+
+// Lista de roles para selectores de formularios
+export const ROLES = Object.keys(ROL_LABELS)
+
+// Tipos de producto (multiproducto) → label, color, ícono y orden de pestañas
+export const TIPO_PRODUCTO = {
+  aeronave: { label: 'Aeronave',         icon: '✈', c: T.cyan,   bg: T.cD },
+  camion:   { label: 'Camión',           icon: '🚚', c: T.amber,  bg: T.aD },
+  planta:   { label: 'Planta de energía', icon: '⚡', c: T.green,  bg: T.gD },
+  sensor:   { label: 'Sensor',           icon: '📡', c: T.purple, bg: T.pD },
+}
+
+export const TIPOS_PRODUCTO = Object.keys(TIPO_PRODUCTO)

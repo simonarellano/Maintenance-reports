@@ -34,16 +34,18 @@ export async function login(req, res) {
       nombre: user.nombre,
       email: user.email,
       rol: user.rol,
+      superusuario: !!user.superusuario,
       licenciaNum: user.licenciaNum,
     },
   })
 }
 
 export async function me(req, res) {
-  // req.user viene del middleware verifyToken
+  // req.user viene del middleware verifyToken (payload del JWT)
   return res.json({
     id: req.user.sub,
     email: req.user.email,
     rol: req.user.rol,
+    superusuario: !!req.user.superusuario,
   })
 }

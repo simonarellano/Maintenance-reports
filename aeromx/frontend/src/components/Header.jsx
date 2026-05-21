@@ -24,7 +24,11 @@ export function Header() {
   const location = useLocation()
   const user = useAuthStore((state) => state.user)
   const logout = useAuthStore((state) => state.logout)
-  const esSupervisor = user?.rol === 'supervisor'
+  const esSuper = user?.superusuario === true
+  // Catálogos (productos, modelos, formatos): gerente o ingeniero de soporte.
+  const puedeCatalogos = esSuper || user?.rol === 'gerente_soporte' || user?.rol === 'ingeniero_soporte'
+  // Usuarios: solo gerente de soporte.
+  const puedeUsuarios = esSuper || user?.rol === 'gerente_soporte'
   const isMobile = useIsMobile()
   const [drawerOpen, setDrawerOpen] = useState(false)
 
@@ -48,10 +52,10 @@ export function Header() {
   const links = [
     { to: '/dashboard',  label: 'Órdenes',    show: true },
     { to: '/flota',      label: 'Flota',      show: true },
-    { to: '/aeronaves',  label: 'Aeronaves',  show: esSupervisor },
-    { to: '/modelos',    label: 'Modelos',    show: esSupervisor },
-    { to: '/formatos',   label: 'Formatos',   show: esSupervisor },
-    { to: '/usuarios',   label: 'Usuarios',   show: esSupervisor },
+    { to: '/productos',  label: 'Productos',  show: puedeCatalogos },
+    { to: '/modelos',    label: 'Modelos',    show: puedeCatalogos },
+    { to: '/formatos',   label: 'Formatos',   show: puedeCatalogos },
+    { to: '/usuarios',   label: 'Usuarios',   show: puedeUsuarios },
   ].filter((l) => l.show)
 
   const initials = (user?.nombre || user?.email || '?')
