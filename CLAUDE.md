@@ -817,16 +817,6 @@ cd ../frontend && npm run dev             # UI :5173 — login dev@aeromx.com / 
 - Órdenes nuevas creadas en QA: `OT-...-0009` (aeronave, con foto), `0010` (camión), `0011` (planta), `0012` (sensor) — todas `cerrada`.
 - PDFs de QA quedaron en `/tmp/qa-pdfs/` (scratch, se puede borrar).
 
-### Siguiente paso — Sesión 15 = **Roadmap original Fase 2+**
-
-> El rediseño multiproducto (Fases A-E) está **completo y verificado de punta a punta** (API + navegador). El fix de firma de críticos ya está commiteado (`4822c24`, Sesión 15).
-
-**Retomar Roadmap (Fase 2+):** dashboard de flota avanzado, asignación de técnicos, alertas de vencimiento, inventario de partes, reportes/estadísticas, histórico por producto, modo offline, reportes DGAC.
-
-**Backlog técnico detectado en QA (priorizar cuando aplique):**
-- ✅ ~~**Integración real de almacenamiento (MinIO/S3)** para fotos~~ — **HECHO en Sesión 15** (ver abajo).
-- (Opcional) UI de cierre que liste los puntos críticos pendientes de firma.
-
 ### Cambios en Sesión 15 — Almacenamiento real MinIO/S3 para fotos + commit del fix de críticos
 **Fecha:** 2026-05-22 | **Rama:** `development` | **Estado:** integración de storage completa y verificada (MinIO + driver local)
 
@@ -865,3 +855,36 @@ cd ../frontend && npm run dev             # UI :5173 — login dev@aeromx.com / 
 - `.env` real sigue con `STORAGE_PROVIDER=minio`. Para despliegue AWS: `STORAGE_PROVIDER=s3` + credenciales (o rol IAM).
 - Los 23 archivos siguen también en `backend/uploads/` (no se borraron del disco; ya están en MinIO y el bucket es la fuente al servir con `minio`).
 - Sigue pendiente (opcional): UI de cierre que liste puntos críticos sin firmar.
+
+#### Commits de la sesión (rama `development`)
+- `4822c24` — Fix: firma obligatoria de puntos críticos antes de cerrar.
+- `e8260b6` — Almacenamiento real de fotos en MinIO/S3 (capa de abstracción) + notas de esta sesión en CLAUDE.md.
+
+---
+
+### Siguiente paso — Sesión 16
+
+> **El rediseño de arquitectura (Fases A–E) está 100% completo y verificado** — confirmado contra los checklists de §8 del doc de arquitectura (todos los ítems `[x]`). Lo que queda **NO es arquitectura**: se construye encima de la arquitectura ya estable. Son dos frentes distintos:
+
+**Frente 1 — Pre-despliegue / hardening (el grueso del trabajo restante, ~3–4 sesiones):**
+- ⚠️ La ruta `GET /uploads/:key` es **pública** (igual que el `express.static` previo). Para fotos de mantenimiento sensibles, evaluar exigir auth.
+- ⚠️ Toggle "¿Se encontró defecto?" — duda de QA Sesión 14 sin confirmar (¿persiste el "Sí"?). Verificar en una O/T nueva.
+- Gestión de secretos de producción (rotar `JWT_SECRET`, credenciales S3/IAM fuera del repo).
+- HTTPS, CORS de producción, backups de Postgres + MinIO.
+- Limpieza de datos de prueba → datos reales del cliente.
+- (Opcional) UI de cierre que liste los puntos críticos pendientes de firma.
+
+**Frente 2 — Roadmap original Fase 2+ (features, ~5–8 sesiones; el modo offline es el comodín de riesgo):**
+- Fase 2 Operaciones: dashboard de flota avanzado · asignación de técnicos · alertas de vencimiento.
+- Fase 3 Gestión: inventario de partes · reportes/estadísticas · histórico por producto · notificaciones email/push.
+- Fase 4 Extra: modo offline (PWA sync en rampa) · reportes DGAC · PDF formato oficial.
+
+> **Sugerencia para abrir la Sesión 16:** acordar con el usuario un *checklist de pre-despliegue* (Frente 1) antes de meterse a features de Fase 2+. El usuario tiene pendientes propios en mente que no están todos aquí.
+
+**Setup rápido (verificado en Sesión 15):**
+```bash
+cd aeromx && docker compose up -d        # Postgres :5433 + MinIO :9000/9001
+cd backend && npm run dev                 # API :3001  (revisa GET /api/health primero)
+cd ../frontend && npm run dev             # UI :5173 — login dev@aeromx.com / aeromx123
+```
+> Almacenamiento activo = MinIO (`STORAGE_PROVIDER=minio`). Las 23 fotos previas ya están en el bucket `aeromx-fotos`. Para migrar fotos de disco a un bucket nuevo: `node scripts/migrar-fotos-a-storage.js`.
