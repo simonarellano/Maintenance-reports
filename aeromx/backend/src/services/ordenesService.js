@@ -589,6 +589,16 @@ export async function firmarCierre(ordenId, usuarioId) {
     throw Object.assign(new Error('La orden ya está cerrada'), { code: 'BAD_STATE' })
   }
 
+  // Los puntos críticos deben tener firma individual antes de firmar el cierre.
+  // Esto cubre también el caso de reapertura, donde no se vuelve a pasar por gestionar().
+  const criticos = await verificarCriticosFirmados(ordenId)
+  if (!criticos.completo) {
+    throw Object.assign(
+      new Error(`Faltan ${criticos.faltan} de ${criticos.total} firmas en puntos críticos`),
+      { code: 'BAD_STATE' },
+    )
+  }
+
   const usuario = await prisma.usuario.findUnique({
     where: { id: usuarioId },
     select: { id: true, rol: true, superusuario: true },
@@ -680,4 +690,16 @@ export async function verificarPuntosCompletos(ordenId) {
     prisma.resultadoPunto.count({ where: { ordenId, completado: true } }),
   ])
   return { total, completados, completo: total > 0 && total === completados }
+}
+
+// Los puntos críticos requieren firma digital individual antes de cerrar la O/T.
+// Si el formato no tiene puntos críticos, `completo` es true (no bloquea nada).
+export async function verificarCriticosFirmados(ordenId) {
+  const [total, firmados] = await Promise.all([
+    prisma.resultadoPunto.count({ where: { ordenId, punto: { esCritico: true } } }),
+    prisma.resultadoPunto.count({
+      where: { ordenId, punto: { esCritico: true }, firmadoPor: { not: null } },
+    }),
+  ])
+  return { total, firmados, faltan: total - firmados, completo: total === firmados }
 }
