@@ -1,26 +1,36 @@
 import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
-import { fileURLToPath } from 'url'
-import path from 'path'
 import authRoutes from './routes/auth.js'
 import usuariosRoutes from './routes/usuarios.js'
 import modelosRoutes from './routes/modelos.js'
 import productosRoutes from './routes/productos.js'
 import formatosRoutes from './routes/formatos.js'
 import ordenesRoutes from './routes/ordenes.js'
+import { storage } from './lib/storage/index.js'
 
 dotenv.config()
 
 const app = express()
 const PORT = process.env.PORT || 3000
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 app.use(cors({ origin: process.env.CORS_ORIGIN || '*' }))
 app.use(express.json())
 
-// Archivos estáticos — fotos subidas desde móvil
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')))
+// Fotos de inspección — se sirven vía la capa de almacenamiento (local/MinIO/S3)
+// haciendo stream desde el backend. Así el frontend usa siempre `/uploads/<key>`
+// sin importar el proveedor y sin exponer el bucket.
+app.get('/uploads/:key', async (req, res, next) => {
+  try {
+    const objeto = await storage.getStream(req.params.key)
+    if (!objeto) return res.status(404).json({ error: 'Archivo no encontrado' })
+    res.setHeader('Content-Type', objeto.contentType)
+    if (objeto.contentLength != null) res.setHeader('Content-Length', objeto.contentLength)
+    res.setHeader('Cache-Control', 'private, max-age=3600')
+    objeto.stream.on('error', next)
+    objeto.stream.pipe(res)
+  } catch (e) { next(e) }
+})
 
 app.use('/api/auth', authRoutes)
 app.use('/api/usuarios', usuariosRoutes)
@@ -39,6 +49,10 @@ app.use((err, _req, res, _next) => {
   const status = err.status ?? 500
   res.status(status).json({ error: err.message || 'Error interno del servidor' })
 })
+
+// Prepara el almacenamiento (crea el bucket de MinIO/S3 si falta). No bloquea
+// el arranque: si falla, lo registra y la app sigue (las subidas darán error claro).
+storage.ensureReady().catch((e) => console.error('[storage] ensureReady falló:', e.message))
 
 app.listen(PORT, () => {
   console.log(`AeroMX API corriendo en http://localhost:${PORT}`)

@@ -1,13 +1,9 @@
 import * as svc from '../../services/ordenesService.js'
 import { resolverSecuencia } from '../../services/formatosService.js'
 import { renderMarkdown } from '../../pdf/markdown.js'
+import { storage, keyDesdeUrl } from '../../lib/storage/index.js'
 import fs from 'fs'
 import path from 'path'
-import { fileURLToPath } from 'url'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname  = path.dirname(__filename)
-const UPLOADS_DIR = path.resolve(__dirname, '../../../uploads')
 
 const COMPANY = {
   nombre: 'AEROMX',
@@ -151,7 +147,9 @@ export async function generar(req, res, next) {
     const totales = calcularTotales(orden)
     const secuencia = resolverSecuencia(orden.formato)
     let nextSectionNum = 1
-    const ctx = { M, W: CONTENT_W, nextSectionNum: () => nextSectionNum++, totales }
+    // Pre-cargar los buffers de fotos (async) antes del render síncrono del PDF.
+    const fotosBuffers = await precargarFotos(orden)
+    const ctx = { M, W: CONTENT_W, nextSectionNum: () => nextSectionNum++, totales, fotosBuffers }
     const bloquesPorId = Object.fromEntries((orden.formato.bloquesTexto || []).map((b) => [b.id, b]))
 
     for (const item of secuencia) {
@@ -338,7 +336,7 @@ function renderTrabajos(doc, orden, ctx) {
 function renderFotos(doc, orden, ctx) {
   const hayFotos = (orden.resultados || []).some((r) => (r.fotos || []).length > 0)
   if (!hayFotos) return
-  drawEvidenciaFotografica(doc, orden, ctx.M, ctx.W, `${ctx.nextSectionNum()}. EVIDENCIA FOTOGRÁFICA`)
+  drawEvidenciaFotografica(doc, orden, ctx.M, ctx.W, `${ctx.nextSectionNum()}. EVIDENCIA FOTOGRÁFICA`, ctx.fotosBuffers)
 }
 
 function renderDictamen(doc, orden, ctx) {
@@ -646,20 +644,42 @@ function ensureSpace(doc, needed) {
 
 // ─── Evidencia fotográfica ──────────────────────────────────────────────────
 
+// pdfkit solo embebe PNG y JPEG.
 const EXT_IMG_VALIDAS = new Set(['.png', '.jpg', '.jpeg'])
 
-function resolverArchivoFoto(urlArchivo) {
-  if (!urlArchivo) return null
-  const filename = path.basename(urlArchivo)
-  const abs = path.resolve(UPLOADS_DIR, filename)
-  if (!abs.startsWith(UPLOADS_DIR)) return null
-  if (!fs.existsSync(abs)) return null
-  const ext = path.extname(abs).toLowerCase()
-  if (!EXT_IMG_VALIDAS.has(ext)) return null
-  return abs
+function esImagenEmbebible(urlArchivo) {
+  const ext = path.extname(urlArchivo || '').toLowerCase()
+  return EXT_IMG_VALIDAS.has(ext)
 }
 
-function drawEvidenciaFotografica(doc, orden, M, W, titulo = 'EVIDENCIA FOTOGRÁFICA') {
+// Descarga (async) los buffers de todas las fotos de la orden desde la capa de
+// almacenamiento, para poder embeberlos en el render síncrono del PDF.
+// Devuelve un Map<urlArchivo, Buffer|null> (null = no disponible o formato no soportado).
+async function precargarFotos(orden) {
+  const map = new Map()
+  const urls = []
+  for (const r of orden.resultados || []) {
+    for (const f of r.fotos || []) {
+      if (f.urlArchivo && !map.has(f.urlArchivo)) {
+        map.set(f.urlArchivo, null)
+        urls.push(f.urlArchivo)
+      }
+    }
+  }
+  await Promise.all(
+    urls.map(async (url) => {
+      if (!esImagenEmbebible(url)) return
+      try {
+        const key = keyDesdeUrl(url)
+        const buf = key ? await storage.getBuffer(key) : null
+        if (buf) map.set(url, buf)
+      } catch { /* deja null → placeholder */ }
+    }),
+  )
+  return map
+}
+
+function drawEvidenciaFotografica(doc, orden, M, W, titulo = 'EVIDENCIA FOTOGRÁFICA', fotosBuffers = new Map()) {
   const resultadosPorPunto = Object.fromEntries(orden.resultados.map((r) => [r.puntoId, r]))
   const grupos = []
   for (const seccion of orden.formato.secciones) {
@@ -692,7 +712,7 @@ function drawEvidenciaFotografica(doc, orden, M, W, titulo = 'EVIDENCIA FOTOGRÁ
     let rowY = doc.y
     for (let i = 0; i < g.resultado.fotos.length; i++) {
       const foto = g.resultado.fotos[i]
-      const archivo = resolverArchivoFoto(foto.urlArchivo)
+      const buffer = fotosBuffers.get(foto.urlArchivo) || null
 
       if (col === 0) {
         ensureSpace(doc, CELL_H + 6)
@@ -702,9 +722,9 @@ function drawEvidenciaFotografica(doc, orden, M, W, titulo = 'EVIDENCIA FOTOGRÁ
 
       doc.lineWidth(0.5).strokeColor(COLOR.border).rect(x, rowY, CELL_W, IMG_H).stroke()
 
-      if (archivo) {
+      if (buffer) {
         try {
-          doc.image(archivo, x + 2, rowY + 2, {
+          doc.image(buffer, x + 2, rowY + 2, {
             fit: [CELL_W - 4, IMG_H - 4],
             align: 'center', valign: 'center',
           })

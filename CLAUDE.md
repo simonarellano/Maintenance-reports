@@ -781,17 +781,87 @@ cd ../frontend && npm run dev             # UI :5173 — login dev@aeromx.com / 
 ```
 > El backend suele quedar corriendo vía nodemon entre sesiones. Antes de `npm run dev` revisa `GET /api/health` o `Get-CimInstance Win32_Process -Filter "name='node.exe'"`.
 
-### Siguiente paso — Sesión 14 = **QA visual + cierre del rediseño**
+### Cambios en Sesión 14 — QA visual e2e + fix de firma de puntos críticos · REDISEÑO CERRADO
+**Fecha:** 2026-05-21 | **Rama:** `development` | **Estado:** QA navegador completo (4 tipos) · 1 bug encontrado y arreglado
 
-> El rediseño multiproducto (Fases A-E) está **completo y verificado a nivel API**. Lo que queda es **QA en navegador** (lo único que el smoke no cubre) y luego retomar el Roadmap original.
+> QA manual guiado en navegador (el usuario maneja la UI, Claude verifica en vivo contra Postgres + archivos de `uploads/`). Cubrió lo que el smoke por API no cubría: visibilidad por rol, flujo completo en pantalla, revisión visual de PDFs y fotos.
 
-**Checklist de QA manual en navegador** (login `dev@aeromx.com / aeromx123`, y probar también con `tecnico@`, `gerente@`, `piloto@`, `ingeniero@`):
-- [ ] **`CrearOTPage`**: pestañas de tipo cambian formatos/productos; **ingeniero auxiliar** visible solo si soporte = técnico; **piloto** visible/obligatorio solo en aeronave; confirmar que `ingeniero_soporte` también puede crear.
-- [ ] **`InspeccionPage`**: `IniciarPanel` pide la lectura correcta por tipo; header con identificador/badge; **Historial de estados** desplegable; modal de reasignación de 5 slots (solo gerente/super).
-- [ ] **`CierreOTPage`**: el bloque de firma aparece **solo** para el usuario del slot pendiente; 3 firmas en aeronave, 2 en el resto.
-- [ ] **`DashboardPage`**: botón **Reabrir** + modal de motivo (gerente); badges de tipo; filtro "Mis órdenes" por los 5 slots.
-- [ ] **Tipos `planta` y `sensor` en UI** (el e2e solo cubrió camión+aeronave). Sensor: sin medidor + cierre con 2 firmas.
-- [ ] **Subida de fotos a MinIO**: cámara/archivo en inspección, miniaturas vía proxy `/uploads`, y que aparezcan en el PDF.
-- [ ] **Revisión visual del PDF** por tipo: datos por tipo correctos, nº de firmas, bloque de asignaciones.
+#### QA — todo verificado en navegador (PASS)
+- **Visibilidad por rol** (Header + botones): `tecnico_soporte` solo ve Órdenes/Flota; `ingeniero_soporte` ve catálogos y puede crear pero no Usuarios ni Reabrir; `gerente_soporte`/super ven todo + Reabrir. ✅
+- **Flujo completo por tipo** (crear → recepción → iniciar → puntos → cierre → firmas → PDF):
+  - **aeronave** (XB-ABC): 5 slots con auxiliar condicional, recepción valida identificador, iniciar pide horas, foto en punto "con daños", 3 firmas (soporte+gerente+piloto por rol), sincronización de horas con no-retroceso. ✅
+  - **camión** (MX-CAM-001): iniciar pide **odómetro**, 4 slots sin piloto, 2 firmas, odómetro sincronizado. ✅
+  - **planta** (PE-001): iniciar pide **horímetro**, 2 firmas, horímetro sincronizado. ✅
+  - **sensor** (SE-001): iniciar **sin medidor**, 2 firmas. ✅
+- **Fotos**: suben, se ven en inspección (miniatura) y quedan **embebidas en el PDF** (el PDF de aeronave pesa ~61 KB más por la foto). ✅
+  - ⚠️ **Hallazgo (no bug):** la subida de fotos NO usa MinIO. Pese a `STORAGE_PROVIDER=minio` en `.env` y MinIO en docker, `src/middleware/upload.js` usa `multer.diskStorage` a `backend/uploads/` y se sirve vía proxy estático `/uploads`. No hay SDK de MinIO/S3 ni `putObject` en el backend. La integración a MinIO/S3 está **pendiente de implementar** (relevante para despliegue nube/on-premise).
+- **PDFs por tipo** (revisión visual): datos correctos por tipo, nº de firmas (3 aeronave / 2 resto), bloque de asignaciones. ✅
 
-**Después — retomar Roadmap original (Fase 2+):** dashboard de flota avanzado, asignación de técnicos, alertas de vencimiento, inventario de partes, reportes/estadísticas, histórico por producto, modo offline, reportes DGAC.
+#### 🔴 Bug encontrado y ARREGLADO — cierre sin firma de puntos críticos
+- **Síntoma:** se podía firmar y cerrar una O/T con puntos `es_critico` sin su firma individual (regla de negocio: "pasos críticos requieren firma digital individual por paso"). Reproducido en navegador: aeronave cerrada con 19/20 críticos sin firmar.
+- **Causa raíz:** el gate de cierre (`cierreController.gestionar`) solo validaba `verificarPuntosCompletos` (cuenta `completado`), nunca la firma de críticos.
+- **Fix aplicado:**
+  - `services/ordenesService.js`: nueva `verificarCriticosFirmados(ordenId)` → `{ total, firmados, faltan, completo }` sobre puntos `es_critico`.
+  - `controllers/ordenes/cierreController.js`: gate al crear cierre (rechaza con *"faltan N de M firmas en puntos críticos"*).
+  - `services/ordenesService.js` → `firmarCierre`: gate al firmar (defensa en profundidad — **cubre el bypass por reapertura**, que no vuelve a pasar por `gestionar`). Ni el superusuario lo evade (es regla de negocio, no de permiso).
+- **Verificación:** bloquea con críticos sin firmar (vía API y en UI, en aeronave y camión) y permite cuando están firmados. El frontend ya muestra el error (`CierreOTPage.jsx:135`). Universal a los 4 tipos: aeronave (20 críticos), camión (2), planta (1), sensor (0 → no-op).
+- ⏳ **Sin commitear aún** (el usuario commitea cuando decide).
+
+#### 💡 Mejora opcional pendiente (no hecha)
+- Frontend: que `CierreOTPage` liste/enlace los puntos críticos pendientes de firma, en vez de solo mostrar el error al intentar firmar.
+
+#### ❓ Sin confirmar (revisar si reaparece)
+- En la 0009 se probó "¿Se encontró defecto? = Sí" + `RPT-001`, pero el cierre guardó `se_encontro_defecto=false`. La validación de "ref obligatorio si hay defecto" SÍ funcionó (lee el valor en vivo), así que probablemente el usuario lo cambió a "No" antes de guardar. **No confirmado** si el toggle persiste correctamente el "Sí" — verificar en una próxima O/T si vuelve a aparecer.
+
+#### Estado de datos de prueba tras la sesión
+- Órdenes nuevas creadas en QA: `OT-...-0009` (aeronave, con foto), `0010` (camión), `0011` (planta), `0012` (sensor) — todas `cerrada`.
+- PDFs de QA quedaron en `/tmp/qa-pdfs/` (scratch, se puede borrar).
+
+### Siguiente paso — Sesión 15 = **Roadmap original Fase 2+**
+
+> El rediseño multiproducto (Fases A-E) está **completo y verificado de punta a punta** (API + navegador). El fix de firma de críticos ya está commiteado (`4822c24`, Sesión 15).
+
+**Retomar Roadmap (Fase 2+):** dashboard de flota avanzado, asignación de técnicos, alertas de vencimiento, inventario de partes, reportes/estadísticas, histórico por producto, modo offline, reportes DGAC.
+
+**Backlog técnico detectado en QA (priorizar cuando aplique):**
+- ✅ ~~**Integración real de almacenamiento (MinIO/S3)** para fotos~~ — **HECHO en Sesión 15** (ver abajo).
+- (Opcional) UI de cierre que liste los puntos críticos pendientes de firma.
+
+### Cambios en Sesión 15 — Almacenamiento real MinIO/S3 para fotos + commit del fix de críticos
+**Fecha:** 2026-05-22 | **Rama:** `development` | **Estado:** integración de storage completa y verificada (MinIO + driver local)
+
+#### Fix de firma de puntos críticos — COMMITEADO
+- Commit `4822c24`: `verificarCriticosFirmados()` + gate doble (`cierreController.gestionar` y `ordenesService.firmarCierre`). Solo los 2 archivos del fix (sin CLAUDE.md ni `.claude/`).
+
+#### Capa de abstracción de almacenamiento (nuevo `src/lib/storage/`)
+- `helpers.js` — `generarKey()`, `contentTypeDesdeKey()`, `keyDesdeUrl()` (puros, sin estado, evitan dependencia circular).
+- `localDriver.js` — disco `backend/uploads/` (comportamiento histórico + fallback). Guard anti path-traversal.
+- `s3Driver.js` — **un solo driver para MinIO y AWS S3** (`@aws-sdk/client-s3`). MinIO usa `endpoint` + `forcePathStyle:true`; S3 usa region/credenciales (o cadena por defecto IAM). `ensureReady()` crea el bucket si falta.
+- `index.js` — fachada con selección **perezosa** del driver por `STORAGE_PROVIDER` (`local|minio|s3`). Perezosa porque `dotenv.config()` corre **después** de los imports en `index.js` (no hay preload `-r dotenv/config`); construir el driver al importar leería env vacío. `storageProvider()` tolera comentarios en línea del `.env` (`minio   # ...`) tomando el primer token.
+- Métodos: `ensureReady`, `put({buffer,contentType,originalName})→{key}`, `putRaw({key,buffer,contentType})` (preserva key, para migración), `getBuffer(key)`, `getStream(key)`, `delete(key)`.
+
+#### Wiring
+- `npm i @aws-sdk/client-s3 @aws-sdk/lib-storage`.
+- `middleware/upload.js` → `multer.memoryStorage()` (antes `diskStorage`). El controller recibe `req.file.buffer`.
+- `controllers/ordenes/fotosController.js` → `subir` llama `storage.put()` y guarda `urlArchivo=/uploads/<key>`; `eliminar` además llama `storage.delete(key)` → **arregla el bug de archivos huérfanos** (antes solo borraba la fila).
+- `index.js` → reemplaza `express.static('/uploads')` por ruta **`GET /uploads/:key`** que hace stream vía `storage.getStream()` (proxy por backend, infra-agnóstico, frontend intacto). Llama `storage.ensureReady()` al arranque (no bloqueante).
+- `controllers/ordenes/pdfController.js` → como los renderers son **síncronos**, se **pre-cargan los buffers** async (`precargarFotos()` → `Map<urlArchivo,Buffer>`) antes del loop y `doc.image(buffer,…)` los embebe. Se eliminó `resolverArchivoFoto` (leía de disco). Solo embebe PNG/JPEG; el resto cae a placeholder "Archivo no disponible".
+
+#### Migración (`scripts/migrar-fotos-a-storage.js`)
+- Sube los archivos de `backend/uploads/` al bucket conservando la key (para que los `url_archivo` ya guardados resuelvan). Idempotente; no-op si `STORAGE_PROVIDER=local`.
+- **Ejecutado:** 23 fotos previas (QA) migradas a MinIO. Segunda corrida: 0 subidos / 23 ya existían.
+
+#### Decisión de arquitectura tomada en esta sesión
+- **Servir fotos = proxy por backend** (no presigned URLs) — elegido por el usuario. Mantiene `urlArchivo` y el frontend sin cambios; funciona igual on-premise o nube sin exponer el bucket.
+
+#### Verificación e2e (todo PASS ✅)
+- Subida (OT-0008, campo multipart `foto`) → 201 con `urlArchivo`; `GET /uploads/:key` → 200, `image/png`, bytes idénticos; **no** queda en disco local (fue a MinIO); bucket lista el objeto.
+- Borrado → 204, serve 404, bucket vuelve a 0 objetos.
+- PDF de la orden → `%PDF`, 68 KB con la foto embebida.
+- Driver `local` (aislado): put/getBuffer/getStream/delete round-trip + guard de path-traversal + delete idempotente.
+- `.gitignore` ya cubre `.env` y `backend/uploads` — el SDK aparece en `package.json`/`package-lock.json`.
+
+#### Notas / pendientes
+- `.env` real sigue con `STORAGE_PROVIDER=minio`. Para despliegue AWS: `STORAGE_PROVIDER=s3` + credenciales (o rol IAM).
+- Los 23 archivos siguen también en `backend/uploads/` (no se borraron del disco; ya están en MinIO y el bucket es la fuente al servir con `minio`).
+- Sigue pendiente (opcional): UI de cierre que liste puntos críticos sin firmar.
