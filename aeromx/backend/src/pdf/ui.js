@@ -91,3 +91,44 @@ export function conditionPill(doc, x, y, estado) {
 export function rolePill(doc, x, y, label) {
   return pill(doc, x, y, label, { fg: COLOR.accent, bg: COLOR.accentSoft, dot: false })
 }
+
+// Strip horizontal de N pasos con borde sup/inf y separadores verticales.
+// steps: [{ num, label, value, mono }]
+export function timeline(doc, steps, M, W) {
+  ensureSpace(doc, 64)
+  const y = doc.y
+  const h = 52
+  const colW = W / steps.length
+
+  // bordes superior e inferior
+  doc.lineWidth(0.8).strokeColor(COLOR.line)
+  doc.moveTo(M, y).lineTo(M + W, y).stroke()
+  doc.moveTo(M, y + h).lineTo(M + W, y + h).stroke()
+
+  steps.forEach((s, i) => {
+    const cx = M + i * colW
+    const pad = i === 0 ? 0 : 14
+    const inner = cx + pad
+    if (i > 0) {
+      doc.lineWidth(0.7).strokeColor(COLOR.line2).moveTo(cx, y + 10).lineTo(cx, y + h - 10).stroke()
+    }
+    // círculo numerado
+    const r = 9
+    doc.save()
+    doc.circle(inner + r, y + 14, r).fill(COLOR.ink)
+    font(doc, FONT.monoMed).fontSize(9).fillColor(COLOR.paper)
+      .text(String(s.num), inner, y + 10, { width: r * 2, align: 'center', lineBreak: false })
+    doc.restore()
+    // label
+    font(doc, FONT.mono).fontSize(8).fillColor(COLOR.muted)
+      .text(s.label.toUpperCase(), inner, y + 27, {
+        width: colW - pad - 6, characterSpacing: 0.6, lineBreak: false, ellipsis: true,
+      })
+    // valor
+    font(doc, FONT.sansMed).fontSize(9.5).fillColor(COLOR.ink)
+      .text(s.value, inner, y + 38, { width: colW - pad - 6, lineBreak: false, ellipsis: true })
+  })
+  doc.fillColor(COLOR.ink)
+  doc.y = y + h + 16
+  doc.x = M
+}

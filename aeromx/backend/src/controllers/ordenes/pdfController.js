@@ -143,6 +143,7 @@ export async function generar(req, res, next) {
     registerFonts(doc)
     drawHeader(doc, orden, M, CONTENT_W)
     drawTitleRow(doc, orden, M, CONTENT_W)
+    drawTimeline(doc, orden, M, CONTENT_W)
 
     const totales = calcularTotales(orden)
     const secuencia = resolverSecuencia(orden.formato)
@@ -413,6 +414,18 @@ function drawHeader(doc, orden, M, W) {
   doc.fillColor(COLOR.ink)
   doc.y = sepY + 16
   doc.x = M
+}
+
+function drawTimeline(doc, orden, M, W) {
+  const tipo = orden.producto?.tipoProducto
+  const labelRecepcion = { aeronave: 'Recepción aeronave', camion: 'Recepción camión',
+    planta: 'Recepción planta', sensor: 'Recepción sensor' }[tipo] || 'Recepción'
+  ui.timeline(doc, [
+    { num: 1, label: 'Creación de orden', value: orden.createdAt ? fmtFecha(orden.createdAt) : 'Pendiente' },
+    { num: 2, label: labelRecepcion,      value: orden.fechaRecepcion ? fmtFecha(orden.fechaRecepcion) : 'Pendiente' },
+    { num: 3, label: 'Inicio mantenim.',  value: orden.fechaInicio ? fmtFecha(orden.fechaInicio) : 'Pendiente' },
+    { num: 4, label: 'Cierre / firma',    value: orden.fechaCierre ? fmtFecha(orden.fechaCierre) : 'Pendiente' },
+  ], M, W)
 }
 
 function drawTitleRow(doc, orden, M, W) {
