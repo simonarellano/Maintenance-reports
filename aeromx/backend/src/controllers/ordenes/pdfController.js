@@ -2,51 +2,49 @@ import * as svc from '../../services/ordenesService.js'
 import { resolverSecuencia } from '../../services/formatosService.js'
 import { renderMarkdown } from '../../pdf/markdown.js'
 import { storage, keyDesdeUrl } from '../../lib/storage/index.js'
+import { COLOR, FONT, font, registerFonts, fmtFecha, fmtFechaHora, fmtDuracion } from '../../pdf/theme.js'
+import * as ui from '../../pdf/ui.js'
 import fs from 'fs'
 import path from 'path'
 
 const COMPANY = {
-  nombre: 'AEROMX',
+  nombre: 'HYDRA',
   lema: 'Gestión de mantenimiento',
   direccion: 'Planta 20 City · México',
   telefono: '+52 (55) 0000-0000',
-  email: 'soporte@aeromx.com',
-}
-
-const COLOR = {
-  primary:    '#00d0e8',
-  primaryDk:  '#04525e',
-  bandBg:     '#0f172a',
-  bandText:   '#dde8f8',
-  accent:     '#ff4545',
-  amber:      '#f0a030',
-  green:      '#28d980',
-  light:      '#e6faff',
-  rowDanos:   '#fff8e8',
-  rowAten:    '#ffeded',
-  rowOk:      '#eafbf3',
-  gray:       '#64748b',
-  dark:       '#0f172a',
-  border:     '#cbd5e1',
+  email: 'soporte@hydra.mx',
 }
 
 const ESTADO_LABELS_PDF = {
-  bueno:              'BUENO',
-  correcto_con_danos: 'CON DAÑOS',
-  requiere_atencion:  'REQUIERE ATENCIÓN',
-  no_aplica:          'N/A',
+  bueno: 'BUENO', correcto_con_danos: 'CON DAÑOS',
+  requiere_atencion: 'REQUIERE ATENCIÓN', no_aplica: 'N/A',
 }
 
 const TIPO_LABELS = {
-  aeronave: 'AERONAVE',
-  camion:   'CAMIÓN',
-  planta:   'PLANTA DE ENERGÍA',
-  sensor:   'SENSOR',
+  aeronave: 'Aeronave', camion: 'Camión', planta: 'Planta de energía', sensor: 'Sensor',
 }
 
-const fmtFecha     = (d) => d ? new Date(d).toLocaleDateString('es-MX', { year: 'numeric', month: '2-digit', day: '2-digit' }) : '—'
-const fmtHora      = (d) => d ? new Date(d).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '—'
-const fmtFechaHora = (d) => d ? `${fmtFecha(d)} ${fmtHora(d)}` : '—'
+// ─── Shim temporal de compatibilidad ────────────────────────────────────────
+// Los renderers §01–§06 aún referencian la paleta vieja. Este objeto los mantiene
+// funcionando hasta que cada renderer sea migrado en tareas posteriores.
+// TODO: eliminar llave a llave conforme avancen las tareas 4–11.
+const _COMPAT = {
+  primary:   COLOR.accent,        // azul acento (#2F5FA6)
+  primaryDk: COLOR.ink,           // tinta oscura
+  bandBg:    COLOR.ink,           // fondo de banda oscuro
+  bandText:  COLOR.paper,         // texto sobre banda oscura
+  border:    COLOR.line,          // borde claro
+  gray:      COLOR.muted,         // texto secundario
+  dark:      COLOR.ink,           // tinta principal
+  light:     COLOR.accentSoft,    // fondo suave
+  rowAten:   COLOR.criticalSoft,  // fila "requiere atención"
+  rowDanos:  COLOR.warnSoft,      // fila "con daños"
+  rowOk:     COLOR.okSoft,        // fila completada OK
+  green:     COLOR.ok,            // verde de firma confirmada
+  obsColor:  COLOR.critical,      // rojo de observaciones (era #ff4545) — renombrado de 'accent' para no sobreescribir COLOR.accent del tema
+}
+// Mezclamos el shim sobre COLOR para que las referencias COLOR.border, etc. resuelvan.
+Object.assign(COLOR, _COMPAT)
 
 // ─── Datos del producto según tipo ──────────────────────────────────────────
 
@@ -142,7 +140,9 @@ export async function generar(req, res, next) {
     const M = 40
     const CONTENT_W = PAGE_W - M * 2
 
+    registerFonts(doc)
     drawHeader(doc, orden, M, CONTENT_W)
+    drawTitleRow(doc, orden, M, CONTENT_W)
 
     const totales = calcularTotales(orden)
     const secuencia = resolverSecuencia(orden.formato)
@@ -377,42 +377,66 @@ const BUILTIN_RENDERERS = {
 // ─── Helpers de dibujo ──────────────────────────────────────────────────────
 
 function drawHeader(doc, orden, M, W) {
-  doc.rect(0, 0, doc.page.width, 70).fill(COLOR.bandBg)
-  doc.rect(0, 70, doc.page.width, 2).fill(COLOR.primary)
-
-  const logoPath = path.join(process.cwd(), 'public/logo.png')
-  const logoWidth = 100
-  const logoHeight = 40
-  const logoX = M
-  const logoY = 10
+  const topY = 40
+  // Logo HYDRA en tinta (o texto si falta el archivo)
+  const logoPath = path.join(process.cwd(), 'public/hydra-logo.png')
   try {
     if (fs.existsSync(logoPath)) {
-      doc.image(logoPath, logoX, logoY, { width: logoWidth, height: logoHeight })
-    } else {
-      doc.fillColor(COLOR.bandText).font('Helvetica-Bold').fontSize(20).text(COMPANY.nombre, M, 18)
+      doc.image(logoPath, M, topY, { height: 30 })
     }
-  } catch {
-    doc.fillColor(COLOR.bandText).font('Helvetica-Bold').fontSize(20).text(COMPANY.nombre, M, 18)
+  } catch { /* ignora; cae a texto abajo */ }
+
+  // Marca (texto al lado del logo). Si no hubo logo, queda como marca textual.
+  const brandX = fs.existsSync(logoPath) ? M + 86 : M
+  font(doc, FONT.sansSemi).fontSize(11).fillColor(COLOR.ink)
+    .text(`${COMPANY.nombre} · ${COMPANY.lema}`, brandX, topY + 2, { lineBreak: false })
+  font(doc, FONT.mono).fontSize(8).fillColor(COLOR.muted)
+    .text(`${COMPANY.direccion} · ${COMPANY.telefono} · ${COMPANY.email}`,
+      brandX, topY + 17, { lineBreak: false })
+
+  // Meta a la derecha (mono)
+  font(doc, FONT.mono).fontSize(8.5).fillColor(COLOR.muted)
+  const metaLines = [
+    `Documento  O/T`,
+    `Generado  ${fmtFechaHora(new Date())}`,
+    `Formato  v${orden.formato.version} · ${orden.formato.nombre}`,
+  ]
+  let my = topY
+  for (const line of metaLines) {
+    doc.fillColor(COLOR.muted).text(line, M, my, { width: W, align: 'right', lineBreak: false })
+    my += 12
   }
 
-  doc.font('Helvetica').fontSize(8).fillColor(COLOR.bandText)
-    .text(COMPANY.lema, M, logoY + logoHeight + 2)
+  // Separador sólido en tinta
+  const sepY = topY + 40
+  doc.lineWidth(1).strokeColor(COLOR.ink).moveTo(M, sepY).lineTo(M + W, sepY).stroke()
+  doc.fillColor(COLOR.ink)
+  doc.y = sepY + 16
+  doc.x = M
+}
 
-  doc.fontSize(8).fillColor(COLOR.bandText)
-    .text(COMPANY.direccion, M, 18, { width: W, align: 'right' })
-    .text(`${COMPANY.telefono} · ${COMPANY.email}`, M, 32, { width: W, align: 'right' })
+function drawTitleRow(doc, orden, M, W) {
+  const y = doc.y
+  // Reservar espacio del status pill a la derecha
+  const pillReserve = 130
+  const leftW = W - pillReserve
 
-  doc.fillColor(COLOR.dark)
-  doc.y = 86
-  doc.font('Helvetica-Bold').fontSize(14)
-    .text('ORDEN DE TRABAJO DE MANTENIMIENTO', M, doc.y, { width: W, align: 'center' })
+  font(doc, FONT.mono).fontSize(9).fillColor(COLOR.muted)
+    .text('ORDEN DE TRABAJO DE MANTENIMIENTO', M, y, {
+      width: leftW, characterSpacing: 1.2, lineBreak: false,
+    })
+  font(doc, FONT.sansMed).fontSize(26).fillColor(COLOR.ink)
+    .text(orden.formato.nombre, M, y + 14, { width: leftW })
+  const folioY = doc.y + 2
+  font(doc, FONT.mono).fontSize(12).fillColor(COLOR.ink2)
+    .text(`N.º  ${orden.numeroOt}`, M, folioY, { width: leftW, lineBreak: false })
 
-  const boxY = doc.y + 4
-  doc.rect(M, boxY, W, 26).fill(COLOR.light).stroke(COLOR.primary)
-  doc.fillColor(COLOR.primaryDk).font('Helvetica-Bold').fontSize(13)
-    .text(`N.º ${orden.numeroOt}`, M, boxY + 7, { width: W, align: 'center' })
-  doc.fillColor(COLOR.dark)
-  doc.y = boxY + 34
+  // Status pill alineado al tope del título
+  ui.statusPill(doc, M + W, y + 16, orden.estado)
+
+  doc.fillColor(COLOR.ink)
+  doc.y = folioY + 22
+  doc.x = M
 }
 
 function sectionTitle(doc, txt, M, W) {
@@ -552,7 +576,7 @@ function drawTableRow(doc, cols, M, values, r) {
   }
 
   if (r?.observacion) {
-    doc.font('Helvetica-Oblique').fontSize(TABLE_OBS_FONT_SIZE).fillColor(COLOR.accent)
+    doc.font('Helvetica-Oblique').fontSize(TABLE_OBS_FONT_SIZE).fillColor(COLOR.obsColor)
       .text(`Obs: ${r.observacion}`, M + TABLE_PAD_X, rowY + baseH + 1, {
         width: totalW - TABLE_PAD_X * 2,
       })
