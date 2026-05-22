@@ -13,14 +13,23 @@ export const ordenesService = {
   cambiarEstado: (id, estado) =>
     client.patch(`/ordenes/${id}/estado`, { estado }),
 
-  recepcionarAeronave: (id, matriculaConfirmada) =>
-    client.post(`/ordenes/${id}/recepcion`, { matriculaConfirmada }),
+  // Hito 2 — recepción validando el identificador del producto (matrícula/placas/serie).
+  recepcionar: (id, identificadorConfirmado) =>
+    client.post(`/ordenes/${id}/recepcion`, { identificadorConfirmado }),
 
-  iniciarMantenimiento: (id) =>
-    client.post(`/ordenes/${id}/iniciar-mantenimiento`),
+  // Hito 3 — inicia el mantenimiento. `lecturas` lleva el medidor según el tipo:
+  // aeronave → { horasTotales, horasMotorDer?, horasMotorIzq? }, camion → { odometro },
+  // planta → { horimetro }, sensor → {}.
+  iniciarMantenimiento: (id, lecturas = {}) =>
+    client.post(`/ordenes/${id}/iniciar-mantenimiento`, lecturas),
 
-  asignar: (id, { tecnicoId, supervisorId }) =>
-    client.patch(`/ordenes/${id}/asignacion`, { tecnicoId, supervisorId }),
+  // Reasigna cualquiera de los 4-5 responsables (solo gerente).
+  asignar: (id, asignaciones) =>
+    client.patch(`/ordenes/${id}/asignacion`, asignaciones),
+
+  // Reabre una O/T cerrada — vuelve a pendiente_firma (solo gerente).
+  reabrir: (id, motivo) =>
+    client.post(`/ordenes/${id}/reabrir`, { motivo }),
 
   archivar: (id, archivada = true) =>
     client.patch(`/ordenes/${id}/archivar`, { archivada }),
@@ -48,8 +57,9 @@ export const ordenesService = {
   crearCierre: (id, data) =>
     client.post(`/ordenes/${id}/cierre`, data),
 
-  firmarCierre: (id, data) =>
-    client.post(`/ordenes/${id}/cierre/firmar`, data),
+  // El backend infiere el slot a firmar del rol del usuario autenticado — no requiere body.
+  firmarCierre: (id) =>
+    client.post(`/ordenes/${id}/cierre/firmar`),
 
   descargarPDF: (id) =>
     client.get(`/ordenes/${id}/pdf`, { responseType: 'blob' })

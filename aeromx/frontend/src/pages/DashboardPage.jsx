@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { Header } from '../components/Header'
 import { ordenesService } from '../api/ordenesService'
 import { useAuthStore } from '../store/authStore'
-import { T, STATUS } from '../tokens/design'
+import { T, STATUS, TIPO_PRODUCTO } from '../tokens/design'
 import {
-  Btn, BtnSm, Card, ErrorBanner, Pill, ProgressBar, Spinner,
+  Btn, BtnSm, Card, ErrorBanner, Modal, Pill, ProgressBar, Spinner,
 } from '../components/ui'
 
 const ESTADO_LABELS = {
@@ -27,13 +27,17 @@ const VISTAS = [
 export default function DashboardPage() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
-  const esSupervisor = user?.rol === 'supervisor'
+  const esGerente = user?.superusuario === true || user?.rol === 'gerente_soporte'
+  const puedeCrear = esGerente || user?.rol === 'ingeniero_soporte'
   const [ordenes, setOrdenes] = useState([])
   const [filtro, setFiltro] = useState('todas')
   const [vista, setVista] = useState('mias')
   const [busqueda, setBusqueda] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [ordenAReabrir, setOrdenAReabrir] = useState(null)
+  const [motivoReapertura, setMotivoReapertura] = useState('')
+  const [reabrirLoading, setReabrirLoading] = useState(false)
 
   useEffect(() => {
     cargarOrdenes()
@@ -81,15 +85,44 @@ export default function DashboardPage() {
     }
   }
 
+  const abrirReapertura = (e, orden) => {
+    e.stopPropagation()
+    setOrdenAReabrir(orden)
+    setMotivoReapertura('')
+  }
+
+  const confirmarReapertura = async () => {
+    if (!motivoReapertura.trim()) {
+      setError('El motivo de reapertura es obligatorio')
+      return
+    }
+    setReabrirLoading(true)
+    try {
+      await ordenesService.reabrir(ordenAReabrir.id, motivoReapertura.trim())
+      setOrdenAReabrir(null)
+      setMotivoReapertura('')
+      await cargarOrdenes()
+    } catch (err) {
+      setError(err.response?.data?.error || 'Error reabriendo la orden')
+    } finally {
+      setReabrirLoading(false)
+    }
+  }
+
+  const estaAsignado = (o) =>
+    o.soporte?.id === user?.id ||
+    o.ingenieroAuxiliar?.id === user?.id ||
+    o.mecanico?.id === user?.id ||
+    o.gerente?.id === user?.id ||
+    o.piloto?.id === user?.id
+
   const ordenesVisibles = useMemo(() => {
     let lista = ordenes
     if (vista === 'mias' && user?.id) {
-      lista = lista.filter(o =>
-        (o.tecnico?.id === user.id || o.supervisor?.id === user.id) &&
-        o.estado !== 'cerrada'
-      )
+      lista = lista.filter(o => estaAsignado(o) && o.estado !== 'cerrada')
     }
     return lista
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ordenes, vista, user?.id])
 
   const ordenesFiltradas = useMemo(() => {
@@ -97,9 +130,9 @@ export default function DashboardPage() {
     if (!q) return ordenesVisibles
     return ordenesVisibles.filter(o =>
       o.numeroOt?.toLowerCase().includes(q) ||
-      o.aeronave?.matricula?.toLowerCase().includes(q) ||
+      o.producto?.identificador?.toLowerCase().includes(q) ||
       o.cliente?.toLowerCase().includes(q) ||
-      o.tecnico?.nombre?.toLowerCase().includes(q) ||
+      o.soporte?.nombre?.toLowerCase().includes(q) ||
       o.formato?.nombre?.toLowerCase().includes(q)
     )
   }, [ordenesVisibles, busqueda])
@@ -154,10 +187,12 @@ export default function DashboardPage() {
               {vistaActiva?.descripcion}
             </p>
           </div>
-          <Btn
-            label="+ Nueva Orden"
-            onClick={() => navigate('/ordenes/crear')}
-          />
+          {puedeCrear && (
+            <Btn
+              label="+ Nueva Orden"
+              onClick={() => navigate('/ordenes/crear')}
+            />
+          )}
         </div>
 
         {/* Tabs de vista */}
@@ -232,7 +267,7 @@ export default function DashboardPage() {
               type="text"
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
-              placeholder="Buscar por matrícula, N.º O/T, cliente, técnico o formato…"
+              placeholder="Buscar por identificador, N.º O/T, cliente, soporte o formato…"
               style={{
                 width: '100%',
                 background: T.s2, border: `1px solid ${T.border}`, borderRadius: 10,
@@ -282,7 +317,9 @@ export default function DashboardPage() {
               {vista === 'mias' && (
                 <Btn label="Ver todo" variant="ghost" onClick={() => setVista('todas')} />
               )}
-              <Btn label="Crear nueva orden" onClick={() => navigate('/ordenes/crear')} />
+              {puedeCrear && (
+                <Btn label="Crear nueva orden" onClick={() => navigate('/ordenes/crear')} />
+              )}
             </div>
           </Card>
         ) : (
@@ -291,16 +328,63 @@ export default function DashboardPage() {
               <OrdenCard
                 key={orden.id}
                 orden={orden}
-                esSupervisor={esSupervisor}
+                esGerente={esGerente}
                 onClick={() => navigate(`/ordenes/${orden.id}/inspeccion`)}
                 onArchivar={(e) => archivarOrden(e, orden)}
                 onEliminar={(e) => eliminarOrden(e, orden)}
+                onReabrir={(e) => abrirReapertura(e, orden)}
                 onPDF={(e) => descargarPDF(e, orden.id, orden.numeroOt)}
               />
             ))}
           </div>
         )}
       </main>
+
+      {/* Modal de reapertura */}
+      <Modal
+        open={Boolean(ordenAReabrir)}
+        onClose={() => setOrdenAReabrir(null)}
+        title="Reabrir orden cerrada"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <p style={{ fontSize: 13, color: T.sub, lineHeight: 1.55 }}>
+            La orden <strong style={{ color: T.text }}>{ordenAReabrir?.numeroOt}</strong> volverá
+            a estado <strong style={{ color: T.amber }}>pendiente de firma</strong>. Se borrarán las
+            firmas del cierre y deberán aplicarse de nuevo. El evento queda registrado en el historial.
+          </p>
+          <div>
+            <div style={{
+              fontSize: 11, color: T.sub, fontWeight: 600,
+              letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 6,
+            }}>
+              Motivo de reapertura <span style={{ color: T.red }}>*</span>
+            </div>
+            <textarea
+              value={motivoReapertura}
+              onChange={(e) => setMotivoReapertura(e.target.value)}
+              placeholder="Ej. Se detectó un error en el registro fotográfico del punto 12…"
+              rows={3}
+              style={{
+                width: '100%', minHeight: 80,
+                background: T.s2, border: `1px solid ${T.border}`,
+                borderRadius: 10, padding: '10px 12px',
+                color: T.text, fontSize: 14, fontFamily: T.font,
+                resize: 'vertical', outline: 'none',
+              }}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Btn variant="ghost" label="Cancelar" onClick={() => setOrdenAReabrir(null)} style={{ flex: 1 }} />
+            <Btn
+              variant="amber"
+              label={reabrirLoading ? 'Reabriendo…' : 'Reabrir orden'}
+              onClick={confirmarReapertura}
+              disabled={reabrirLoading || !motivoReapertura.trim()}
+              style={{ flex: 1 }}
+            />
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }
@@ -327,13 +411,14 @@ function StatChip({ label, value, c, bg }) {
 }
 
 // ── Card de O/T ────────────────────────────────────────────────
-function OrdenCard({ orden, esSupervisor, onClick, onArchivar, onEliminar, onPDF }) {
+function OrdenCard({ orden, esGerente, onClick, onArchivar, onEliminar, onReabrir, onPDF }) {
   const st = STATUS[orden.estado] || { label: orden.estado, c: T.sub, bg: T.s2 }
   const totalPuntos = orden._count?.resultados || 0
   const completos = orden.resultados?.filter((r) => r.completado).length || 0
   const progreso = totalPuntos > 0 ? completos / totalPuntos : 0
   const esCerrada = orden.estado === 'cerrada'
   const esBorrador = orden.estado === 'borrador'
+  const tipoMeta = TIPO_PRODUCTO[orden.producto?.tipoProducto] || { label: 'Producto', icon: '📦', c: T.sub, bg: T.s2 }
 
   return (
     <div
@@ -357,9 +442,9 @@ function OrdenCard({ orden, esSupervisor, onClick, onArchivar, onEliminar, onPDF
             {orden.numeroOt}
           </div>
           <div style={{ fontSize: 16, fontWeight: 600, color: T.text }}>
-            {orden.aeronave?.matricula}
+            {orden.producto?.identificador}
             <span style={{ color: T.sub, fontWeight: 400 }}>
-              {orden.aeronave?.modelo?.nombre ? ` · ${orden.aeronave.modelo.nombre}` : ''}
+              {orden.producto?.modelo?.nombre ? ` · ${orden.producto.modelo.nombre}` : ''}
             </span>
           </div>
           <div style={{ fontSize: 12, color: T.sub, marginTop: 2 }}>
@@ -368,6 +453,7 @@ function OrdenCard({ orden, esSupervisor, onClick, onArchivar, onEliminar, onPDF
           </div>
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <Pill label={`${tipoMeta.icon} ${tipoMeta.label}`} color={tipoMeta.c} bg={tipoMeta.bg} small />
           <Pill label={st.label} color={st.c} bg={st.bg} small />
           {orden.archivada && (
             <Pill label="Archivada" color={T.sub} bg={T.s2} small />
@@ -381,8 +467,8 @@ function OrdenCard({ orden, esSupervisor, onClick, onArchivar, onEliminar, onPDF
         gap: 10, marginBottom: 10,
         paddingTop: 10, borderTop: `1px solid ${T.border}`,
       }}>
-        <Meta k="Técnico"     v={orden.tecnico?.nombre} />
-        <Meta k="Supervisor"  v={orden.supervisor?.nombre} />
+        <Meta k="Soporte" v={orden.soporte?.nombre} />
+        <Meta k="Gerente" v={orden.gerente?.nombre} />
         {orden.lugarMantenimiento && <Meta k="Lugar" v={`📍 ${orden.lugarMantenimiento}`} />}
         <Meta
           k="Recepción"
@@ -441,8 +527,11 @@ function OrdenCard({ orden, esSupervisor, onClick, onArchivar, onEliminar, onPDF
             }
           />
         )}
-        {esSupervisor && (
+        {esGerente && (
           <>
+            {esCerrada && (
+              <BtnSm variant="amber" onClick={onReabrir} label="↺ Reabrir" />
+            )}
             <BtnSm
               variant={orden.archivada ? 'surface' : 'ghost'}
               onClick={onArchivar}

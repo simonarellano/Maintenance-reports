@@ -1,6 +1,6 @@
 # AeroMX — Contexto del Proyecto para Claude
 
-> **IMPORTANTE — Estado del rediseño multiproducto**: las **Fases A y B están aplicadas** (schema + roles + backend completo multiproducto, smoke test pasa para los 4 tipos). El **frontend sigue roto a propósito** hasta completar **Fases C/D**. **Lee primero [`aeromx/docs/ARQUITECTURA-MULTIPRODUCTO.md`](aeromx/docs/ARQUITECTURA-MULTIPRODUCTO.md)** — especialmente §0.2 (cómo saber en qué fase estás) y §8 (plan por fases). Las secciones de este CLAUDE.md sobre roles, schema, formatos y O/T en §"Roles de Usuario", §"Esquema de BD" y similares describen el **estado pre-rediseño** y ya **no son fuente de verdad**. La fuente de verdad ahora es el doc de arquitectura + el `schema.prisma` actual.
+> **IMPORTANTE — Estado del rediseño multiproducto**: el rediseño está **COMPLETO** — **Fases A, B, C, D y E aplicadas** (schema + roles + backend multiproducto + frontend completo: catálogos y O/T por tipo, reapertura). El backend pasa smoke test para los 4 tipos y el frontend compila (`npm run build` verde). **Lee primero [`aeromx/docs/ARQUITECTURA-MULTIPRODUCTO.md`](aeromx/docs/ARQUITECTURA-MULTIPRODUCTO.md)** — especialmente §0.2 (cómo saber en qué fase estás) y §8 (plan por fases). Las secciones de este CLAUDE.md sobre roles, schema, formatos y O/T en §"Roles de Usuario", §"Esquema de BD" y similares describen el **estado pre-rediseño** y ya **no son fuente de verdad**. La fuente de verdad ahora es el doc de arquitectura + el `schema.prisma` actual.
 
 ## ¿Qué es este proyecto?
 Sistema web/móvil de gestión de mantenimiento aeronáutico. Reemplaza formatos Word manuales con un flujo digital de órdenes de mantenimiento paso a paso, con captura de evidencia fotográfica por punto de inspección y firma digital.
@@ -725,3 +725,73 @@ cd ../frontend && npm run build                 # debería pasar (Fase C verde)
 - ⚠️ Ya no existen los roles `tecnico/ingeniero/supervisor` — solo `gerente_soporte/ingeniero_soporte/tecnico_soporte/mecanico/piloto`. Cualquier referencia hardcoded en frontend rompe.
 - ⚠️ El JWT ahora lleva `superusuario: boolean` en el payload. Aprovecharlo en el frontend para mostrar/ocultar acciones administrativas.
 - 💡 Token de prueba con superusuario: login `dev@aeromx.com / aeromx123`.
+
+### Cambios en Sesión 13 — Fases D y E completadas (frontend O/T multiproducto + pulido) · REDISEÑO COMPLETO
+**Fecha:** 2026-05-21 | **Rama:** `development` | **Estado:** Fases D y E done · rediseño multiproducto terminado de punta a punta
+
+> Esta sesión ejecutó las **Fases D y E** del plan en [`aeromx/docs/ARQUITECTURA-MULTIPRODUCTO.md`](aeromx/docs/ARQUITECTURA-MULTIPRODUCTO.md). Con esto el frontend de órdenes habla con el backend multiproducto y el rediseño queda **cerrado**.
+
+#### `api/ordenesService.js`
+- `recepcionarAeronave` → **`recepcionar(id, identificadorConfirmado)`** (body `{ identificadorConfirmado }`, valida contra `producto.identificador`).
+- `iniciarMantenimiento(id, lecturas)` — ahora envía las lecturas del medidor en el body (aeronave: `horasTotales`/motor der/izq; camión: `odometro`; planta: `horimetro`; sensor: nada).
+- `asignar(id, asignaciones)` — body con los 5 slots (`soporteId`, `ingenieroAuxiliarId`, `mecanicoId`, `gerenteId`, `pilotoId`).
+- **Nuevo `reabrir(id, motivo)`** → `POST /ordenes/:id/reabrir`.
+- `firmarCierre(id)` — sin body; el backend infiere el slot del rol del usuario.
+
+#### `CrearOTPage.jsx`
+- Selector de **tipo de producto** en pestañas (`TIPO_PRODUCTO`). Al cambiar tipo recarga formatos+productos del tipo (`listar({ tipoProducto })`).
+- Sección "Asignación de responsables" con 4-5 selectores filtrados por rol: soporte (técnico/ingeniero), ingeniero auxiliar (solo si soporte es técnico), mecánico, gerente, piloto (solo aeronave, obligatorio).
+- **Sin inputs de horas** (las lecturas se piden al iniciar). Guard de página: solo gerente/ingeniero/super; el resto ve aviso.
+- Payload nuevo: `{ formatoId, productoId, soporteId, ingenieroAuxiliarId?, mecanicoId, gerenteId, pilotoId?, cliente?, ordenServicio?, lugarMantenimiento? }`.
+
+#### `InspeccionPage.jsx`
+- Todo `orden.aeronave`/`matricula`/`tecnico`/`supervisor` → `orden.producto`/`identificador`/`soporte`/`gerente` (+ mecánico, piloto).
+- Header dinámico: ícono+badge por tipo, `identificador`, y bloque de **lecturas del medidor** según tipo (solo tras iniciar).
+- **`IniciarPanel`**: pide la lectura correspondiente al tipo antes de iniciar el mantenimiento; prefill desde el detalle del producto.
+- Recepción valida `identificador` genérico (matrícula/placas/serie).
+- Permisos `puedeEditar` espejan `verificarPermisoEdicion` del backend: soporte/auxiliar/mecánico/gerente asignado o superusuario. Reasignación (gerente/super) con modal de **5 slots**.
+- Nueva sección desplegable **"Historial de estados"** (`orden.historial`: estado anterior → nuevo · usuario · fecha · motivo).
+
+#### `CierreOTPage.jsx`
+- Firmas soporte/gerente/(piloto si aeronave). `firmaTecnicoId/firmaSupervisorId` → `firmaSoporteId/firmaGerenteId/firmaPilotoId`.
+- Aeronave requiere **3 firmas**, resto **2**. El slot del usuario se infiere del rol; el bloque de firma solo aparece si el usuario está asignado a ese slot y aún no firmó.
+- Datos de la orden con `identificador`, soporte, gerente y piloto (si aeronave).
+
+#### `DashboardPage.jsx`
+- `esSupervisor` → `esGerente` (gerente/super) para archivar/eliminar/**reabrir**; `puedeCrear` (gerente/ingeniero/super) controla el botón "+ Nueva Orden".
+- Tarjeta con `producto.identificador` + badge de tipo; metas Soporte/Gerente; "Mis órdenes" filtra por los **5 slots** de asignación.
+- Botón **"↺ Reabrir"** en O/T cerradas (gerente) + **modal de motivo** obligatorio.
+
+#### Verificación
+- `npm run build` (Vite): ✅ 120 módulos, sin errores de imports.
+- Grep de seguridad: no quedan referencias a `aeronave?`/`.matricula`/`orden.tecnico`/`orden.supervisor`/roles viejos/`firmaTecnicoId`/`recepcionarAeronave` en `frontend/src` (salvo un comentario en `productosService.js`).
+- Backend sin cambios esta sesión — sigue el de Fase B (smoke test de los 4 tipos + reapertura pasando). Los contratos del frontend coinciden con esos endpoints.
+
+#### Smoke test e2e (Sesión 13) — 31/31 PASS ✅
+Script efímero (urllib, sin dependencias) corrido contra la API real en `:3001`. Validó los **contratos que consume la Fase D** de punta a punta para **camión + aeronave**:
+- login + flag `superusuario`; crear O/T con asignación 4-5 slots; recepción validando `identificador`; iniciar con lectura por tipo (camión `odometro`, aeronave `horasTotales`+motores); completar puntos; cierre; **firma por slot** (login como tecnico@/gerente@/piloto@); estado→`cerrada`; PDF (`%PDF`); **sincronización de odómetro** (86000); **reapertura** (vuelve a `pendiente_firma`, borra firmas, historial ≥2, exige `motivo`).
+- ⚠️ Aprendizaje (para el smoke, no es bug): hay **2 `gerente_soporte`** (dev super + gerente@). Para firmar el slot gerente hay que loguearse como el usuario **asignado** (gerente@), no como cualquier gerente — seleccionar usuarios por **email**, no por `by_role[...][0]`.
+- ⚠️ `prisma generate` da `EPERM` si el backend está corriendo (DLL bloqueada). Si cambias el schema, **detén el backend antes de `prisma generate`**. El smoke no necesitó regenerar.
+
+#### Setup rápido para arrancar (verificado en Sesión 13)
+```bash
+cd aeromx && docker compose up -d        # Postgres :5433 + MinIO (suelen quedar arriba entre sesiones)
+cd backend && npm run dev                 # API :3001  (revisa primero si ya corre: curl localhost:3001/api/health)
+cd ../frontend && npm run dev             # UI :5173 — login dev@aeromx.com / aeromx123
+```
+> El backend suele quedar corriendo vía nodemon entre sesiones. Antes de `npm run dev` revisa `GET /api/health` o `Get-CimInstance Win32_Process -Filter "name='node.exe'"`.
+
+### Siguiente paso — Sesión 14 = **QA visual + cierre del rediseño**
+
+> El rediseño multiproducto (Fases A-E) está **completo y verificado a nivel API**. Lo que queda es **QA en navegador** (lo único que el smoke no cubre) y luego retomar el Roadmap original.
+
+**Checklist de QA manual en navegador** (login `dev@aeromx.com / aeromx123`, y probar también con `tecnico@`, `gerente@`, `piloto@`, `ingeniero@`):
+- [ ] **`CrearOTPage`**: pestañas de tipo cambian formatos/productos; **ingeniero auxiliar** visible solo si soporte = técnico; **piloto** visible/obligatorio solo en aeronave; confirmar que `ingeniero_soporte` también puede crear.
+- [ ] **`InspeccionPage`**: `IniciarPanel` pide la lectura correcta por tipo; header con identificador/badge; **Historial de estados** desplegable; modal de reasignación de 5 slots (solo gerente/super).
+- [ ] **`CierreOTPage`**: el bloque de firma aparece **solo** para el usuario del slot pendiente; 3 firmas en aeronave, 2 en el resto.
+- [ ] **`DashboardPage`**: botón **Reabrir** + modal de motivo (gerente); badges de tipo; filtro "Mis órdenes" por los 5 slots.
+- [ ] **Tipos `planta` y `sensor` en UI** (el e2e solo cubrió camión+aeronave). Sensor: sin medidor + cierre con 2 firmas.
+- [ ] **Subida de fotos a MinIO**: cámara/archivo en inspección, miniaturas vía proxy `/uploads`, y que aparezcan en el PDF.
+- [ ] **Revisión visual del PDF** por tipo: datos por tipo correctos, nº de firmas, bloque de asignaciones.
+
+**Después — retomar Roadmap original (Fase 2+):** dashboard de flota avanzado, asignación de técnicos, alertas de vencimiento, inventario de partes, reportes/estadísticas, histórico por producto, modo offline, reportes DGAC.

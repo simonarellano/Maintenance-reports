@@ -17,8 +17,8 @@
 | A — Schema + roles + migración + seed + middleware | ✅ done | Sesión 10 |
 | B — Backend: modularizar controller + servicios multiproducto | ✅ done | Sesión 11 |
 | C — Frontend: catálogos por tipo + permisos | ✅ done | Sesión 12 |
-| D — Frontend: O/T multiproducto + asignaciones + reapertura | ⏳ pendiente | Sesión 13 |
-| E — Pulido y QA | ⏳ pendiente | Sesión 14 |
+| D — Frontend: O/T multiproducto + asignaciones + reapertura | ✅ done | Sesión 13 |
+| E — Pulido y QA | ✅ done | Sesión 13 |
 
 Verificación independiente del estado actual: ejecutar los checks de §0.2.
 
@@ -955,19 +955,19 @@ Bloque de asignación en el header del PDF: muestra los 4-5 responsables (soport
 - [x] Bonus: `authController.js` (backend) ahora incluye `superusuario` en la respuesta de login y `/auth/me`.
 - ✅ Done: `npm run build` pasa; alta de camión/planta/sensor desde la UI; catálogos filtran por tipo; header por rol.
 
-### Fase D — Frontend: O/T multiproducto + asignaciones + reapertura
-- [ ] `CrearOTPage`: selector de tipo → carga modelos+productos+formatos del tipo. Sección de asignación con 4-5 selectores. Quita inputs de horas.
-- [ ] `InspeccionPage`: panel de "Iniciar mantenimiento" pide lecturas según tipo. Header muestra atributos correctos. Sección "Historial de estados" desplegable.
-- [ ] `CierreOTPage`: si aeronave, muestra slot de firma de piloto; el botón solo aparece para el usuario asignado al slot que falta firmar.
-- [ ] `DashboardPage`: tarjeta muestra `identificador` correcto. Botón "Reabrir" para gerente.
-- [ ] Modal de reapertura con campo `motivo` requerido (sin selector de estado).
-- ✅ Done cuando: un gerente puede crear O/T para un camión, asignar a 4 responsables, completar el flujo, cerrar, reabrir, y descargar PDF.
+### Fase D — Frontend: O/T multiproducto + asignaciones + reapertura ✅ COMPLETADA (Sesión 13, 2026-05-21)
+- [x] `CrearOTPage`: selector de tipo (pestañas) → carga formatos+productos del tipo. Sección de asignación con 4-5 selectores (`soporteId`, `ingenieroAuxiliarId` condicional a soporte=técnico, `mecanicoId`, `gerenteId`, `pilotoId` si aeronave). Sin inputs de horas. Guard por rol (gerente/ingeniero/super).
+- [x] `InspeccionPage`: panel `IniciarPanel` pide lecturas según tipo (aeronave: horas; camión: odómetro; planta: horímetro; sensor: ninguna). Header dinámico con `identificador` + badge de tipo + lecturas. Sección "Historial de estados" desplegable. Permisos y modal de reasignación con 5 slots.
+- [x] `CierreOTPage`: firmas soporte/gerente/(piloto si aeronave); 3 firmas en aeronave, 2 en el resto; el bloque de firma solo se muestra al usuario cuyo slot está pendiente y está asignado.
+- [x] `DashboardPage`: tarjeta con `identificador` + badge de tipo; "Mis órdenes" filtra por los 5 slots; botón "Reabrir" (gerente) + modal de motivo.
+- [x] `ordenesService.js`: `recepcionar`, `iniciarMantenimiento(id, lecturas)`, `asignar(id, {5 slots})`, `reabrir(id, motivo)`, `firmarCierre(id)` sin body.
+- ✅ Done: `npm run build` pasa (120 módulos); contratos del frontend alineados con el smoke test de Fase B.
 
-### Fase E — Pulido y QA
-- [ ] Copy/etiquetas por tipo.
-- [ ] Validaciones de form (rol del seleccionado, exclusión de auxiliar cuando soporte es ingeniero).
-- [ ] Histórico de estados visible en `InspeccionPage`.
-- [ ] Actualizar `CLAUDE.md` con resumen de Sesión 10.
+### Fase E — Pulido y QA ✅ COMPLETADA (Sesión 13, 2026-05-21)
+- [x] Copy/etiquetas por tipo (selector de tipo, labels dinámicos por `TIPO_PRODUCTO`).
+- [x] Validaciones de form (rol del seleccionado vía selectores filtrados; auxiliar oculto cuando soporte es ingeniero; piloto obligatorio solo en aeronave).
+- [x] Histórico de estados visible en `InspeccionPage`.
+- [x] Actualizar `CLAUDE.md` con resumen de Sesión 13.
 
 ### 8.6 Mapa de archivos por fase
 

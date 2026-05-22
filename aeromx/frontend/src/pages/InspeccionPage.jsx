@@ -4,9 +4,9 @@ import { Header } from '../components/Header'
 import { ordenesService } from '../api/ordenesService'
 import { usuariosService } from '../api/usuariosService'
 import { useAuthStore } from '../store/authStore'
-import { T, STATUS, PUNTO_STATUS } from '../tokens/design'
+import { T, STATUS, PUNTO_STATUS, TIPO_PRODUCTO, ROL_LABELS } from '../tokens/design'
 import {
-  Btn, BtnSm, Card, DroneMark, ErrorBanner, Field, FieldSelect, Hdr,
+  Btn, BtnSm, Card, ErrorBanner, FieldSelect, Hdr,
   KV, Modal, Pill, ProgressBar, Spinner,
 } from '../components/ui'
 
@@ -19,6 +19,8 @@ const ESTADOS_OPCIONES = [
 
 const REQUIERE_OBSERVACION = ['correcto_con_danos', 'requiere_atencion']
 
+const ROLES_SOPORTE = ['tecnico_soporte', 'ingeniero_soporte']
+
 export default function InspeccionPage() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -27,12 +29,11 @@ export default function InspeccionPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [collapsed, setCollapsed] = useState({})
-  const [matriculaInput, setMatriculaInput] = useState('')
+  const [identificadorInput, setIdentificadorInput] = useState('')
   const [recepcionLoading, setRecepcionLoading] = useState(false)
-  const [iniciarLoading, setIniciarLoading] = useState(false)
   const [showAsignacion, setShowAsignacion] = useState(false)
-  const [tecnicos, setTecnicos] = useState([])
-  const [supervisores, setSupervisores] = useState([])
+  const [usuarios, setUsuarios] = useState([])
+  const [showHistorial, setShowHistorial] = useState(false)
 
   useEffect(() => { cargarOrden() }, [id])
 
@@ -51,12 +52,8 @@ export default function InspeccionPage() {
 
   const cargarUsuariosParaAsignacion = async () => {
     try {
-      const [tecsRes, supsRes] = await Promise.all([
-        usuariosService.listar({ activo: true }),
-        usuariosService.listar({ rol: 'supervisor', activo: true }),
-      ])
-      setTecnicos((tecsRes.data || []).filter(u => u.rol === 'tecnico' || u.rol === 'ingeniero'))
-      setSupervisores(supsRes.data || [])
+      const { data } = await usuariosService.listar({ activo: true })
+      setUsuarios(data || [])
     } catch (e) {
       console.error(e)
     }
@@ -64,12 +61,12 @@ export default function InspeccionPage() {
 
   const abrirAsignacion = () => {
     setShowAsignacion(true)
-    if (tecnicos.length === 0) cargarUsuariosParaAsignacion()
+    if (usuarios.length === 0) cargarUsuariosParaAsignacion()
   }
 
-  const guardarAsignacion = async (tecnicoId, supervisorId) => {
+  const guardarAsignacion = async (asignaciones) => {
     try {
-      await ordenesService.asignar(id, { tecnicoId, supervisorId })
+      await ordenesService.asignar(id, asignaciones)
       setShowAsignacion(false)
       await cargarOrden()
     } catch (e) {
@@ -78,15 +75,15 @@ export default function InspeccionPage() {
     }
   }
 
-  const recepcionarAeronave = async () => {
-    if (!matriculaInput.trim()) {
-      setError('Ingresa la matrícula para validar la recepción')
+  const recepcionar = async () => {
+    if (!identificadorInput.trim()) {
+      setError('Ingresa el identificador para validar la recepción')
       return
     }
     setRecepcionLoading(true)
     try {
-      await ordenesService.recepcionarAeronave(id, matriculaInput.trim())
-      setMatriculaInput('')
+      await ordenesService.recepcionar(id, identificadorInput.trim())
+      setIdentificadorInput('')
       setError('')
       await cargarOrden()
     } catch (e) {
@@ -96,18 +93,10 @@ export default function InspeccionPage() {
     }
   }
 
-  const iniciarMantenimiento = async () => {
-    if (!confirm('¿Iniciar el mantenimiento? El timestamp se registrará ahora y se podrán capturar resultados.')) return
-    setIniciarLoading(true)
-    try {
-      await ordenesService.iniciarMantenimiento(id)
-      setError('')
-      await cargarOrden()
-    } catch (e) {
-      setError(e.response?.data?.error || 'Error iniciando el mantenimiento')
-    } finally {
-      setIniciarLoading(false)
-    }
+  const iniciarMantenimiento = async (lecturas) => {
+    await ordenesService.iniciarMantenimiento(id, lecturas)
+    setError('')
+    await cargarOrden()
   }
 
   const actualizarResultado = async (resultadoId, data) => {
@@ -204,9 +193,17 @@ export default function InspeccionPage() {
   const progreso = totalPuntos > 0 ? completados / totalPuntos : 0
   const todosCompletos = totalPuntos > 0 && completados === totalPuntos
 
-  const esTecnicoAsignado = user && orden.tecnico?.id === user.id
-  const esSupervisorAsignado = user && user.rol === 'supervisor' && orden.supervisor?.id === user.id
-  const puedeEditar = (esTecnicoAsignado || esSupervisorAsignado) && orden.estado !== 'cerrada'
+  const producto = orden.producto
+  const tipo = producto?.tipoProducto
+  const tipoMeta = TIPO_PRODUCTO[tipo] || { label: 'Producto', icon: '📦', c: T.cyan, bg: T.cD }
+
+  const uid = user?.id
+  const esSuper = user?.superusuario === true
+  const esGerente = esSuper || user?.rol === 'gerente_soporte'
+  const asignado = esSuper || [
+    orden.soporte, orden.ingenieroAuxiliar, orden.mecanico, orden.gerente,
+  ].some((u) => u?.id === uid)
+  const puedeEditar = asignado && orden.estado !== 'cerrada'
 
   const tieneRecepcion = Boolean(orden.fechaRecepcion)
   const tieneInicio = Boolean(orden.fechaInicio)
@@ -214,6 +211,7 @@ export default function InspeccionPage() {
   const soloLectura = !puedeEditar || inspeccionBloqueada
 
   const st = STATUS[orden.estado] || { label: orden.estado, c: T.sub, bg: T.s2 }
+  const historial = orden.historial || []
 
   return (
     <div style={{ minHeight: '100vh', background: T.bg }}>
@@ -226,22 +224,26 @@ export default function InspeccionPage() {
           right={<Pill label={st.label} color={st.c} bg={st.bg} />}
         />
 
-        {/* Drone card */}
+        {/* Producto card */}
         <Card padding={16} style={{ marginBottom: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
             <div style={{
               width: 44, height: 44, borderRadius: 12,
-              background: T.cD, border: `1px solid ${T.cyan}30`,
+              background: tipoMeta.bg, border: `1px solid ${tipoMeta.c}40`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 22,
             }}>
-              <DroneMark size={26} />
+              {tipoMeta.icon}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 16, fontWeight: 600, color: T.text }}>
-                {orden.aeronave?.modelo?.nombre || 'Aeronave'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 16, fontWeight: 600, color: T.text }}>
+                  {producto?.modelo?.nombre || tipoMeta.label}
+                </span>
+                <Pill small label={tipoMeta.label} color={tipoMeta.c} bg={tipoMeta.bg} />
               </div>
-              <div style={{ fontFamily: T.mono, fontSize: 13, color: T.cyan, marginTop: 2 }}>
-                {orden.aeronave?.matricula}
+              <div style={{ fontFamily: T.mono, fontSize: 13, color: tipoMeta.c, marginTop: 2 }}>
+                {producto?.identificador}
               </div>
             </div>
           </div>
@@ -250,35 +252,17 @@ export default function InspeccionPage() {
             display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
             gap: 12, paddingTop: 12, borderTop: `1px solid ${T.border}`,
           }}>
-            <KV k="Técnico"     v={orden.tecnico?.nombre} />
-            <KV k="Supervisor"  v={orden.supervisor?.nombre || 'Sin asignar'} />
+            <KV k="Soporte"  v={soporteLabel(orden.soporte, orden.ingenieroAuxiliar)} />
+            <KV k="Mecánico" v={orden.mecanico?.nombre || 'Sin asignar'} />
+            <KV k="Gerente"  v={orden.gerente?.nombre || 'Sin asignar'} />
+            {tipo === 'aeronave' && <KV k="Piloto" v={orden.piloto?.nombre || 'Sin asignar'} />}
             {orden.cliente && <KV k="Cliente" v={orden.cliente} />}
             {orden.ordenServicio && <KV k="O/S" v={orden.ordenServicio} mono />}
             {orden.lugarMantenimiento && <KV k="Lugar" v={`📍 ${orden.lugarMantenimiento}`} />}
-            <KV
-              k="Creación"
-              v={orden.createdAt ? new Date(orden.createdAt).toLocaleDateString('es-MX') : '—'}
-              mono
-            />
-            {orden.fechaCierre && (
-              <KV
-                k="Cierre"
-                v={new Date(orden.fechaCierre).toLocaleDateString('es-MX')}
-                mono
-                vColor={T.green}
-              />
-            )}
           </div>
 
-          {/* Horas */}
-          <div style={{
-            display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: 10, marginTop: 14, paddingTop: 14, borderTop: `1px solid ${T.border}`,
-          }}>
-            <HoraChip label="Horas totales"   v={orden.horasAlMomento ?? 0} />
-            <HoraChip label="Motor derecho"   v={orden.horasMotorDer ?? 0} />
-            <HoraChip label="Motor izquierdo" v={orden.horasMotorIzq ?? 0} />
-          </div>
+          {/* Lecturas del medidor (si ya se capturaron al iniciar) */}
+          {tieneInicio && <LecturasMedidor tipo={tipo} orden={orden} />}
 
           {/* Hitos */}
           <div style={{
@@ -286,12 +270,12 @@ export default function InspeccionPage() {
             gap: 8, marginTop: 14, paddingTop: 14, borderTop: `1px solid ${T.border}`,
           }}>
             <HitoTemporal n={1} label="Creación" ts={orden.createdAt} />
-            <HitoTemporal n={2} label="Recepción aeronave" ts={orden.fechaRecepcion} />
+            <HitoTemporal n={2} label="Recepción" ts={orden.fechaRecepcion} />
             <HitoTemporal n={3} label="Inicio mantenimiento" ts={orden.fechaInicio} />
             <HitoTemporal n={4} label="Finalización" ts={orden.fechaCierre} />
           </div>
 
-          {user?.rol === 'supervisor' && orden.estado !== 'cerrada' && (
+          {esGerente && orden.estado !== 'cerrada' && (
             <div style={{
               marginTop: 14, paddingTop: 14, borderTop: `1px solid ${T.border}`,
               display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
@@ -300,7 +284,7 @@ export default function InspeccionPage() {
               <BtnSm
                 variant="surface"
                 onClick={abrirAsignacion}
-                label="Reasignar técnico / supervisor"
+                label="Reasignar responsables"
               />
             </div>
           )}
@@ -318,22 +302,22 @@ export default function InspeccionPage() {
             }}
           >
             <div style={{ fontSize: 15, fontWeight: 700, color: T.amber, marginBottom: 4 }}>
-              Paso 1 · Recepción de la aeronave
+              Paso 1 · Recepción del {tipoMeta.label.toLowerCase()}
             </div>
             <p style={{ fontSize: 13, color: T.text, marginBottom: 12, lineHeight: 1.5 }}>
-              Confirma la recepción de la aeronave ingresando su matrícula para validar la identidad.
-              <br/>Esperada: <span style={{ fontFamily: T.mono, color: T.amber, fontWeight: 700 }}>
-                {orden.aeronave?.matricula}
+              Confirma la recepción ingresando el identificador para validar la identidad.
+              <br/>Esperado: <span style={{ fontFamily: T.mono, color: T.amber, fontWeight: 700 }}>
+                {producto?.identificador}
               </span>
             </p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <input
                 type="text"
-                value={matriculaInput}
-                onChange={(e) => setMatriculaInput(e.target.value.toUpperCase())}
-                placeholder="Matrícula de la aeronave"
+                value={identificadorInput}
+                onChange={(e) => setIdentificadorInput(e.target.value.toUpperCase())}
+                placeholder="Identificador (matrícula / placas / serie)"
                 style={{
-                  flex: 1, minWidth: 200,
+                  flex: 1, minWidth: 240,
                   background: T.s2, border: `1px solid ${T.amber}40`,
                   borderRadius: 10, padding: '10px 12px',
                   color: T.text, fontFamily: T.mono, fontSize: 14,
@@ -343,46 +327,30 @@ export default function InspeccionPage() {
               <Btn
                 variant="amber"
                 disabled={recepcionLoading}
-                onClick={recepcionarAeronave}
+                onClick={recepcionar}
                 label={recepcionLoading ? 'Validando…' : 'Registrar recepción'}
               />
             </div>
           </Card>
         )}
 
-        {/* Paso 2: Iniciar mantenimiento */}
+        {/* Paso 2: Iniciar mantenimiento (pide lecturas según tipo) */}
         {tieneRecepcion && !tieneInicio && puedeEditar && (
-          <Card
-            padding={18}
-            style={{
-              marginBottom: 14,
-              background: T.cD,
-              borderColor: `${T.cyan}40`,
-              borderLeft: `3px solid ${T.cyan}`,
-            }}
-          >
-            <div style={{ fontSize: 15, fontWeight: 700, color: T.cyan, marginBottom: 4 }}>
-              Paso 2 · Iniciar mantenimiento
-            </div>
-            <p style={{ fontSize: 13, color: T.text, marginBottom: 12, lineHeight: 1.5 }}>
-              La orden está <strong>congelada</strong>: no se pueden capturar resultados hasta iniciar
-              formalmente los trabajos. Al pulsar el botón se registra el timestamp de inicio.
-            </p>
-            <Btn
-              disabled={iniciarLoading}
-              onClick={iniciarMantenimiento}
-              label={iniciarLoading ? 'Iniciando…' : '▶ Iniciar mantenimiento'}
-            />
-          </Card>
+          <IniciarPanel
+            tipo={tipo}
+            producto={producto}
+            onIniciar={iniciarMantenimiento}
+            onError={setError}
+          />
         )}
 
         {/* Modo solo lectura */}
         {!puedeEditar && orden.estado !== 'cerrada' && (
           <Card padding={14} style={{ marginBottom: 14 }}>
             <div style={{ fontSize: 13, color: T.sub, lineHeight: 1.5 }}>
-              🔒 <strong style={{ color: T.text }}>Modo solo lectura.</strong> Esta orden está asignada a{' '}
-              <strong style={{ color: T.text }}>{orden.tecnico?.nombre || 'otro usuario'}</strong> — solo
-              la persona asignada o el supervisor de la orden pueden capturar datos.
+              🔒 <strong style={{ color: T.text }}>Modo solo lectura.</strong> Solo el soporte,
+              el ingeniero auxiliar, el mecánico o el gerente asignados pueden capturar datos
+              de esta orden.
             </div>
           </Card>
         )}
@@ -398,12 +366,12 @@ export default function InspeccionPage() {
         <Modal
           open={showAsignacion}
           onClose={() => setShowAsignacion(false)}
-          title="Asignación de la orden"
+          title="Reasignar responsables"
+          maxWidth={560}
         >
           <ModalAsignacionContent
             orden={orden}
-            tecnicos={tecnicos}
-            supervisores={supervisores}
+            usuarios={usuarios}
             onClose={() => setShowAsignacion(false)}
             onGuardar={guardarAsignacion}
           />
@@ -489,7 +457,7 @@ export default function InspeccionPage() {
                           <Th minWidth={170}>Componente</Th>
                           <Th minWidth={220}>Descripción de trabajo</Th>
                           <Th minWidth={240}>Condición</Th>
-                          <Th minWidth={130}>Firma técnico</Th>
+                          <Th minWidth={130}>Firma</Th>
                           <Th minWidth={200}>Registro fotográfico</Th>
                         </tr>
                       </thead>
@@ -514,6 +482,40 @@ export default function InspeccionPage() {
             )
           })}
         </div>
+
+        {/* Historial de estados */}
+        {historial.length > 0 && (
+          <section style={{
+            marginTop: 14,
+            background: T.s1, border: `1px solid ${T.border}`,
+            borderRadius: 14, overflow: 'hidden',
+          }}>
+            <button
+              onClick={() => setShowHistorial((v) => !v)}
+              style={{
+                width: '100%', padding: '14px 16px',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
+                background: T.s2, border: 'none',
+                borderBottom: showHistorial ? `1px solid ${T.border}` : 'none',
+                cursor: 'pointer', textAlign: 'left', fontFamily: T.font,
+              }}
+            >
+              <div style={{ fontSize: 14, fontWeight: 600, color: T.text }}>
+                🕓 Historial de estados ({historial.length})
+              </div>
+              <span style={{ color: T.sub, fontSize: 12, fontFamily: T.mono }}>
+                {showHistorial ? '▼' : '▶'}
+              </span>
+            </button>
+            {showHistorial && (
+              <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {historial.map((h) => (
+                  <HistorialRow key={h.id} h={h} />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
 
         {/* Acciones */}
         <div style={{
@@ -540,6 +542,174 @@ export default function InspeccionPage() {
         </div>
       </main>
     </div>
+  )
+}
+
+// Etiqueta combinada de soporte (+ auxiliar si existe).
+function soporteLabel(soporte, auxiliar) {
+  if (!soporte) return 'Sin asignar'
+  return auxiliar ? `${soporte.nombre} (+ ${auxiliar.nombre})` : soporte.nombre
+}
+
+// ── Lecturas del medidor según el tipo ───────────────────────
+function LecturasMedidor({ tipo, orden }) {
+  let chips = []
+  if (tipo === 'aeronave') {
+    chips = [
+      { label: 'Horas totales', v: orden.horasTotales, unidad: 'h' },
+      { label: 'Motor derecho', v: orden.horasMotorDer, unidad: 'h' },
+      { label: 'Motor izquierdo', v: orden.horasMotorIzq, unidad: 'h' },
+    ]
+  } else if (tipo === 'camion') {
+    chips = [{ label: 'Odómetro', v: orden.odometro, unidad: 'km' }]
+  } else if (tipo === 'planta') {
+    chips = [{ label: 'Horímetro', v: orden.horimetro, unidad: 'h' }]
+  } else {
+    return null // sensor: sin medidor
+  }
+  return (
+    <div style={{
+      display: 'grid', gridTemplateColumns: `repeat(${Math.min(chips.length, 3)}, 1fr)`,
+      gap: 10, marginTop: 14, paddingTop: 14, borderTop: `1px solid ${T.border}`,
+    }}>
+      {chips.map((c) => <MedidorChip key={c.label} label={c.label} v={c.v} unidad={c.unidad} />)}
+    </div>
+  )
+}
+
+function MedidorChip({ label, v, unidad }) {
+  return (
+    <div style={{
+      background: T.cD, border: `1px solid ${T.cyan}25`,
+      borderRadius: 12, padding: '10px 12px', textAlign: 'center',
+    }}>
+      <div style={{
+        fontSize: 9, color: T.cyan, fontWeight: 600,
+        letterSpacing: '0.07em', textTransform: 'uppercase',
+      }}>{label}</div>
+      <div style={{
+        fontSize: 18, color: T.cyan, fontWeight: 700,
+        fontFamily: T.mono, marginTop: 2,
+      }}>{v ?? 0} {unidad}</div>
+    </div>
+  )
+}
+
+// ── Panel de inicio de mantenimiento con lecturas por tipo ────
+function IniciarPanel({ tipo, producto, onIniciar, onError }) {
+  // Prefill con la lectura actual del producto.
+  const det = producto?.[tipo]
+  const [horasTotales, setHorasTotales] = useState(det?.horasTotales ?? '')
+  const [horasMotorDer, setHorasMotorDer] = useState(det?.horasMotorDer ?? '')
+  const [horasMotorIzq, setHorasMotorIzq] = useState(det?.horasMotorIzq ?? '')
+  const [odometro, setOdometro] = useState(det?.odometro ?? '')
+  const [horimetro, setHorimetro] = useState(det?.horimetro ?? '')
+  const [loading, setLoading] = useState(false)
+
+  const iniciar = async () => {
+    const lecturas = {}
+    if (tipo === 'aeronave') {
+      if (horasTotales === '' || horasTotales === null) {
+        onError('Las horas totales son obligatorias para iniciar el mantenimiento de una aeronave')
+        return
+      }
+      lecturas.horasTotales = Number(horasTotales)
+      if (horasMotorDer !== '') lecturas.horasMotorDer = Number(horasMotorDer)
+      if (horasMotorIzq !== '') lecturas.horasMotorIzq = Number(horasMotorIzq)
+    } else if (tipo === 'camion') {
+      if (odometro === '') { onError('El odómetro es obligatorio para iniciar el mantenimiento'); return }
+      lecturas.odometro = Number(odometro)
+    } else if (tipo === 'planta') {
+      if (horimetro === '') { onError('El horímetro es obligatorio para iniciar el mantenimiento'); return }
+      lecturas.horimetro = Number(horimetro)
+    }
+    setLoading(true)
+    try {
+      await onIniciar(lecturas)
+    } catch (e) {
+      onError(e.response?.data?.error || 'Error iniciando el mantenimiento')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const inputStyle = {
+    width: '100%', background: T.s2, border: `1px solid ${T.cyan}40`,
+    borderRadius: 10, padding: '10px 12px',
+    color: T.text, fontFamily: T.mono, fontSize: 14, outline: 'none',
+  }
+  const labelStyle = {
+    fontSize: 10, color: T.cyan, fontWeight: 600,
+    letterSpacing: '0.06em', textTransform: 'uppercase',
+    display: 'block', marginBottom: 5,
+  }
+
+  return (
+    <Card
+      padding={18}
+      style={{
+        marginBottom: 14,
+        background: T.cD,
+        borderColor: `${T.cyan}40`,
+        borderLeft: `3px solid ${T.cyan}`,
+      }}
+    >
+      <div style={{ fontSize: 15, fontWeight: 700, color: T.cyan, marginBottom: 4 }}>
+        Paso 2 · Iniciar mantenimiento
+      </div>
+      <p style={{ fontSize: 13, color: T.text, marginBottom: 14, lineHeight: 1.5 }}>
+        La orden está <strong>congelada</strong> hasta iniciar los trabajos. Registra la lectura
+        del medidor al momento de iniciar; con esto se habilita la captura de resultados.
+      </p>
+
+      {tipo === 'aeronave' && (
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+          gap: 12, marginBottom: 14,
+        }}>
+          <div>
+            <label style={labelStyle}>Horas totales *</label>
+            <input type="number" step="0.1" min="0" value={horasTotales}
+              onChange={(e) => setHorasTotales(e.target.value)} placeholder="0.0" style={inputStyle} />
+          </div>
+          <div>
+            <label style={labelStyle}>Horas motor der.</label>
+            <input type="number" step="0.1" min="0" value={horasMotorDer}
+              onChange={(e) => setHorasMotorDer(e.target.value)} placeholder="0.0" style={inputStyle} />
+          </div>
+          <div>
+            <label style={labelStyle}>Horas motor izq.</label>
+            <input type="number" step="0.1" min="0" value={horasMotorIzq}
+              onChange={(e) => setHorasMotorIzq(e.target.value)} placeholder="0.0" style={inputStyle} />
+          </div>
+        </div>
+      )}
+      {tipo === 'camion' && (
+        <div style={{ maxWidth: 240, marginBottom: 14 }}>
+          <label style={labelStyle}>Odómetro (km) *</label>
+          <input type="number" step="1" min="0" value={odometro}
+            onChange={(e) => setOdometro(e.target.value)} placeholder="0" style={inputStyle} />
+        </div>
+      )}
+      {tipo === 'planta' && (
+        <div style={{ maxWidth: 240, marginBottom: 14 }}>
+          <label style={labelStyle}>Horímetro (h) *</label>
+          <input type="number" step="0.1" min="0" value={horimetro}
+            onChange={(e) => setHorimetro(e.target.value)} placeholder="0.0" style={inputStyle} />
+        </div>
+      )}
+      {tipo === 'sensor' && (
+        <p style={{ fontSize: 12, color: T.sub, marginBottom: 14 }}>
+          Los sensores no llevan medidor — solo confirma el inicio del mantenimiento.
+        </p>
+      )}
+
+      <Btn
+        disabled={loading}
+        onClick={iniciar}
+        label={loading ? 'Iniciando…' : '▶ Iniciar mantenimiento'}
+      />
+    </Card>
   )
 }
 
@@ -573,24 +743,40 @@ function HitoTemporal({ n, label, ts }) {
   )
 }
 
-// ── Hora chip ────────────────────────────────────────────────
-function HoraChip({ label, v }) {
+// ── Fila del historial de estados ────────────────────────────
+function HistorialRow({ h }) {
+  const stA = STATUS[h.estadoAnterior] || { label: h.estadoAnterior, c: T.sub, bg: T.s2 }
+  const stN = STATUS[h.estadoNuevo] || { label: h.estadoNuevo, c: T.sub, bg: T.s2 }
   return (
     <div style={{
-      background: T.cD, border: `1px solid ${T.cyan}25`,
-      borderRadius: 12, padding: '10px 12px', textAlign: 'center',
+      background: T.s2, border: `1px solid ${T.border}`,
+      borderRadius: 10, padding: '10px 14px',
     }}>
-      <div style={{
-        fontSize: 9, color: T.cyan, fontWeight: 600,
-        letterSpacing: '0.07em', textTransform: 'uppercase',
-      }}>{label}</div>
-      <div style={{
-        fontSize: 18, color: T.cyan, fontWeight: 700,
-        fontFamily: T.mono, marginTop: 2,
-      }}>{v} h</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <Pill small label={stA.label} color={stA.c} bg={stA.bg} />
+        <span style={{ color: T.sub, fontFamily: T.mono }}>→</span>
+        <Pill small label={stN.label} color={stN.c} bg={stN.bg} />
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: T.sub, fontFamily: T.mono }}>
+          {new Date(h.createdAt).toLocaleString('es-MX', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit',
+          })}
+        </span>
+      </div>
+      <div style={{ fontSize: 12, color: T.text, marginTop: 6 }}>
+        {h.usuario?.nombre || 'Usuario'}
+        <span style={{ color: T.sub }}> · {ROL_LABELS[h.usuario?.rol] || h.usuario?.rol}</span>
+      </div>
+      {h.motivo && (
+        <div style={{ fontSize: 12, color: T.sub, marginTop: 4, fontStyle: 'italic' }}>
+          “{h.motivo}”
+        </div>
+      )}
     </div>
   )
 }
+
+// ── Hora chip ────────────────────────────────────────────────
 
 // ── Th ──────────────────────────────────────────────────────────
 function Th({ children, width, minWidth }) {
@@ -606,54 +792,94 @@ function Th({ children, width, minWidth }) {
   )
 }
 
-// ── Modal asignación ─────────────────────────────────────────
-function ModalAsignacionContent({ orden, tecnicos, supervisores, onClose, onGuardar }) {
-  const [tecnicoId, setTecnicoId] = useState(orden.tecnico?.id || '')
-  const [supervisorId, setSupervisorId] = useState(orden.supervisor?.id || '')
+// ── Modal asignación (5 slots) ───────────────────────────────
+function ModalAsignacionContent({ orden, usuarios, onClose, onGuardar }) {
+  const tipo = orden.producto?.tipoProducto
+  const esAeronave = tipo === 'aeronave'
+
+  const [soporteId, setSoporteId] = useState(orden.soporte?.id || '')
+  const [ingenieroAuxiliarId, setIngenieroAuxiliarId] = useState(orden.ingenieroAuxiliar?.id || '')
+  const [mecanicoId, setMecanicoId] = useState(orden.mecanico?.id || '')
+  const [gerenteId, setGerenteId] = useState(orden.gerente?.id || '')
+  const [pilotoId, setPilotoId] = useState(orden.piloto?.id || '')
   const [saving, setSaving] = useState(false)
+
+  const soportes  = usuarios.filter((u) => ROLES_SOPORTE.includes(u.rol))
+  const ingenieros = usuarios.filter((u) => u.rol === 'ingeniero_soporte')
+  const mecanicos  = usuarios.filter((u) => u.rol === 'mecanico')
+  const gerentes   = usuarios.filter((u) => u.rol === 'gerente_soporte')
+  const pilotos    = usuarios.filter((u) => u.rol === 'piloto')
+
+  const soporteEsTecnico = soportes.find((u) => u.id === soporteId)?.rol === 'tecnico_soporte'
+
+  const opcion = (u) => ({
+    value: u.id,
+    label: `${u.nombre} · ${ROL_LABELS[u.rol] || u.rol}${u.licenciaNum ? ` · ${u.licenciaNum}` : ''}`,
+  })
 
   const guardar = async () => {
     setSaving(true)
     try {
-      await onGuardar(tecnicoId, supervisorId || null)
+      await onGuardar({
+        soporteId,
+        ingenieroAuxiliarId: soporteEsTecnico ? (ingenieroAuxiliarId || null) : null,
+        mecanicoId,
+        gerenteId,
+        ...(esAeronave ? { pilotoId } : {}),
+      })
     } finally {
       setSaving(false)
     }
   }
 
+  const completo = soporteId && mecanicoId && gerenteId && (!esAeronave || pilotoId)
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <FieldSelect
-        label="Técnico / Ingeniero responsable"
-        required
-        value={tecnicoId}
-        onChange={setTecnicoId}
+        label="Soporte (técnico o ingeniero)"
+        required value={soporteId} onChange={setSoporteId}
         placeholder="-- Selecciona --"
-        options={tecnicos.map(u => ({
-          value: u.id,
-          label: `${u.nombre} · ${u.rol}${u.licenciaNum ? ` · ${u.licenciaNum}` : ''}`,
-        }))}
+        options={soportes.map(opcion)}
+      />
+      {soporteEsTecnico && (
+        <FieldSelect
+          label="Ingeniero auxiliar (opcional)"
+          value={ingenieroAuxiliarId} onChange={setIngenieroAuxiliarId}
+          placeholder="-- Sin ingeniero auxiliar --"
+          options={ingenieros.map(opcion)}
+        />
+      )}
+      <FieldSelect
+        label="Mecánico"
+        required value={mecanicoId} onChange={setMecanicoId}
+        placeholder="-- Selecciona --"
+        options={mecanicos.map(opcion)}
       />
       <FieldSelect
-        label="Supervisor asignado"
-        value={supervisorId}
-        onChange={setSupervisorId}
-        placeholder="-- Sin supervisor --"
-        options={supervisores.map(u => ({
-          value: u.id,
-          label: `${u.nombre}${u.licenciaNum ? ` · ${u.licenciaNum}` : ''}`,
-        }))}
+        label="Gerente de soporte"
+        required value={gerenteId} onChange={setGerenteId}
+        placeholder="-- Selecciona --"
+        options={gerentes.map(opcion)}
       />
+      {esAeronave && (
+        <FieldSelect
+          label="Piloto"
+          required value={pilotoId} onChange={setPilotoId}
+          placeholder="-- Selecciona --"
+          options={pilotos.map(opcion)}
+        />
+      )}
       <p style={{ fontSize: 11, color: T.sub, lineHeight: 1.5 }}>
-        Solo el técnico asignado y el supervisor de la orden tendrán permisos de edición.
-        El resto de usuarios verá la orden en modo solo lectura.
+        El soporte, ingeniero auxiliar, mecánico y gerente asignados tienen permisos de edición.
+        El piloto solo firma el cierre (aeronaves).
       </p>
       <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
         <Btn variant="ghost" label="Cancelar" onClick={onClose} style={{ flex: 1 }} />
         <Btn
           label={saving ? 'Guardando…' : 'Guardar'}
           onClick={guardar}
-          disabled={saving || !tecnicoId}
+          disabled={saving || !completo}
           style={{ flex: 1 }}
         />
       </div>

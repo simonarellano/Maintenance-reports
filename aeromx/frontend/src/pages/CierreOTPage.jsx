@@ -55,7 +55,6 @@ export default function CierreOTPage() {
     setSubmitLoading(true)
     try {
       await ordenesService.crearCierre(id, data)
-      // Recargar para que cierre quede visible y avanzar a firma
       await cargarOrden()
       setStep('firma')
     } catch (err) {
@@ -68,30 +67,58 @@ export default function CierreOTPage() {
   // ── Estado derivado de las firmas ──
   const cierre = orden?.cierre
   const rolUsuario = user?.rol
-  const tecnicoFirmado    = Boolean(cierre?.firmaTecnicoId)
-  const supervisorFirmado = Boolean(cierre?.firmaSupervisorId)
-  const ordenCerrada      = orden?.estado === 'cerrada'
+  const esSuper = user?.superusuario === true
+  const esAeronave = orden?.producto?.tipoProducto === 'aeronave'
 
-  // ¿El rol del usuario actual ya firmó?
-  const yaFirmoMiRol = useMemo(() => {
-    if (!cierre || !rolUsuario) return false
-    if (rolUsuario === 'tecnico' || rolUsuario === 'ingeniero') return tecnicoFirmado
-    if (rolUsuario === 'supervisor') return supervisorFirmado
-    return false
-  }, [cierre, rolUsuario, tecnicoFirmado, supervisorFirmado])
+  const soporteFirmado = Boolean(cierre?.firmaSoporteId)
+  const gerenteFirmado = Boolean(cierre?.firmaGerenteId)
+  const pilotoFirmado  = Boolean(cierre?.firmaPilotoId)
+  const ordenCerrada   = orden?.estado === 'cerrada'
 
-  // Etiqueta del rol que aún falta por firmar
-  const rolPendiente = useMemo(() => {
-    if (!cierre) return null
-    if (!tecnicoFirmado && !supervisorFirmado) return null
-    if (!tecnicoFirmado) return 'Técnico / Ingeniero'
-    if (!supervisorFirmado) return 'Supervisor'
+  // Slot de firma que le corresponde al usuario según su rol.
+  const miSlot = useMemo(() => {
+    if (rolUsuario === 'gerente_soporte') return 'gerente'
+    if (rolUsuario === 'tecnico_soporte' || rolUsuario === 'ingeniero_soporte') return 'soporte'
+    if (rolUsuario === 'piloto') return 'piloto'
     return null
-  }, [cierre, tecnicoFirmado, supervisorFirmado])
+  }, [rolUsuario])
+
+  // ¿El usuario está asignado al slot que le toca?
+  const asignadoAMiSlot = useMemo(() => {
+    if (!orden || !miSlot) return false
+    if (esSuper) return true
+    if (miSlot === 'soporte') return orden.soporte?.id === user.id || orden.ingenieroAuxiliar?.id === user.id
+    if (miSlot === 'gerente') return orden.gerente?.id === user.id
+    if (miSlot === 'piloto')  return esAeronave && orden.piloto?.id === user.id
+    return false
+  }, [orden, miSlot, esSuper, esAeronave, user?.id])
+
+  const yaFirmoMiRol = useMemo(() => {
+    if (!cierre || !miSlot) return false
+    if (miSlot === 'soporte') return soporteFirmado
+    if (miSlot === 'gerente') return gerenteFirmado
+    if (miSlot === 'piloto')  return pilotoFirmado
+    return false
+  }, [cierre, miSlot, soporteFirmado, gerenteFirmado, pilotoFirmado])
+
+  const puedeFirmar = Boolean(cierre) && miSlot && asignadoAMiSlot && !yaFirmoMiRol
+    && (miSlot !== 'piloto' || esAeronave)
+
+  // Firmas que aún faltan (para el banner).
+  const pendientes = useMemo(() => {
+    if (!cierre) return []
+    const arr = []
+    if (!soporteFirmado) arr.push('Soporte')
+    if (!gerenteFirmado) arr.push('Gerente')
+    if (esAeronave && !pilotoFirmado) arr.push('Piloto')
+    return arr
+  }, [cierre, soporteFirmado, gerenteFirmado, pilotoFirmado, esAeronave])
+
+  const totalFirmas = esAeronave ? 3 : 2
 
   const handleFirmar = async () => {
-    if (yaFirmoMiRol) {
-      setError('Tu firma ya fue registrada para esta orden')
+    if (!puedeFirmar) {
+      setError('No tienes una firma pendiente que aplicar en esta orden')
       return
     }
     if (!firmaConfirmada) {
@@ -101,15 +128,11 @@ export default function CierreOTPage() {
     setSubmitLoading(true)
     setError('')
     try {
-      const firmaData = { tipo: rolUsuario }
-      await ordenesService.firmarCierre(id, firmaData)
+      await ordenesService.firmarCierre(id)
       await cargarOrden()
-      // El check sólo se desmarca después de firmar correctamente; el botón
-      // queda deshabilitado por `yaFirmoMiRol`, así que no hay rebote.
       setFirmaConfirmada(false)
     } catch (err) {
       setError(err.response?.data?.error || err.response?.data?.message || 'Error firmando cierre')
-      // Mantenemos el check marcado para que el usuario no tenga que volver a tildarlo si reintenta.
     } finally {
       setSubmitLoading(false)
     }
@@ -143,6 +166,8 @@ export default function CierreOTPage() {
   const totalPuntos = orden?.resultados?.length || 0
   const completados = orden?.resultados?.filter((r) => r.completado).length || 0
   const todosCompletos = totalPuntos > 0 && completados === totalPuntos
+  const identificador = orden?.producto?.identificador
+  const modeloNombre = orden?.producto?.modelo?.nombre
 
   return (
     <div style={{ minHeight: '100vh', background: T.bg }}>
@@ -208,7 +233,7 @@ export default function CierreOTPage() {
                     {todosCompletos ? 'Todos los puntos completados' : 'Hay puntos sin completar'}
                   </div>
                   <div style={{ fontSize: 12, color: T.sub, marginTop: 2 }}>
-                    {completados} de {totalPuntos} · {orden?.aeronave?.matricula} · {orden?.aeronave?.modelo?.nombre}
+                    {completados} de {totalPuntos} · {identificador} · {modeloNombre}
                   </div>
                 </div>
               </div>
@@ -310,45 +335,54 @@ export default function CierreOTPage() {
               <div style={{
                 display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 14,
               }}>
-                <KV k="Orden"      v={orden?.numeroOt} mono vColor={T.cyan} />
-                <KV k="Aeronave"   v={orden?.aeronave?.matricula} mono />
-                <KV k="Técnico"    v={orden?.tecnico?.nombre} />
-                <KV k="Supervisor" v={orden?.supervisor?.nombre} />
+                <KV k="Orden"    v={orden?.numeroOt} mono vColor={T.cyan} />
+                <KV k="Producto" v={identificador} mono />
+                <KV k="Soporte"  v={orden?.soporte?.nombre} />
+                <KV k="Gerente"  v={orden?.gerente?.nombre} />
+                {esAeronave && <KV k="Piloto" v={orden?.piloto?.nombre} />}
               </div>
             </Card>
 
-            {/* Estado de las firmas — la O/T cierra cuando ambas están aplicadas */}
+            {/* Estado de las firmas — la O/T cierra cuando todas están aplicadas */}
             <Card padding={16}>
               <div style={{
                 fontSize: 11, color: T.sub, letterSpacing: '0.07em',
                 textTransform: 'uppercase', fontWeight: 600, marginBottom: 12,
-              }}>Firmas requeridas</div>
+              }}>Firmas requeridas ({totalFirmas})</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <FirmaRow
-                  rol="Técnico / Ingeniero"
-                  firmado={tecnicoFirmado}
-                  nombre={cierre?.tecnico?.nombre || orden?.tecnico?.nombre}
-                  fecha={cierre?.fechaFirmaTecnico}
+                  rol="Soporte"
+                  firmado={soporteFirmado}
+                  nombre={cierre?.soporte?.nombre || orden?.soporte?.nombre}
+                  fecha={cierre?.fechaFirmaSoporte}
                 />
                 <FirmaRow
-                  rol="Supervisor"
-                  firmado={supervisorFirmado}
-                  nombre={cierre?.supervisor?.nombre || orden?.supervisor?.nombre}
-                  fecha={cierre?.fechaFirmaSupervisor}
+                  rol="Gerente"
+                  firmado={gerenteFirmado}
+                  nombre={cierre?.gerente?.nombre || orden?.gerente?.nombre}
+                  fecha={cierre?.fechaFirmaGerente}
                 />
+                {esAeronave && (
+                  <FirmaRow
+                    rol="Piloto"
+                    firmado={pilotoFirmado}
+                    nombre={cierre?.piloto?.nombre || orden?.piloto?.nombre}
+                    fecha={cierre?.fechaFirmaPiloto}
+                  />
+                )}
               </div>
-              {!ordenCerrada && rolPendiente && (
+              {!ordenCerrada && pendientes.length > 0 && (
                 <div style={{
                   marginTop: 12, padding: '10px 12px',
                   background: T.aD, border: `1px solid ${T.amber}30`,
                   borderRadius: 10, fontSize: 12, color: T.amber, lineHeight: 1.5,
                 }}>
-                  ⏳ La orden se cerrará automáticamente cuando firme el <strong>{rolPendiente}</strong>.
+                  ⏳ La orden se cerrará cuando firmen: <strong>{pendientes.join(', ')}</strong>.
                 </div>
               )}
             </Card>
 
-            {/* Banner de éxito cuando la O/T está cerrada — siempre visible una vez cerrada */}
+            {/* Banner de éxito cuando la O/T está cerrada */}
             {ordenCerrada && (
               <Card
                 padding={20}
@@ -374,7 +408,7 @@ export default function CierreOTPage() {
                       Orden cerrada y firmada
                     </div>
                     <div style={{ fontSize: 12, color: T.sub, marginTop: 2 }}>
-                      Ambas firmas fueron registradas. La O/T cambió a estado <strong style={{ color: T.text }}>cerrada</strong>.
+                      Las {totalFirmas} firmas fueron registradas. La O/T cambió a estado <strong style={{ color: T.text }}>cerrada</strong>.
                     </div>
                   </div>
                 </div>
@@ -399,129 +433,130 @@ export default function CierreOTPage() {
 
             {/* Bloque de firma — sólo si la O/T no está cerrada */}
             {!ordenCerrada && (
-              <>
-                {/* Identidad del firmante */}
-                <Card
-                  padding={18}
-                  style={{
-                    background: yaFirmoMiRol ? T.s1 : T.gD,
-                    borderColor: yaFirmoMiRol ? T.border : `${T.green}40`,
-                    borderLeft: `3px solid ${yaFirmoMiRol ? T.sub : T.green}`,
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+              puedeFirmar ? (
+                <>
+                  {/* Identidad del firmante */}
+                  <Card
+                    padding={18}
+                    style={{
+                      background: T.gD,
+                      borderColor: `${T.green}40`,
+                      borderLeft: `3px solid ${T.green}`,
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                      <div style={{
+                        width: 44, height: 44, borderRadius: 12,
+                        background: T.bg, border: `1px solid ${T.green}40`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        flexShrink: 0,
+                      }}>
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                          <path d="M12 2L4 6v6c0 5 3.5 9.5 8 11 4.5-1.5 8-6 8-11V6l-8-4z" stroke={T.green} strokeWidth="1.6"/>
+                          <path d="M9 12l2 2 4-4" stroke={T.green} strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>
+                          Firma Digital Segura
+                        </div>
+                        <div style={{ fontSize: 12, color: T.sub, marginTop: 2 }}>
+                          Firmarás el cierre como <strong style={{ color: T.text }}>{slotLabel(miSlot)}</strong>.
+                          Tu identidad se registra automáticamente.
+                        </div>
+                      </div>
+                    </div>
                     <div style={{
-                      width: 44, height: 44, borderRadius: 12,
-                      background: T.bg, border: `1px solid ${yaFirmoMiRol ? T.border : T.green + '40'}`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      flexShrink: 0,
+                      display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                      gap: 12, paddingTop: 12, borderTop: `1px solid ${T.green}25`,
                     }}>
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                        <path d="M12 2L4 6v6c0 5 3.5 9.5 8 11 4.5-1.5 8-6 8-11V6l-8-4z" stroke={yaFirmoMiRol ? T.sub : T.green} strokeWidth="1.6"/>
-                        <path d="M9 12l2 2 4-4" stroke={yaFirmoMiRol ? T.sub : T.green} strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    </div>
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>
-                        {yaFirmoMiRol ? 'Tu firma ya fue registrada' : 'Firma Digital Segura'}
-                      </div>
-                      <div style={{ fontSize: 12, color: T.sub, marginTop: 2 }}>
-                        {yaFirmoMiRol
-                          ? `Esperando la firma del ${rolPendiente || 'otro firmante'} para cerrar la O/T.`
-                          : 'Tu identidad será registrada automáticamente.'}
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{
-                    display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                    gap: 12, paddingTop: 12, borderTop: `1px solid ${yaFirmoMiRol ? T.border : T.green}25`,
-                  }}>
-                    <KV k="Usuario" v={user?.email} mono />
-                    <KV k="Rol" v={
-                      <Pill
-                        small
-                        label={ROL_LABELS[rolUsuario] || rolUsuario}
-                        color={yaFirmoMiRol ? T.sub : T.green}
-                        bg={yaFirmoMiRol ? T.s2 : T.gD}
+                      <KV k="Usuario" v={user?.email} mono />
+                      <KV k="Rol" v={
+                        <Pill small label={ROL_LABELS[rolUsuario] || rolUsuario} color={T.green} bg={T.gD} />
+                      } />
+                      <KV
+                        k="Fecha y hora"
+                        v={new Date().toLocaleString('es-MX', {
+                          day: '2-digit', month: '2-digit', year: 'numeric',
+                          hour: '2-digit', minute: '2-digit',
+                        })}
+                        mono
                       />
-                    } />
-                    <KV
-                      k="Fecha y hora"
-                      v={new Date().toLocaleString('es-MX', {
-                        day: '2-digit', month: '2-digit', year: 'numeric',
-                        hour: '2-digit', minute: '2-digit',
-                      })}
-                      mono
+                    </div>
+                  </Card>
+
+                  <label
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 12,
+                      background: T.s1, border: `1px solid ${firmaConfirmada ? T.cyan + '50' : T.border}`,
+                      borderRadius: 12, padding: '14px 16px',
+                      cursor: 'pointer', transition: 'border-color .15s',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={firmaConfirmada}
+                      onChange={(e) => setFirmaConfirmada(e.target.checked)}
+                      style={{ width: 18, height: 18, flexShrink: 0 }}
                     />
-                  </div>
-                </Card>
+                    <span style={{ color: T.text, fontSize: 14, fontWeight: 500, lineHeight: 1.5 }}>
+                      Confirmo que he revisado los datos y autorizo el cierre de esta orden de trabajo
+                    </span>
+                  </label>
 
-                {/* Confirmación + botón — sólo si el rol del usuario aún no firmó */}
-                {!yaFirmoMiRol && (
-                  <>
-                    <label
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 12,
-                        background: T.s1, border: `1px solid ${firmaConfirmada ? T.cyan + '50' : T.border}`,
-                        borderRadius: 12, padding: '14px 16px',
-                        cursor: 'pointer', transition: 'border-color .15s',
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={firmaConfirmada}
-                        onChange={(e) => setFirmaConfirmada(e.target.checked)}
-                        style={{ width: 18, height: 18, flexShrink: 0 }}
-                      />
-                      <span style={{ color: T.text, fontSize: 14, fontWeight: 500, lineHeight: 1.5 }}>
-                        Confirmo que he revisado los datos y autorizo el cierre de esta orden de trabajo
-                      </span>
-                    </label>
+                  <Card padding={14}>
+                    <p style={{ fontSize: 11, color: T.sub, lineHeight: 1.6 }}>
+                      Al confirmar, declaro que revisé y ejecuté los puntos de este formato de mantenimiento
+                      conforme a los procedimientos establecidos. Esta firma digital queda registrada en bitácora
+                      con identidad, rol y timestamp.
+                    </p>
+                  </Card>
 
-                    <Card padding={14}>
-                      <p style={{ fontSize: 11, color: T.sub, lineHeight: 1.6 }}>
-                        Al confirmar, declaro que revisé y ejecuté todos los puntos de este formato de mantenimiento
-                        conforme a los procedimientos establecidos. Esta firma digital queda registrada en bitácora
-                        con identidad, rol y timestamp.
-                      </p>
-                    </Card>
-
-                    <div style={{ display: 'flex', gap: 12 }}>
-                      <Btn
-                        variant="ghost"
-                        label="← Volver"
-                        onClick={() => navigate(`/ordenes/${id}/inspeccion`)}
-                        style={{ flex: 1 }}
-                      />
-                      <Btn
-                        variant={firmaConfirmada ? 'green' : 'ghost'}
-                        label={submitLoading ? 'Firmando…' : '✓ Firmar'}
-                        onClick={handleFirmar}
-                        disabled={submitLoading || !firmaConfirmada}
-                        style={{ flex: 1 }}
-                      />
-                    </div>
-                  </>
-                )}
-
-                {/* Si ya firmé pero falta el otro: solo botón volver */}
-                {yaFirmoMiRol && (
                   <div style={{ display: 'flex', gap: 12 }}>
                     <Btn
                       variant="ghost"
-                      label="Volver al dashboard"
-                      onClick={() => navigate('/dashboard')}
+                      label="← Volver"
+                      onClick={() => navigate(`/ordenes/${id}/inspeccion`)}
+                      style={{ flex: 1 }}
+                    />
+                    <Btn
+                      variant={firmaConfirmada ? 'green' : 'ghost'}
+                      label={submitLoading ? 'Firmando…' : '✓ Firmar'}
+                      onClick={handleFirmar}
+                      disabled={submitLoading || !firmaConfirmada}
                       style={{ flex: 1 }}
                     />
                   </div>
-                )}
-              </>
+                </>
+              ) : (
+                <Card padding={18}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: T.text, marginBottom: 6 }}>
+                    {yaFirmoMiRol ? 'Tu firma ya fue registrada' : 'No puedes firmar esta orden'}
+                  </div>
+                  <p style={{ fontSize: 12, color: T.sub, lineHeight: 1.55, marginBottom: 14 }}>
+                    {yaFirmoMiRol
+                      ? `Esperando la firma de: ${pendientes.join(', ') || 'los demás responsables'}.`
+                      : 'Solo el soporte, el gerente' + (esAeronave ? ' y el piloto' : '') + ' asignados pueden firmar el cierre.'}
+                  </p>
+                  <Btn
+                    variant="ghost"
+                    label="Volver al dashboard"
+                    onClick={() => navigate('/dashboard')}
+                  />
+                </Card>
+              )
             )}
           </div>
         )}
       </main>
     </div>
   )
+}
+
+function slotLabel(slot) {
+  if (slot === 'gerente') return 'gerente'
+  if (slot === 'piloto') return 'piloto'
+  return 'soporte'
 }
 
 // ── Fila por firma ────────────────────────────────────────────
