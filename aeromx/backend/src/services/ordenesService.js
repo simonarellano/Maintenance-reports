@@ -160,9 +160,9 @@ export function obtenerOrden(id) {
       },
       cierre: {
         include: {
-          soporte: { select: { id: true, nombre: true, rol: true } },
-          gerente: { select: { id: true, nombre: true, rol: true } },
-          piloto:  { select: { id: true, nombre: true, rol: true } },
+          soporte: { select: { id: true, nombre: true, rol: true, licenciaNum: true } },
+          gerente: { select: { id: true, nombre: true, rol: true, licenciaNum: true } },
+          piloto:  { select: { id: true, nombre: true, rol: true, licenciaNum: true } },
         },
       },
       historial: {
