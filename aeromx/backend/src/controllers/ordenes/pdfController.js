@@ -252,55 +252,43 @@ function renderPersonal(doc, orden, ctx) {
 }
 
 function renderTrabajos(doc, orden, ctx) {
-  sectionTitle(doc, `${ctx.nextSectionNum()}. TRABAJOS REALIZADOS`, ctx.M, ctx.W)
-
+  ui.sectionHead(doc, ctx.nextSectionNum(), 'Trabajos realizados', ctx.M, ctx.W)
   const resultadosPorPunto = Object.fromEntries(orden.resultados.map((r) => [r.puntoId, r]))
+  const cols = ui.worksColumns(ctx.W)
+
+  ui.worksTableHeader(doc, cols, ctx.M)
 
   for (const seccion of orden.formato.secciones || []) {
-    doc.moveDown(0.2)
-    ensureSpace(doc, 60)
-    const secY = doc.y
-    doc.save()
-    doc.rect(ctx.M, secY, ctx.W, 18).fill(COLOR.bandBg)
-    doc.rect(ctx.M, secY, 3, 18).fill(COLOR.primary)
-    doc.restore()
-    doc.fillColor(COLOR.primary).font('Helvetica-Bold').fontSize(10)
-      .text(seccion.nombre.toUpperCase(), ctx.M + 10, secY + 5, {
-        width: ctx.W - 16, lineBreak: false, ellipsis: true,
-      })
-    doc.fillColor(COLOR.dark)
-    doc.y = secY + 22
-
-    const cols = [
-      { w: 24,  label: '#'           },
-      { w: 130, label: 'COMPONENTE'  },
-      { w: 175, label: 'DESCRIPCIÓN' },
-      { w: 85,  label: 'CONDICIÓN'   },
-      { w: 80,  label: 'FIRMA'       },
-      { w: 41,  label: 'FOTOS'       },
-    ]
-    drawTableHeader(doc, cols, ctx.M)
+    const puntos = (seccion.puntos || []).filter((p) => resultadosPorPunto[p.id])
+    if (puntos.length === 0) continue
+    const hechos = puntos.filter((p) => resultadosPorPunto[p.id]?.completado).length
+    ui.groupHead(doc, seccion.nombre, hechos, puntos.length, ctx.M, ctx.W)
 
     let idx = 1
-    for (const punto of seccion.puntos || []) {
+    for (const punto of puntos) {
       const r = resultadosPorPunto[punto.id]
-      if (!r) continue
-      drawTableRow(doc, cols, ctx.M, [
-        String(idx++),
-        `${punto.nombreComponente}${punto.esCritico ? ' ★' : ''}`,
-        punto.descripcion || '—',
-        ESTADO_LABELS_PDF[r.estadoResultado] || r.estadoResultado,
-        r.firmadoPor ? (r.firmante?.nombre || 'Firmado') : '—',
-        String(r.fotos?.length || 0),
-      ], r)
+      ui.workRow(doc, cols, ctx.M, {
+        idx: String(idx++).padStart(2, '0'),
+        componente: punto.nombreComponente,
+        critico: punto.esCritico,
+        descripcion: punto.descripcion || '—',
+        estado: r.estadoResultado,
+        firma: r.firmadoPor ? (r.firmante?.nombre || 'Firmado') : (punto.esCritico ? 'Pendiente' : '— No req.'),
+        fotosN: r.fotos?.length || 0,
+        fotosM: r.fotos?.length || 0,
+      })
+      // (galería de fotos → Tarea 8)
     }
   }
 
+  // Leyenda al final de la sección
+  ui.ensureSpace(doc, 24)
   doc.moveDown(0.3)
-  ensureSpace(doc, 40)
-  doc.font('Helvetica-Oblique').fontSize(8).fillColor(COLOR.gray)
-    .text('★ = Punto crítico — requiere firma individual.', ctx.M, doc.y)
-  doc.fillColor(COLOR.dark)
+  font(doc, FONT.mono).fontSize(7.5).fillColor(COLOR.muted)
+    .text('✦ Punto crítico — requiere firma individual.   Condición: BUENO · CON DAÑOS · REQUIERE ATENCIÓN · N/A',
+      ctx.M, doc.y, { width: ctx.W, lineBreak: false, ellipsis: true })
+  doc.fillColor(COLOR.ink)
+  doc.moveDown(0.4)
 }
 
 function renderFotos(doc, orden, ctx) {

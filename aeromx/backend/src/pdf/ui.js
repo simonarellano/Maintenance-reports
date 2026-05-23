@@ -211,3 +211,100 @@ export function personCard(doc, x, y, w, h, card) {
     .text(card.licencia || '—', x + w / 2, footY + 14, { width: w / 2 - 16, lineBreak: false, ellipsis: true })
   doc.fillColor(COLOR.ink)
 }
+
+// ─── Tabla de trabajos ────────────────────────────────────────────────────────
+
+// Columnas de la tabla de trabajos. Anchos relativos al W disponible.
+export function worksColumns(W) {
+  // #, Componente, Descripción, Condición, Firma, Fotos
+  const fixed = 28 + 110 + 70 + 48        // #, condición, firma, fotos
+  const rest = W - fixed
+  return [
+    { key: 'idx',  w: 28,  label: '#' },
+    { key: 'comp', w: Math.round(rest * 0.42), label: 'Componente' },
+    { key: 'desc', w: rest - Math.round(rest * 0.42), label: 'Descripción' },
+    { key: 'cond', w: 110, label: 'Condición' },
+    { key: 'firma', w: 70, label: 'Firma' },
+    { key: 'fotos', w: 48, label: 'Fotos' },
+  ]
+}
+
+export function worksTableHeader(doc, cols, M) {
+  const totalW = cols.reduce((a, c) => a + c.w, 0)
+  const y = doc.y
+  doc.save().rect(M, y, totalW, 18).fill(COLOR.headBg).restore()
+  let x = M
+  font(doc, FONT.mono).fontSize(7.5).fillColor(COLOR.muted)
+  for (const c of cols) {
+    doc.text(c.label.toUpperCase(), x + 6, y + 5.5, {
+      width: c.w - 10, characterSpacing: 0.5, lineBreak: false, ellipsis: true,
+    })
+    x += c.w
+  }
+  doc.fillColor(COLOR.ink)
+  doc.y = y + 18
+}
+
+export function groupHead(doc, nombre, hechos, total, M, W) {
+  ensureSpace(doc, 22)
+  const y = doc.y
+  doc.save().rect(M, y, W, 18).fill(COLOR.groupBg).restore()
+  font(doc, FONT.monoMed).fontSize(8).fillColor(COLOR.ink)
+    .text(`GRUPO · ${nombre.toUpperCase()}`, M + 8, y + 5.5, {
+      width: W - 120, characterSpacing: 0.6, lineBreak: false, ellipsis: true,
+    })
+  font(doc, FONT.mono).fontSize(8).fillColor(COLOR.muted)
+    .text(`${hechos} de ${total} ejecutados`, M, y + 5.5, { width: W - 8, align: 'right', lineBreak: false })
+  doc.fillColor(COLOR.ink)
+  doc.y = y + 18
+}
+
+// Dibuja una fila de trabajo (sin la galería de fotos, que va aparte).
+// row: { idx, componente, critico, descripcion, estado, firma, fotosN, fotosM }
+export function workRow(doc, cols, M, row) {
+  const W = cols.reduce((a, c) => a + c.w, 0)
+  const descCol = cols.find((c) => c.key === 'desc')
+  const compCol = cols.find((c) => c.key === 'comp')
+
+  font(doc, FONT.sans).fontSize(8.5)
+  const descH = doc.heightOfString(row.descripcion || '—', { width: descCol.w - 12 })
+  const compH = doc.heightOfString(row.componente || '—', { width: compCol.w - 12 })
+  const rowH = Math.max(30, descH + 14, compH + 14)
+  ensureSpace(doc, rowH + 4)
+  const y = doc.y
+
+  // separador superior
+  doc.save()
+  doc.lineWidth(0.6).strokeColor(COLOR.line2).moveTo(M, y).lineTo(M + W, y).stroke()
+  doc.restore()
+
+  let x = M
+  for (const c of cols) {
+    const cx = x + 6
+    if (c.key === 'idx') {
+      font(doc, FONT.mono).fontSize(8).fillColor(COLOR.muted)
+        .text(row.idx, cx, y + 8, { width: c.w - 8, lineBreak: false })
+    } else if (c.key === 'comp') {
+      font(doc, FONT.sansSemi).fontSize(9).fillColor(COLOR.ink)
+        .text(row.componente, cx, y + 8, { width: c.w - 12, continued: !!row.critico })
+      if (row.critico) {
+        doc.fillColor(COLOR.critical).text(' ✦', { lineBreak: false })
+      }
+    } else if (c.key === 'desc') {
+      font(doc, FONT.sans).fontSize(8.5).fillColor(COLOR.ink2)
+        .text(row.descripcion || '—', cx, y + 8, { width: c.w - 12 })
+    } else if (c.key === 'cond') {
+      conditionPill(doc, cx, y + 6, row.estado)
+    } else if (c.key === 'firma') {
+      font(doc, FONT.mono).fontSize(7.5).fillColor(COLOR.muted)
+        .text(row.firma, cx, y + 8, { width: c.w - 10, lineBreak: false, ellipsis: true })
+    } else if (c.key === 'fotos') {
+      font(doc, FONT.mono).fontSize(8.5).fillColor(row.fotosN > 0 ? COLOR.ink : COLOR.muted)
+        .text(`${row.fotosN}/${row.fotosM}`, cx, y + 8, { width: c.w - 10, lineBreak: false })
+    }
+    x += c.w
+  }
+  doc.fillColor(COLOR.ink)
+  doc.y = y + rowH
+  return { rowStartY: y, rowH }
+}
