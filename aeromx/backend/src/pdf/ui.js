@@ -309,6 +309,45 @@ export function workRow(doc, cols, M, row) {
   return { rowStartY: y, rowH }
 }
 
+export function progressBar(doc, x, y, w, ratio) {
+  const h = 4
+  doc.save()
+  doc.roundedRect(x, y, w, h, 2).fill(COLOR.line2)
+  if (ratio > 0) doc.roundedRect(x, y, Math.max(2, w * Math.min(1, ratio)), h, 2).fill(COLOR.ok)
+  doc.restore()
+}
+
+// Bloque de dictamen de 3 celdas. cells: [{ label, value, color, sub, progress }]
+export function dictumBlock(doc, cells, M, W) {
+  const h = 76
+  const colW = W / cells.length
+  ensureSpace(doc, h + 8)
+  const y = doc.y
+  roundedPanel(doc, M, y, W, h, { stroke: COLOR.line })
+  doc.save().lineWidth(0.6).strokeColor(COLOR.line2)
+  for (let c = 1; c < cells.length; c++) {
+    const x = M + c * colW
+    doc.moveTo(x, y + 4).lineTo(x, y + h - 4).stroke()
+  }
+  doc.restore()
+
+  cells.forEach((cell, i) => {
+    const x = M + i * colW
+    font(doc, FONT.mono).fontSize(7.5).fillColor(COLOR.muted)
+      .text(cell.label.toUpperCase(), x + 14, y + 12, { width: colW - 24, characterSpacing: 0.5, lineBreak: false })
+    font(doc, FONT.sansMed).fontSize(20).fillColor(cell.color || COLOR.ink)
+      .text(cell.value, x + 14, y + 26, { width: colW - 24, lineBreak: false, ellipsis: true })
+    if (cell.progress != null) progressBar(doc, x + 14, y + 54, colW - 28, cell.progress)
+    if (cell.sub) {
+      font(doc, FONT.mono).fontSize(7.5).fillColor(COLOR.muted)
+        .text(cell.sub, x + 14, y + 54, { width: colW - 24, lineBreak: false, ellipsis: true })
+    }
+  })
+  doc.fillColor(COLOR.ink)
+  doc.y = y + h + 6
+  doc.x = M
+}
+
 // Galería de fotos bajo un renglón de trabajo. fotos: [{ urlArchivo, nombreArchivo, fechaCaptura }]
 // buffers: Map<urlArchivo, Buffer|null>. fmtFechaFn: (date)=>string.
 export function evidenceGallery(doc, fotos, buffers, M, W, fmtFechaFn) {

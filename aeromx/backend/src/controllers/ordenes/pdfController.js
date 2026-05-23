@@ -299,21 +299,44 @@ function renderFotos() { /* no-op */ }
 
 function renderDictamen(doc, orden, ctx) {
   if (!orden.cierre) return
-  sectionTitle(doc, `${ctx.nextSectionNum()}. DICTAMEN Y OBSERVACIONES GENERALES`, ctx.M, ctx.W)
+  ui.sectionHead(doc, ctx.nextSectionNum(), 'Dictamen y observaciones generales', ctx.M, ctx.W)
   const c = orden.cierre
-  drawKVGrid(doc, [
-    ['Puntos ejecutados',     `${ctx.totales.completados} de ${ctx.totales.totalPuntos}`],
-    ['¿Se encontró defecto?', c.seEncontroDefecto ? 'SÍ' : 'NO'],
-    ['Doc. correctivo',       c.refDocCorrectivo || '—'],
+  const { completados, totalPuntos } = ctx.totales
+  const ratio = totalPuntos > 0 ? completados / totalPuntos : 0
+
+  ui.dictumBlock(doc, [
+    { label: 'Puntos ejecutados', value: `${completados} / ${totalPuntos}`, progress: ratio },
+    {
+      label: '¿Se encontró defecto?',
+      value: c.seEncontroDefecto ? 'Sí' : 'No',
+      color: c.seEncontroDefecto ? COLOR.critical : COLOR.ok,
+      sub: c.seEncontroDefecto ? 'Ver documento correctivo' : 'Equipo apto para servicio',
+    },
+    {
+      label: 'Documento correctivo',
+      value: c.refDocCorrectivo || '—',
+      color: c.refDocCorrectivo ? COLOR.ink : COLOR.muted,
+      sub: c.refDocCorrectivo ? '' : 'No aplica',
+    },
   ], ctx.M, ctx.W)
 
-  if (c.observacionesGenerales) {
-    ensureSpace(doc, 60)
-    doc.font('Helvetica-Bold').fontSize(9).fillColor(COLOR.dark)
-      .text('Observaciones:', ctx.M, doc.y + 4)
-    doc.font('Helvetica').fontSize(9)
-      .text(c.observacionesGenerales, ctx.M, doc.y + 2, { width: ctx.W, align: 'justify' })
-  }
+  // bloque de observaciones
+  const obs = c.observacionesGenerales
+  ui.ensureSpace(doc, 60)
+  const y = doc.y
+  font(doc, FONT.sans).fontSize(10)
+  const txt = obs || 'Sin observaciones adicionales registradas por el técnico responsable.'
+  const txtH = doc.heightOfString(txt, { width: ctx.W - 28 })
+  const boxH = Math.max(48, txtH + 30)
+  ui.roundedPanel(doc, ctx.M, y, ctx.W, boxH, { fill: '#FCFBF6', stroke: COLOR.line })
+  font(doc, FONT.mono).fontSize(7.5).fillColor(COLOR.muted)
+    .text('OBSERVACIONES GENERALES', ctx.M + 14, y + 11, { characterSpacing: 0.6, lineBreak: false })
+  // fuente idéntica en ambos casos; el estado vacío se distingue por color + oblique
+  font(doc, FONT.sans).fontSize(10).fillColor(obs ? COLOR.ink2 : COLOR.muted)
+    .text(txt, ctx.M + 14, y + 24, { width: ctx.W - 28, oblique: !obs })
+  doc.fillColor(COLOR.ink)
+  doc.y = y + boxH + 6
+  doc.x = ctx.M
 }
 
 function renderFirmas(doc, orden, ctx) {
