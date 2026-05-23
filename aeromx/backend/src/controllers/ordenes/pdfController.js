@@ -277,7 +277,9 @@ function renderTrabajos(doc, orden, ctx) {
         fotosN: r.fotos?.length || 0,
         fotosM: r.fotos?.length || 0,
       })
-      // (galería de fotos → Tarea 8)
+      if (r.fotos && r.fotos.length > 0) {
+        ui.evidenceGallery(doc, r.fotos, ctx.fotosBuffers, ctx.M, ctx.W, fmtFecha)
+      }
     }
   }
 
@@ -291,11 +293,9 @@ function renderTrabajos(doc, orden, ctx) {
   doc.moveDown(0.4)
 }
 
-function renderFotos(doc, orden, ctx) {
-  const hayFotos = (orden.resultados || []).some((r) => (r.fotos || []).length > 0)
-  if (!hayFotos) return
-  drawEvidenciaFotografica(doc, orden, ctx.M, ctx.W, `${ctx.nextSectionNum()}. EVIDENCIA FOTOGRÁFICA`, ctx.fotosBuffers)
-}
+// La evidencia ahora se dibuja por renglón dentro de renderTrabajos.
+// Se deja como no-op para no romper secuencias guardadas que incluyan "fotos".
+function renderFotos() { /* no-op */ }
 
 function renderDictamen(doc, orden, ctx) {
   if (!orden.cierre) return
@@ -671,87 +671,4 @@ async function precargarFotos(orden) {
     }),
   )
   return map
-}
-
-function drawEvidenciaFotografica(doc, orden, M, W, titulo = 'EVIDENCIA FOTOGRÁFICA', fotosBuffers = new Map()) {
-  const resultadosPorPunto = Object.fromEntries(orden.resultados.map((r) => [r.puntoId, r]))
-  const grupos = []
-  for (const seccion of orden.formato.secciones) {
-    for (const punto of seccion.puntos) {
-      const r = resultadosPorPunto[punto.id]
-      if (!r || !r.fotos || r.fotos.length === 0) continue
-      grupos.push({ seccion, punto, resultado: r })
-    }
-  }
-  if (grupos.length === 0) return
-
-  sectionTitle(doc, titulo, M, W)
-
-  const COLS = 3
-  const GAP = 8
-  const CELL_W = (W - GAP * (COLS - 1)) / COLS
-  const IMG_H = 110
-  const CAPTION_H = 22
-  const CELL_H = IMG_H + CAPTION_H
-
-  for (const g of grupos) {
-    ensureSpace(doc, 28)
-    const titY = doc.y + 2
-    doc.font('Helvetica-Bold').fontSize(9).fillColor(COLOR.dark)
-      .text(`${g.seccion.nombre} · ${g.punto.nombreComponente}${g.punto.esCritico ? ' ★' : ''}`,
-        M, titY, { width: W, lineBreak: false, ellipsis: true })
-    doc.y = titY + 14
-
-    let col = 0
-    let rowY = doc.y
-    for (let i = 0; i < g.resultado.fotos.length; i++) {
-      const foto = g.resultado.fotos[i]
-      const buffer = fotosBuffers.get(foto.urlArchivo) || null
-
-      if (col === 0) {
-        ensureSpace(doc, CELL_H + 6)
-        rowY = doc.y
-      }
-      const x = M + col * (CELL_W + GAP)
-
-      doc.lineWidth(0.5).strokeColor(COLOR.border).rect(x, rowY, CELL_W, IMG_H).stroke()
-
-      if (buffer) {
-        try {
-          doc.image(buffer, x + 2, rowY + 2, {
-            fit: [CELL_W - 4, IMG_H - 4],
-            align: 'center', valign: 'center',
-          })
-        } catch {
-          dibujarPlaceholderFoto(doc, x, rowY, CELL_W, IMG_H, 'Imagen ilegible')
-        }
-      } else {
-        dibujarPlaceholderFoto(doc, x, rowY, CELL_W, IMG_H, 'Archivo no disponible')
-      }
-
-      const fecha = foto.fechaCaptura ? fmtFecha(foto.fechaCaptura) : ''
-      const captionY = rowY + IMG_H + 3
-      doc.font('Helvetica').fontSize(7).fillColor(COLOR.gray)
-        .text(`${i + 1}. ${foto.nombreArchivo || 'foto'}${fecha ? ` · ${fecha}` : ''}`,
-          x + 2, captionY, { width: CELL_W - 4, lineBreak: false, ellipsis: true })
-      doc.fillColor(COLOR.dark)
-
-      col++
-      if (col >= COLS) {
-        col = 0
-        doc.y = rowY + CELL_H + 6
-      }
-    }
-    if (col !== 0) doc.y = rowY + CELL_H + 6
-    doc.moveDown(0.2)
-  }
-}
-
-function dibujarPlaceholderFoto(doc, x, y, w, h, label) {
-  doc.save()
-  doc.rect(x + 1, y + 1, w - 2, h - 2).fill(COLOR.light)
-  doc.restore()
-  doc.font('Helvetica-Oblique').fontSize(8).fillColor(COLOR.gray)
-    .text(label, x, y + h / 2 - 6, { width: w, align: 'center', lineBreak: false })
-  doc.fillColor(COLOR.dark)
 }

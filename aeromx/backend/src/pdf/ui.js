@@ -308,3 +308,61 @@ export function workRow(doc, cols, M, row) {
   doc.y = y + rowH
   return { rowStartY: y, rowH }
 }
+
+// Galería de fotos bajo un renglón de trabajo. fotos: [{ urlArchivo, nombreArchivo, fechaCaptura }]
+// buffers: Map<urlArchivo, Buffer|null>. fmtFechaFn: (date)=>string.
+export function evidenceGallery(doc, fotos, buffers, M, W, fmtFechaFn) {
+  if (!fotos || fotos.length === 0) return
+  const cols = 3
+  const gap = 8
+  const padL = 24
+  const innerW = W - padL
+  const cellW = (innerW - gap * (cols - 1)) / cols
+  const imgH = 92
+  const capH = 16
+  const cellH = imgH + capH
+
+  // banda de evidencia (fondo + borde punteado superior)
+  const rows = Math.ceil(fotos.length / cols)
+  const blockH = 22 + rows * cellH + (rows - 1) * gap + 8
+  ensureSpace(doc, blockH)
+  const y0 = doc.y
+
+  doc.save().rect(M, y0, W, blockH).fill(COLOR.evidenceBg).restore()
+  doc.save().lineWidth(0.7).strokeColor(COLOR.line).dash(2, { space: 2 })
+    .moveTo(M, y0).lineTo(M + W, y0).stroke().undash().restore()
+
+  font(doc, FONT.mono).fontSize(7.5).fillColor(COLOR.muted)
+    .text('EVIDENCIA FOTOGRÁFICA', M + padL, y0 + 8, { characterSpacing: 0.8, lineBreak: false })
+
+  let cy = y0 + 22
+  fotos.forEach((foto, i) => {
+    const c = i % cols
+    const x = M + padL + c * (cellW + gap)
+    const buf = buffers.get(foto.urlArchivo) || null
+    doc.lineWidth(0.6).strokeColor(COLOR.line).roundedRect(x, cy, cellW, imgH, 4).stroke()
+    if (buf) {
+      try {
+        doc.save().roundedRect(x, cy, cellW, imgH, 4).clip()
+        doc.image(buf, x + 2, cy + 2, { fit: [cellW - 4, imgH - 4], align: 'center', valign: 'center' })
+      } catch {
+        font(doc, FONT.sans).fontSize(7.5).fillColor(COLOR.muted)
+          .text('Imagen ilegible', x, cy + imgH / 2 - 4, { width: cellW, align: 'center', lineBreak: false })
+      } finally {
+        doc.restore()
+      }
+    } else {
+      font(doc, FONT.sans).fontSize(7.5).fillColor(COLOR.muted)
+        .text('Archivo no disponible', x, cy + imgH / 2 - 4, { width: cellW, align: 'center', lineBreak: false })
+    }
+    const fecha = foto.fechaCaptura ? ` · ${fmtFechaFn(foto.fechaCaptura)}` : ''
+    font(doc, FONT.mono).fontSize(7).fillColor(COLOR.muted)
+      .text(`Foto ${String(i + 1).padStart(2, '0')}${fecha}`, x, cy + imgH + 3, {
+        width: cellW, lineBreak: false, ellipsis: true,
+      })
+    if (c === cols - 1) cy += cellH + gap
+  })
+  doc.fillColor(COLOR.ink)
+  doc.y = y0 + blockH
+  doc.x = M
+}
