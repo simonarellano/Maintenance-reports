@@ -15,36 +15,10 @@ const COMPANY = {
   email: 'soporte@hydra.mx',
 }
 
-const ESTADO_LABELS_PDF = {
-  bueno: 'BUENO', correcto_con_danos: 'CON DAÑOS',
-  requiere_atencion: 'REQUIERE ATENCIÓN', no_aplica: 'N/A',
-}
-
 const TIPO_LABELS = {
   aeronave: 'Aeronave', camion: 'Camión', planta: 'Planta de energía', sensor: 'Sensor',
 }
 
-// ─── Shim temporal de compatibilidad ────────────────────────────────────────
-// Los renderers §01–§06 aún referencian la paleta vieja. Este objeto los mantiene
-// funcionando hasta que cada renderer sea migrado en tareas posteriores.
-// TODO: eliminar llave a llave conforme avancen las tareas 4–11.
-const _COMPAT = {
-  primary:   COLOR.accent,        // azul acento (#2F5FA6)
-  primaryDk: COLOR.ink,           // tinta oscura
-  bandBg:    COLOR.ink,           // fondo de banda oscuro
-  bandText:  COLOR.paper,         // texto sobre banda oscura
-  border:    COLOR.line,          // borde claro
-  gray:      COLOR.muted,         // texto secundario
-  dark:      COLOR.ink,           // tinta principal
-  light:     COLOR.accentSoft,    // fondo suave
-  rowAten:   COLOR.criticalSoft,  // fila "requiere atención"
-  rowDanos:  COLOR.warnSoft,      // fila "con daños"
-  rowOk:     COLOR.okSoft,        // fila completada OK
-  green:     COLOR.ok,            // verde de firma confirmada
-  obsColor:  COLOR.critical,      // rojo de observaciones (era #ff4545) — renombrado de 'accent' para no sobreescribir COLOR.accent del tema
-}
-// Mezclamos el shim sobre COLOR para que las referencias COLOR.border, etc. resuelvan.
-Object.assign(COLOR, _COMPAT)
 
 // ─── Datos del producto según tipo ──────────────────────────────────────────
 
@@ -101,15 +75,6 @@ function filasDatosProducto(orden) {
     ]
   }
   return []
-}
-
-// Etiqueta de hito 2 según tipo (recepción)
-function etiquetaRecepcion(tipo) {
-  if (tipo === 'aeronave') return '2. Recepción aeronave'
-  if (tipo === 'camion')   return '2. Recepción camión'
-  if (tipo === 'planta')   return '2. Recepción planta'
-  if (tipo === 'sensor')   return '2. Recepción sensor'
-  return '2. Recepción'
 }
 
 // ─── Endpoint principal ─────────────────────────────────────────────────────
@@ -458,168 +423,30 @@ function drawTitleRow(doc, orden, M, W) {
   doc.x = M
 }
 
-function sectionTitle(doc, txt, M, W) {
-  ensureSpace(doc, 40)
-  doc.moveDown(0.4)
-  const titleY = doc.y
-  doc.rect(M, titleY, W, 20).fill(COLOR.light)
-  doc.rect(M, titleY, 3, 20).fill(COLOR.primary)
-  doc.fillColor(COLOR.primaryDk).font('Helvetica-Bold').fontSize(11)
-    .text(txt, M + 10, titleY + 5, { width: W - 16, lineBreak: false })
-  doc.fillColor(COLOR.dark)
-  doc.y = titleY + 24
-}
-
 function drawMarkdownBlock(doc, label, body, M, W) {
-  ensureSpace(doc, 30)
+  ui.ensureSpace(doc, 30)
   doc.moveDown(0.3)
-  doc.font('Helvetica-Bold').fontSize(13).fillColor(COLOR.dark)
-    .text(label, M, doc.y, { width: W, lineBreak: true })
-
+  font(doc, FONT.sansSemi).fontSize(12).fillColor(COLOR.ink).text(label, M, doc.y, { width: W })
   const underlineY = doc.y + 2
-  doc.lineWidth(0.5).strokeColor(COLOR.border).moveTo(M, underlineY).lineTo(M + W, underlineY).stroke()
+  doc.lineWidth(0.7).strokeColor(COLOR.line).moveTo(M, underlineY).lineTo(M + W, underlineY).stroke()
   doc.y = underlineY + 6
   doc.x = M
-
   renderMarkdown(doc, body, {
-    M, W,
-    colorText:   COLOR.dark,
-    colorAccent: COLOR.primaryDk,
-    colorMuted:  COLOR.gray,
-    colorRule:   COLOR.border,
+    M, W, colorText: COLOR.ink2, colorAccent: COLOR.accent, colorMuted: COLOR.muted, colorRule: COLOR.line,
   })
-
-  doc.fillColor(COLOR.dark).font('Helvetica')
+  doc.fillColor(COLOR.ink)
+  font(doc, FONT.sans)
   doc.moveDown(0.4)
-  doc.x = M
 }
-
-function drawKVGrid(doc, pairs, M, W) {
-  const colW = W / 2
-  const rowH = 20
-  const rows = Math.ceil(pairs.length / 2)
-  ensureSpace(doc, rows * rowH + 12)
-  const gridY = doc.y
-
-  for (let i = 0; i < pairs.length; i++) {
-    const col = i % 2
-    const row = Math.floor(i / 2)
-    const x = M + col * colW
-    const y = gridY + row * rowH
-
-    doc.lineWidth(0.5).strokeColor(COLOR.border)
-    doc.rect(x, y, colW, rowH).stroke()
-    doc.font('Helvetica-Bold').fontSize(7).fillColor(COLOR.gray)
-      .text(String(pairs[i][0]).toUpperCase(), x + 6, y + 3, {
-        width: colW - 12, lineBreak: false, ellipsis: true,
-      })
-    doc.font('Helvetica').fontSize(8.5).fillColor(COLOR.dark)
-      .text(String(pairs[i][1] ?? ''), x + 6, y + 10, {
-        width: colW - 12, height: rowH - 11, ellipsis: true, lineBreak: false,
-      })
-  }
-  doc.y = gridY + rows * rowH + 6
-}
-
-const TABLE_PAD_X = 4
-const TABLE_PAD_Y = 4
-const TABLE_FONT_SIZE = 7.5
-const TABLE_HEADER_FONT_SIZE = 7.5
-const TABLE_OBS_FONT_SIZE = 7
-const TABLE_MIN_ROW_H = 18
-
-function drawTableHeader(doc, cols, M) {
-  ensureSpace(doc, 40)
-  const headerY = doc.y
-  const totalW = cols.reduce((a, c) => a + c.w, 0)
-  doc.save()
-  doc.rect(M, headerY, totalW, 16).fill(COLOR.bandBg)
-  doc.restore()
-
-  let x = M
-  doc.fillColor(COLOR.bandText).font('Helvetica-Bold').fontSize(TABLE_HEADER_FONT_SIZE)
-  for (const c of cols) {
-    doc.text(c.label, x + TABLE_PAD_X, headerY + TABLE_PAD_Y, {
-      width: c.w - TABLE_PAD_X * 2, lineBreak: false, ellipsis: true,
-    })
-    x += c.w
-  }
-  doc.fillColor(COLOR.dark)
-  doc.y = headerY + 18
-}
-
-function drawTableRow(doc, cols, M, values, r) {
-  const totalW = cols.reduce((a, c) => a + c.w, 0)
-
-  doc.font('Helvetica').fontSize(TABLE_FONT_SIZE)
-  const heights = values.map((v, i) =>
-    doc.heightOfString(String(v ?? ''), { width: cols[i].w - TABLE_PAD_X * 2, align: 'left' }),
-  )
-  const baseH = Math.max(TABLE_MIN_ROW_H, Math.max(...heights) + TABLE_PAD_Y * 2)
-
-  doc.font('Helvetica-Oblique').fontSize(TABLE_OBS_FONT_SIZE)
-  const obsH = r?.observacion
-    ? doc.heightOfString(`Obs: ${r.observacion}`, { width: totalW - TABLE_PAD_X * 2 }) + 6
-    : 0
-  const rowH = baseH + obsH
-
-  ensureSpace(doc, rowH + 10)
-  const rowY = doc.y
-
-  const bg = r?.estadoResultado === 'requiere_atencion' ? COLOR.rowAten
-    : r?.estadoResultado === 'correcto_con_danos' ? COLOR.rowDanos
-    : r?.completado ? COLOR.rowOk
-    : null
-  if (bg) {
-    doc.save()
-    doc.rect(M, rowY, totalW, rowH).fill(bg)
-    doc.restore()
-  }
-
-  let x = M
-  doc.lineWidth(0.5).strokeColor(COLOR.border)
-  for (const c of cols) {
-    doc.rect(x, rowY, c.w, rowH).stroke()
-    x += c.w
-  }
-
-  x = M
-  doc.fillColor(COLOR.dark).font('Helvetica').fontSize(TABLE_FONT_SIZE)
-  for (let i = 0; i < cols.length; i++) {
-    doc.text(String(values[i] ?? ''), x + TABLE_PAD_X, rowY + TABLE_PAD_Y, {
-      width: cols[i].w - TABLE_PAD_X * 2,
-      height: baseH - TABLE_PAD_Y * 2,
-      ellipsis: true, lineBreak: true,
-    })
-    x += cols[i].w
-  }
-
-  if (r?.observacion) {
-    doc.font('Helvetica-Oblique').fontSize(TABLE_OBS_FONT_SIZE).fillColor(COLOR.obsColor)
-      .text(`Obs: ${r.observacion}`, M + TABLE_PAD_X, rowY + baseH + 1, {
-        width: totalW - TABLE_PAD_X * 2,
-      })
-    doc.fillColor(COLOR.dark)
-  }
-
-  doc.y = rowY + rowH
-}
-
 
 function drawFooter(doc, orden, pageNum, totalPages, M, W) {
   const y = doc.page.height - 30
-  doc.moveTo(M, y).lineTo(M + W, y).stroke(COLOR.border)
-  doc.font('Helvetica').fontSize(7).fillColor(COLOR.gray)
+  doc.lineWidth(0.7).strokeColor(COLOR.line).moveTo(M, y).lineTo(M + W, y).stroke()
+  font(doc, FONT.mono).fontSize(7.5).fillColor(COLOR.muted)
     .text(`${COMPANY.nombre} · O/T ${orden.numeroOt} · Generado ${fmtFechaHora(new Date())}`,
-      M, y + 4, { width: W, align: 'left', lineBreak: false })
-    .text(`Página ${pageNum} de ${totalPages}`,
-      M, y + 4, { width: W, align: 'right', lineBreak: false })
-  doc.fillColor(COLOR.dark)
-}
-
-function ensureSpace(doc, needed) {
-  const bottom = doc.page.height - 50
-  if (doc.y + needed > bottom) doc.addPage()
+      M, y + 5, { width: W, align: 'left', lineBreak: false })
+    .text(`Página ${pageNum} de ${totalPages}`, M, y + 5, { width: W, align: 'right', lineBreak: false })
+  doc.fillColor(COLOR.ink)
 }
 
 // ─── Evidencia fotográfica ──────────────────────────────────────────────────
