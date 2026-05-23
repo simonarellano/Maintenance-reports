@@ -862,9 +862,44 @@ cd ../frontend && npm run dev             # UI :5173 — login dev@aeromx.com / 
 
 ---
 
-### Siguiente paso — Sesión 16
+### Cambios en Sesión 16 — Rediseño visual del PDF de O/T (estilo HYDRA)
+**Fecha:** 2026-05-22/23 | **Rama:** `development` | **Estado:** rediseño del PDF completo y verificado (4 tipos) · trabajo en `development`, sin push/merge
 
-> **El rediseño de arquitectura (Fases A–E) está 100% completo y verificado** — confirmado contra los checklists de §8 del doc de arquitectura (todos los ítems `[x]`). Lo que queda **NO es arquitectura**: se construye encima de la arquitectura ya estable. Son dos frentes distintos:
+> Ejecutado con **subagent-driven-development** siguiendo [`docs/superpowers/plans/2026-05-22-rediseno-pdf-orden-trabajo.md`](docs/superpowers/plans/2026-05-22-rediseno-pdf-orden-trabajo.md) (spec en `docs/superpowers/specs/`). 11 tareas, cada una con implementador + revisión en dos etapas (cumplimiento de spec → calidad). Solo se tocó la **salida PDF**; **datos, endpoints y almacenamiento intactos**.
+
+#### Sistema de diseño nuevo (`backend/src/pdf/`)
+- **`theme.js`** (nuevo): paleta `COLOR` (oklch→hex del prototipo), tokens `FONT` + `registerFonts(doc)`/`font(doc, token)` con **fallback a Helvetica/Courier** si faltan los TTF, y formateadores `fmtFecha`/`fmtHora`/`fmtFechaHora`/`fmtDuracion`.
+- **`ui.js`** (nuevo): 17 primitivas de dibujo pdfkit — `ensureSpace`, `roundedPanel`, `sectionHead`, `statusPill`/`conditionPill`/`rolePill`, `timeline`, `kvGrid`, `personCard`, `worksColumns`/`worksTableHeader`/`groupHead`/`workRow`, `evidenceGallery`, `progressBar`/`dictumBlock`, `signatureCard`.
+- **`fonts/`** (nuevo): 6 TTF Geist/Geist Mono (OFL). ⚠️ las URLs del repo `vercel/geist-font` del plan estaban obsoletas (404); la ruta correcta es `fonts/Geist/ttf/` y `fonts/GeistMono/ttf/`.
+- **`public/hydra-logo.png`** (nuevo): logo del handoff teñido a negro (alpha preservado) con `pngjs` (dependencia temporal, ya desinstalada).
+
+#### `controllers/ordenes/pdfController.js` — restilizado de punta a punta
+- Cabecera papel claro (logo en tinta + meta a la derecha + separador), título grande + folio mono + **status pill** por estado, **timeline de 4 hitos**, §01 datos generales (KV grid 4-col redondeado, hitos movidos al timeline + "Duración total"), §02 datos del producto (KV grid 3-col por tipo, conserva `filasDatosProducto`), §03 **person cards** (2–5 según tipo), §04 tabla de trabajos (group heads con progreso + condition pills + ✦ críticos) con **galería de evidencia por renglón** (se eliminó la sección de fotos separada), §05 dictamen con **barra de progreso** + observaciones, §06 **signature cards** (2/3 según tipo, rúbrica mono-italic + check + timestamp), footer "Página N de M".
+- Se eliminaron todos los helpers/colores legacy (`sectionTitle`, `drawKVGrid`, `drawTableHeader/Row`, `drawPersonaCard`, `drawFirmaBox`, `drawEvidenciaFotografica`, etc.) y el shim temporal `_COMPAT` (existió en commits intermedios para no romper generación durante la migración sección por sección).
+
+#### Defectos atrapados por las revisiones (corregidos antes de commit final)
+- `fmtDuracion`: guardia falsy con `desde=0` → `== null`; `"1 d 0 h"` → `"1 d"`.
+- shim `_COMPAT.accent` pisaba el azul del theme usado por `rolePill` → renombrado `obsColor`.
+- ✦ crítico mal ubicado al hacer wrap el componente → texto `continued`.
+- `evidenceGallery`: faltaba `doc.restore()` si `doc.image()` lanzaba (clip leak) → `finally`.
+- signature card: solapamiento rol/licencia con la línea del pie → `lineY` ajustado.
+- **fix post-cierre (`ad9806c`)**: `obtenerOrden` no traía `licenciaNum` de los firmantes del cierre → las tarjetas firmadas omitían la licencia. Añadido `licenciaNum: true` a los 3 `select` de `cierre.{soporte,gerente,piloto}`.
+
+#### Verificación
+- No hay runner de pruebas automatizadas; el método es **generar el PDF y revisarlo** (igual que smoke tests previos). Los 4 tipos generan PDF válido (`%PDF-`, `application/pdf`): sensor ~61 KB, planta ~61 KB, camión ~62 KB, aeronave ~138 KB (multipágina, foto embebida inline). Grep limpio: sin `Helvetica`/`_COMPAT`/claves del shim/helpers viejos en el controller; `theme.COLOR` pristino.
+- Script de verificación efímero (`tmp-pdf-check/gen.mjs`) usado durante toda la ejecución; **borrado** al final (scratch, no commiteado).
+
+#### Commits de la sesión (rama `development`, 12 commits: `02ae77c`…`ad9806c`)
+`02ae77c` assets+theme · `92c5dc2` primitivas base · `433a9d6` cabecera+título · `0d1391e` timeline · `2a0009c` KV grids · `b54fbee` person cards · `464c8d4` tabla trabajos · `4d468e5` galería por renglón · `40ea9ad` dictamen+progreso · `83c903f` signature cards · `a90cc4d` footer+limpieza · `ad9806c` fix licenciaNum.
+
+#### Pendiente menor (no hecho)
+- `aeromx/backend/public/logo.png` (logo viejo AEROMX) sigue en disco sin referenciarse — inofensivo, se puede borrar.
+
+---
+
+### Siguiente paso — Sesión 17
+
+> **El rediseño de arquitectura (Fases A–E) está 100% completo y verificado** — confirmado contra los checklists de §8 del doc de arquitectura (todos los ítems `[x]`). El **rediseño visual del PDF** (Sesión 16) también está completo. Lo que queda **NO es arquitectura**: se construye encima de la arquitectura ya estable. Son dos frentes distintos: — confirmado contra los checklists de §8 del doc de arquitectura (todos los ítems `[x]`). Lo que queda **NO es arquitectura**: se construye encima de la arquitectura ya estable. Son dos frentes distintos:
 
 **Frente 1 — Pre-despliegue / hardening (el grueso del trabajo restante, ~3–4 sesiones):**
 - ⚠️ La ruta `GET /uploads/:key` es **pública** (igual que el `express.static` previo). Para fotos de mantenimiento sensibles, evaluar exigir auth.
@@ -879,7 +914,7 @@ cd ../frontend && npm run dev             # UI :5173 — login dev@aeromx.com / 
 - Fase 3 Gestión: inventario de partes · reportes/estadísticas · histórico por producto · notificaciones email/push.
 - Fase 4 Extra: modo offline (PWA sync en rampa) · reportes DGAC · PDF formato oficial.
 
-> **Sugerencia para abrir la Sesión 16:** acordar con el usuario un *checklist de pre-despliegue* (Frente 1) antes de meterse a features de Fase 2+. El usuario tiene pendientes propios en mente que no están todos aquí.
+> **Sugerencia para abrir la Sesión 17:** acordar con el usuario un *checklist de pre-despliegue* (Frente 1) antes de meterse a features de Fase 2+. El usuario tiene pendientes propios en mente que no están todos aquí.
 
 **Setup rápido (verificado en Sesión 15):**
 ```bash
