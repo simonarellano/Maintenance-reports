@@ -220,68 +220,35 @@ function renderDatosProducto(doc, orden, ctx) {
 }
 
 function renderPersonal(doc, orden, ctx) {
-  sectionTitle(doc, `${ctx.nextSectionNum()}. PERSONAL RESPONSABLE`, ctx.M, ctx.W)
+  ui.sectionHead(doc, ctx.nextSectionNum(), 'Personal responsable', ctx.M, ctx.W)
 
-  // Cards de personal — 2 columnas, hasta 5 cards (soporte, auxiliar?, mecánico, gerente, piloto?)
-  const cards = []
-  cards.push({ titulo: 'SOPORTE',          persona: orden.soporte })
-  if (orden.ingenieroAuxiliar) {
-    cards.push({ titulo: 'INGENIERO AUXILIAR', persona: orden.ingenieroAuxiliar })
-  }
-  cards.push({ titulo: 'MECÁNICO',         persona: orden.mecanico })
-  cards.push({ titulo: 'GERENTE',          persona: orden.gerente })
-  if (orden.producto?.tipoProducto === 'aeronave') {
-    cards.push({ titulo: 'PILOTO', persona: orden.piloto })
-  }
+  const mk = (categoria, rolTag, persona) => ({
+    categoria, rolTag, nombre: persona?.nombre || 'No asignado',
+    rol: (persona?.rol || '').replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase()) || '—',
+    licencia: persona?.licenciaNum || '—',
+  })
 
-  const gap = 14
-  const cardW = (ctx.W - gap) / 2
-  const cardH = 96
+  const cards = [mk('Soporte', 'Técnico', orden.soporte)]
+  if (orden.ingenieroAuxiliar) cards.push(mk('Soporte', 'Ing. aux.', orden.ingenieroAuxiliar))
+  cards.push(mk('Mantenimiento', 'Mecánico', orden.mecanico))
+  cards.push(mk('Aprobación', 'Gerente', orden.gerente))
+  if (orden.producto?.tipoProducto === 'aeronave') cards.push(mk('Operación', 'Piloto', orden.piloto))
 
-  let i = 0
-  while (i < cards.length) {
-    ensureSpace(doc, cardH + 14)
-    const startY = doc.y + 4
-    const c1 = cards[i]
-    const c2 = cards[i + 1]
-    drawPersonaCard(doc, ctx.M,               startY, cardW, cardH, c1.titulo, c1.persona, 'No asignado')
-    if (c2) drawPersonaCard(doc, ctx.M + cardW + gap, startY, cardW, cardH, c2.titulo, c2.persona, 'No asignado')
-    doc.y = startY + cardH + 8
+  const cols = 3
+  const gap = 10
+  const cardW = (ctx.W - gap * (cols - 1)) / cols
+  const cardH = 92
+
+  for (let i = 0; i < cards.length; i += cols) {
+    ui.ensureSpace(doc, cardH + 12)
+    const y = doc.y
+    for (let c = 0; c < cols && i + c < cards.length; c++) {
+      const x = ctx.M + c * (cardW + gap)
+      ui.personCard(doc, x, y, cardW, cardH, cards[i + c])
+    }
+    doc.y = y + cardH + gap
     doc.x = ctx.M
-    i += 2
   }
-}
-
-function drawPersonaCard(doc, x, y, w, h, titulo, persona, fallbackNombre) {
-  doc.lineWidth(0.5).strokeColor(COLOR.border)
-  doc.rect(x, y, w, h).stroke()
-
-  doc.save()
-  doc.rect(x, y, w, 18).fill(COLOR.bandBg)
-  doc.rect(x, y, 3, 18).fill(COLOR.primary)
-  doc.restore()
-  doc.fillColor(COLOR.primary).font('Helvetica-Bold').fontSize(9)
-    .text(titulo, x + 10, y + 5, { width: w - 16, lineBreak: false, ellipsis: true })
-
-  const items = [
-    ['Nombre',   persona?.nombre || fallbackNombre],
-    ['Rol',      (persona?.rol || '').replace(/_/g, ' ').toUpperCase() || '—'],
-    ['Licencia', persona?.licenciaNum || '—'],
-  ]
-  let curY = y + 24
-  const rowH = (h - 26) / items.length
-  for (const [k, v] of items) {
-    doc.font('Helvetica-Bold').fontSize(7).fillColor(COLOR.gray)
-      .text(k.toUpperCase(), x + 10, curY, {
-        width: w - 20, lineBreak: false, ellipsis: true, characterSpacing: 0.4,
-      })
-    doc.font('Helvetica').fontSize(10).fillColor(COLOR.dark)
-      .text(String(v ?? '—'), x + 10, curY + 9, {
-        width: w - 20, lineBreak: false, ellipsis: true,
-      })
-    curY += rowH
-  }
-  doc.fillColor(COLOR.dark)
 }
 
 function renderTrabajos(doc, orden, ctx) {

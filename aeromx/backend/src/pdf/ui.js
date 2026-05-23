@@ -179,3 +179,35 @@ export function kvGrid(doc, pairs, cols, M, W) {
   doc.y = y0 + totalH + 6
   doc.x = M
 }
+
+// Card de persona. card: { categoria, rolTag, nombre, rol, licencia }
+export function personCard(doc, x, y, w, h, card) {
+  roundedPanel(doc, x, y, w, h, { stroke: COLOR.line })
+  // header: categoría + pill de rol
+  font(doc, FONT.mono).fontSize(8).fillColor(COLOR.muted)
+    .text((card.categoria || '').toUpperCase(), x + 12, y + 11, {
+      width: w - 90, characterSpacing: 0.8, lineBreak: false, ellipsis: true,
+    })
+  if (card.rolTag) {
+    font(doc, FONT.monoMed).fontSize(8.5)
+    const pw = 9 * 2 + doc.widthOfString(card.rolTag.toUpperCase())
+    rolePill(doc, x + w - 12 - pw, y + 8, card.rolTag)
+  }
+  // nombre
+  font(doc, FONT.sansSemi).fontSize(13).fillColor(COLOR.ink)
+    .text(card.nombre || 'No asignado', x + 12, y + 30, {
+      width: w - 24, lineBreak: false, ellipsis: true,
+    })
+  // pie punteado: Rol / Licencia
+  const footY = y + h - 26
+  doc.save().lineWidth(0.7).strokeColor(COLOR.line).dash(2, { space: 2 })
+    .moveTo(x + 12, footY).lineTo(x + w - 12, footY).stroke().undash().restore()
+  font(doc, FONT.mono).fontSize(7).fillColor(COLOR.muted)
+    .text('ROL', x + 12, footY + 6, { lineBreak: false })
+    .text('LICENCIA', x + w / 2, footY + 6, { lineBreak: false })
+  font(doc, FONT.sansMed).fontSize(9).fillColor(COLOR.ink2)
+    .text(card.rol || '—', x + 12, footY + 14, { width: w / 2 - 16, lineBreak: false, ellipsis: true })
+  font(doc, FONT.monoMed).fontSize(9).fillColor(COLOR.ink)
+    .text(card.licencia || '—', x + w / 2, footY + 14, { width: w / 2 - 16, lineBreak: false, ellipsis: true })
+  doc.fillColor(COLOR.ink)
+}
