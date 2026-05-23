@@ -132,3 +132,50 @@ export function timeline(doc, steps, M, W) {
   doc.y = y + h + 16
   doc.x = M
 }
+
+// Grid clave-valor con panel redondeado y hairlines internos.
+// pairs: [[label, value, opts?]]  opts: { mono, lg, color }
+export function kvGrid(doc, pairs, cols, M, W) {
+  const rowH = 34
+  const colW = W / cols
+  const rows = Math.ceil(pairs.length / cols)
+  const totalH = rows * rowH
+  ensureSpace(doc, totalH + 8)
+  const y0 = doc.y
+
+  // panel exterior
+  roundedPanel(doc, M, y0, W, totalH, { stroke: COLOR.line })
+
+  // hairlines internos (sin tocar el borde redondeado)
+  doc.save().lineWidth(0.6).strokeColor(COLOR.line2)
+  for (let c = 1; c < cols; c++) {
+    const x = M + c * colW
+    doc.moveTo(x, y0 + 4).lineTo(x, y0 + totalH - 4).stroke()
+  }
+  for (let rr = 1; rr < rows; rr++) {
+    const yy = y0 + rr * rowH
+    doc.moveTo(M + 4, yy).lineTo(M + W - 4, yy).stroke()
+  }
+  doc.restore()
+
+  pairs.forEach((p, i) => {
+    const c = i % cols
+    const r = Math.floor(i / cols)
+    const x = M + c * colW
+    const y = y0 + r * rowH
+    const [label, value, opts = {}] = p
+    font(doc, FONT.mono).fontSize(7.5).fillColor(COLOR.muted)
+      .text(String(label).toUpperCase(), x + 11, y + 7, {
+        width: colW - 18, characterSpacing: 0.5, lineBreak: false, ellipsis: true,
+      })
+    const valFont = opts.mono ? FONT.monoMed : FONT.sansMed
+    const valSize = opts.lg ? 13 : opts.mono ? 10.5 : 11.5
+    font(doc, valFont).fontSize(valSize).fillColor(opts.color || COLOR.ink)
+      .text(String(value ?? '—'), x + 11, y + 18, {
+        width: colW - 18, height: rowH - 20, lineBreak: false, ellipsis: true,
+      })
+  })
+  doc.fillColor(COLOR.ink)
+  doc.y = y0 + totalH + 6
+  doc.x = M
+}

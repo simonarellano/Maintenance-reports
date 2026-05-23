@@ -186,35 +186,37 @@ function calcularTotales(orden) {
 }
 
 function renderDatosGenerales(doc, orden, ctx) {
-  sectionTitle(doc, `${ctx.nextSectionNum()}. DATOS GENERALES DEL SERVICIO`, ctx.M, ctx.W)
+  ui.sectionHead(doc, ctx.nextSectionNum(), 'Datos generales del servicio', ctx.M, ctx.W)
   const tipo = orden.producto?.tipoProducto
-
-  drawKVGrid(doc, [
-    ['N.º Orden',              orden.numeroOt],
+  const estadoLabel = orden.estado.replace(/_/g, ' ').toUpperCase()
+  const estadoColor = orden.estado === 'cerrada' ? COLOR.ok
+    : orden.estado === 'borrador' ? COLOR.muted : COLOR.warn
+  ui.kvGrid(doc, [
+    ['N.º Orden',              orden.numeroOt, { mono: true }],
     ['Tipo de producto',       TIPO_LABELS[tipo] || '—'],
-    ['Formato',                `${orden.formato.nombre} · v${orden.formato.version}`],
-    ['Cliente',                orden.cliente || '—'],
-    ['Orden de servicio',      orden.ordenServicio || '—'],
+    ['Formato',                `${orden.formato.nombre} v${orden.formato.version}`],
+    ['Cliente',                orden.cliente || '—', { mono: true }],
+    ['Orden de servicio',      orden.ordenServicio || '—', { mono: true }],
     ['Lugar de mantenimiento', orden.lugarMantenimiento || '—'],
-    ['Estado actual',          orden.estado.replace(/_/g, ' ').toUpperCase()],
-    ['1. Creación de orden',   fmtFechaHora(orden.createdAt)],
-    [etiquetaRecepcion(tipo),  orden.fechaRecepcion ? fmtFechaHora(orden.fechaRecepcion) : 'Pendiente'],
-    ['3. Inicio mantenimiento', orden.fechaInicio ? fmtFechaHora(orden.fechaInicio) : 'Pendiente'],
-    ['4. Cierre / firma',      orden.fechaCierre ? fmtFechaHora(orden.fechaCierre) : 'Pendiente'],
-  ], ctx.M, ctx.W)
+    ['Duración total',         fmtDuracion(orden.createdAt, orden.fechaCierre)],
+    ['Estado actual',          estadoLabel, { color: estadoColor }],
+  ], 4, ctx.M, ctx.W)
 }
 
 // Mantiene compatibilidad con formatos viejos que usan "datos_aeronave"
 function renderDatosProducto(doc, orden, ctx) {
   const tipo = orden.producto?.tipoProducto || 'producto'
   const tituloMap = {
-    aeronave: 'DATOS DE LA AERONAVE',
-    camion:   'DATOS DEL CAMIÓN',
-    planta:   'DATOS DE LA PLANTA',
-    sensor:   'DATOS DEL SENSOR',
+    aeronave: 'Datos de la aeronave', camion: 'Datos del camión',
+    planta: 'Datos de la planta', sensor: 'Datos del sensor',
   }
-  sectionTitle(doc, `${ctx.nextSectionNum()}. ${tituloMap[tipo] || 'DATOS DEL PRODUCTO'}`, ctx.M, ctx.W)
-  drawKVGrid(doc, filasDatosProducto(orden), ctx.M, ctx.W)
+  ui.sectionHead(doc, ctx.nextSectionNum(), tituloMap[tipo] || 'Datos del producto', ctx.M, ctx.W)
+  // filasDatosProducto devuelve [label, value]; marcamos mono/lg para los prominentes
+  const filas = filasDatosProducto(orden).map(([label, value], idx) => {
+    const esSerieOIdent = /serie|placas|matrícula|interno|vin|firmware/i.test(label)
+    return [label, value, { lg: idx < 3, mono: esSerieOIdent }]
+  })
+  ui.kvGrid(doc, filas, 3, ctx.M, ctx.W)
 }
 
 function renderPersonal(doc, orden, ctx) {
