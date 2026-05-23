@@ -348,6 +348,51 @@ export function dictumBlock(doc, cells, M, W) {
   doc.x = M
 }
 
+// Card de firma. caja: { categoria, nombre, rol, licencia, fecha }  (fecha truthy = firmada)
+export function signatureCard(doc, x, y, w, h, caja, fmtFechaHoraFn) {
+  const firmada = !!caja.fecha
+  roundedPanel(doc, x, y, w, h, { fill: firmada ? '#FBFCFA' : COLOR.paper, stroke: COLOR.line })
+
+  // header: categoría + estado firmado
+  font(doc, FONT.mono).fontSize(8).fillColor(COLOR.muted)
+    .text((caja.categoria || '').toUpperCase(), x + 14, y + 12, { characterSpacing: 0.8, lineBreak: false })
+  if (firmada) {
+    const label = 'FIRMADO'
+    font(doc, FONT.monoMed).fontSize(8)
+    const lw = doc.widthOfString(label)
+    doc.fillColor(COLOR.ok).text(label, x + w - 14 - lw, y + 12, { lineBreak: false })
+    doc.save().lineWidth(1.4).strokeColor(COLOR.ok)
+      .moveTo(x + w - 14 - lw - 11, y + 16).lineTo(x + w - 14 - lw - 8, y + 19)
+      .lineTo(x + w - 14 - lw - 3, y + 13).stroke().restore()
+  }
+
+  // línea de firma con rúbrica (nombre en mono italic)
+  const lineY = y + h - 48
+  if (firmada && caja.nombre) {
+    doc.save()
+    doc.font('Courier-Oblique').fontSize(18).fillColor(COLOR.ink)
+      .text(caja.nombre, x + 14, lineY - 24, { width: w - 28, lineBreak: false, ellipsis: true })
+    doc.restore()
+  }
+  doc.lineWidth(1.2).strokeColor(COLOR.ink).moveTo(x + 14, lineY).lineTo(x + w - 14, lineY).stroke()
+
+  // nombre + rol + licencia
+  font(doc, FONT.sansSemi).fontSize(11).fillColor(COLOR.ink)
+    .text(caja.nombre || '—', x + 14, lineY + 5, { width: w - 28, lineBreak: false, ellipsis: true })
+  font(doc, FONT.sans).fontSize(8.5).fillColor(COLOR.muted)
+    .text(`${caja.rol || ''}${caja.licencia ? ` · Lic. ${caja.licencia}` : ''}`,
+      x + 14, lineY + 19, { width: w - 28, lineBreak: false, ellipsis: true })
+
+  // pie punteado con timestamp
+  const footY = y + h - 4
+  doc.save().lineWidth(0.7).strokeColor(COLOR.line).dash(2, { space: 2 })
+    .moveTo(x + 14, footY - 12).lineTo(x + w - 14, footY - 12).stroke().undash().restore()
+  font(doc, FONT.mono).fontSize(7).fillColor(COLOR.muted)
+    .text('Firmado', x + 14, footY - 9, { lineBreak: false })
+    .text(firmada ? fmtFechaHoraFn(caja.fecha) : '—', x + 14, footY - 9, { width: w - 28, align: 'right', lineBreak: false })
+  doc.fillColor(COLOR.ink)
+}
+
 // Galería de fotos bajo un renglón de trabajo. fotos: [{ urlArchivo, nombreArchivo, fechaCaptura }]
 // buffers: Map<urlArchivo, Buffer|null>. fmtFechaFn: (date)=>string.
 export function evidenceGallery(doc, fotos, buffers, M, W, fmtFechaFn) {

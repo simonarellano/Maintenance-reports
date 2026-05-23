@@ -340,8 +340,34 @@ function renderDictamen(doc, orden, ctx) {
 }
 
 function renderFirmas(doc, orden, ctx) {
-  sectionTitle(doc, `${ctx.nextSectionNum()}. FIRMAS DE CONFORMIDAD`, ctx.M, ctx.W)
-  drawFirmas(doc, orden, ctx.M, ctx.W)
+  ui.sectionHead(doc, ctx.nextSectionNum(), 'Firmas de conformidad', ctx.M, ctx.W)
+  const c = orden.cierre
+  const esAeronave = orden.producto?.tipoProducto === 'aeronave'
+
+  const cajas = [
+    { categoria: 'Soporte', persona: c?.soporte || orden.soporte, fecha: c?.fechaFirmaSoporte },
+    { categoria: 'Aprobación', persona: c?.gerente || orden.gerente, fecha: c?.fechaFirmaGerente },
+  ]
+  if (esAeronave) {
+    cajas.push({ categoria: 'Operación', persona: c?.piloto || orden.piloto, fecha: c?.fechaFirmaPiloto })
+  }
+
+  const gap = 14
+  const boxW = (ctx.W - gap * (cajas.length - 1)) / cajas.length
+  const boxH = 104
+  ui.ensureSpace(doc, boxH + 10)
+  const y = doc.y + 4
+  cajas.forEach((cj, i) => {
+    ui.signatureCard(doc, ctx.M + i * (boxW + gap), y, boxW, boxH, {
+      categoria: cj.categoria,
+      nombre: cj.persona?.nombre,
+      rol: (cj.persona?.rol || '').replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase()),
+      licencia: cj.persona?.licenciaNum,
+      fecha: cj.fecha,
+    }, fmtFechaHora)
+  })
+  doc.y = y + boxH + 10
+  doc.x = ctx.M
 }
 
 const BUILTIN_RENDERERS = {
@@ -579,69 +605,6 @@ function drawTableRow(doc, cols, M, values, r) {
   doc.y = rowY + rowH
 }
 
-// Firmas: 3 cajas para aeronave (soporte/gerente/piloto), 2 para el resto.
-function drawFirmas(doc, orden, M, W) {
-  const c = orden.cierre
-  const esAeronave = orden.producto?.tipoProducto === 'aeronave'
-
-  const cajas = [
-    {
-      titulo:   'SOPORTE',
-      persona:  c?.soporte || orden.soporte,
-      fecha:    c?.fechaFirmaSoporte,
-      firmadoId: c?.firmaSoporteId,
-    },
-    {
-      titulo:   'GERENTE',
-      persona:  c?.gerente || orden.gerente,
-      fecha:    c?.fechaFirmaGerente,
-      firmadoId: c?.firmaGerenteId,
-    },
-  ]
-  if (esAeronave) {
-    cajas.push({
-      titulo:   'PILOTO',
-      persona:  c?.piloto || orden.piloto,
-      fecha:    c?.fechaFirmaPiloto,
-      firmadoId: c?.firmaPilotoId,
-    })
-  }
-
-  ensureSpace(doc, 140)
-  const startY = doc.y + 6
-  const gap = 14
-  const boxW = (W - gap * (cajas.length - 1)) / cajas.length
-  const boxH = 100
-
-  for (let i = 0; i < cajas.length; i++) {
-    drawFirmaBox(doc, M + i * (boxW + gap), startY, boxW, boxH, cajas[i])
-  }
-  doc.y = startY + boxH + 10
-}
-
-function drawFirmaBox(doc, x, y, w, h, { titulo, persona, fecha, firmadoId }) {
-  doc.rect(x, y, w, h).stroke(COLOR.border)
-  doc.rect(x, y, 3, h).fill(COLOR.primary)
-  doc.font('Helvetica-Bold').fontSize(9).fillColor(COLOR.primaryDk)
-    .text(titulo, x + 8, y + 6, { width: w - 14, lineBreak: false })
-
-  doc.moveTo(x + 10, y + 60).lineTo(x + w - 10, y + 60).stroke(COLOR.dark)
-  doc.font('Helvetica').fontSize(9).fillColor(COLOR.dark)
-    .text(persona?.nombre || '____________________________', x + 6, y + 65, { width: w - 12, align: 'center' })
-  doc.fontSize(8).fillColor(COLOR.gray)
-    .text((persona?.rol || '').replace(/_/g, ' ').toUpperCase() || '', x + 6, y + 78, { width: w - 12, align: 'center', lineBreak: false })
-    .text(persona?.licenciaNum ? `Lic. ${persona.licenciaNum}` : '', x + 6, y + 88, { width: w - 12, align: 'center', lineBreak: false })
-
-  if (fecha) {
-    doc.fontSize(7).fillColor(COLOR.gray)
-      .text(`Firmado: ${fmtFechaHora(fecha)}`, x + 6, y + 42, { width: w - 12, align: 'center', lineBreak: false })
-  }
-  if (firmadoId) {
-    doc.fontSize(14).fillColor(COLOR.green).font('Helvetica-Oblique')
-      .text('✓ Firmado', x + 6, y + 22, { width: w - 12, align: 'center', lineBreak: false })
-    doc.fillColor(COLOR.dark)
-  }
-}
 
 function drawFooter(doc, orden, pageNum, totalPages, M, W) {
   const y = doc.page.height - 30
