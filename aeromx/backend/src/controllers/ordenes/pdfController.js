@@ -133,9 +133,13 @@ export async function generar(req, res, next) {
       if (renderer) renderer(doc, orden, ctx)
     }
 
+    // El footer se dibuja bajo el margen inferior (page.height - 30). pdfkit auto-agrega
+    // una página cuando se dibuja texto por debajo de maxY (height - margen). Anular el
+    // margen inferior de cada página evita esas páginas en blanco fantasma al final.
     const pages = doc.bufferedPageRange()
     for (let i = 0; i < pages.count; i++) {
       doc.switchToPage(i)
+      doc.page.margins.bottom = 0
       drawFooter(doc, orden, i + 1, pages.count, M, CONTENT_W)
     }
 
