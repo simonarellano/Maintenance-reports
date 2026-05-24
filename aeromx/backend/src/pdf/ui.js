@@ -47,12 +47,14 @@ function pill(doc, x, y, label, { fg, bg, border, dot = true }) {
   const textW = doc.widthOfString(label.toUpperCase())
   const w = padX * 2 + dotW + textW
   const h = 17
+  const cy = y + h / 2
   doc.save()
   doc.roundedRect(x, y, w, h, h / 2).fill(bg)
   if (border) { doc.lineWidth(0.8).strokeColor(border).roundedRect(x, y, w, h, h / 2).stroke() }
-  if (dot) doc.circle(x + padX + 3.5, y + h / 2, 3.5).fill(fg)
+  if (dot) doc.circle(x + padX + 3.5, cy, 3.5).fill(fg)
   font(doc, FONT.monoMed).fontSize(8.5).fillColor(fg)
-    .text(label.toUpperCase(), x + padX + dotW, y + 4.5, { lineBreak: false })
+  const txtH = doc.currentLineHeight()
+  doc.text(label.toUpperCase(), x + padX + dotW, cy - txtH / 2, { lineBreak: false })
   doc.restore()
   doc.fillColor(COLOR.ink)
   return w
@@ -114,10 +116,12 @@ export function timeline(doc, steps, M, W) {
     }
     // círculo numerado
     const r = 9
+    const cy = y + 14            // centro vertical del círculo
     doc.save()
-    doc.circle(inner + r, y + 14, r).fill(COLOR.ink)
+    doc.circle(inner + r, cy, r).fill(COLOR.ink)
     font(doc, FONT.monoMed).fontSize(9).fillColor(COLOR.paper)
-      .text(String(s.num), inner, y + 10, { width: r * 2, align: 'center', lineBreak: false })
+    const numH = doc.currentLineHeight()
+    doc.text(String(s.num), inner, cy - numH / 2, { width: r * 2, align: 'center', lineBreak: false })
     doc.restore()
     // label
     font(doc, FONT.mono).fontSize(8).fillColor(COLOR.muted)
@@ -266,9 +270,11 @@ export function workRow(doc, cols, M, row) {
   const descCol = cols.find((c) => c.key === 'desc')
   const compCol = cols.find((c) => c.key === 'comp')
 
+  font(doc, FONT.sansSemi).fontSize(9)
+  const compTxt = row.componente + (row.critico ? '  ✦' : '')
+  const compH = doc.heightOfString(compTxt, { width: compCol.w - 12 })
   font(doc, FONT.sans).fontSize(8.5)
   const descH = doc.heightOfString(row.descripcion || '—', { width: descCol.w - 12 })
-  const compH = doc.heightOfString(row.componente || '—', { width: compCol.w - 12 })
   const rowH = Math.max(30, descH + 14, compH + 14)
   ensureSpace(doc, rowH + 4)
   const y = doc.y
@@ -286,9 +292,12 @@ export function workRow(doc, cols, M, row) {
         .text(row.idx, cx, y + 8, { width: c.w - 8, lineBreak: false })
     } else if (c.key === 'comp') {
       font(doc, FONT.sansSemi).fontSize(9).fillColor(COLOR.ink)
-        .text(row.componente, cx, y + 8, { width: c.w - 12, continued: !!row.critico })
+        .text(row.componente, cx, y + 8, { width: c.w - 12 })
       if (row.critico) {
-        doc.fillColor(COLOR.critical).text(' ✦', { lineBreak: false })
+        // ✦ en línea aparte alineado a la derecha de la columna, sin empujar el nombre
+        const markY = y + 8
+        font(doc, FONT.sansSemi).fontSize(9).fillColor(COLOR.critical)
+          .text('✦', cx, markY, { width: c.w - 12, align: 'right', lineBreak: false })
       }
     } else if (c.key === 'desc') {
       font(doc, FONT.sans).fontSize(8.5).fillColor(COLOR.ink2)
@@ -348,6 +357,15 @@ export function dictumBlock(doc, cells, M, W) {
   doc.x = M
 }
 
+// Encuentra el mayor fontSize en [min, max] con el que `texto` cabe en `maxW`.
+function ajustarFontSize(doc, texto, maxW, max, min) {
+  for (let size = max; size > min; size -= 0.5) {
+    doc.fontSize(size)
+    if (doc.widthOfString(texto) <= maxW) return size
+  }
+  return min
+}
+
 // Card de firma. caja: { categoria, nombre, rol, licencia, fecha }  (fecha truthy = firmada)
 export function signatureCard(doc, x, y, w, h, caja, fmtFechaHoraFn) {
   const firmada = !!caja.fecha
@@ -370,8 +388,10 @@ export function signatureCard(doc, x, y, w, h, caja, fmtFechaHoraFn) {
   const lineY = y + h - 48
   if (firmada && caja.nombre) {
     doc.save()
-    doc.font('Courier-Oblique').fontSize(18).fillColor(COLOR.ink)
-      .text(caja.nombre, x + 14, lineY - 24, { width: w - 28, lineBreak: false, ellipsis: true })
+    doc.font('Courier-Oblique')
+    const size = ajustarFontSize(doc, caja.nombre, w - 28, 18, 9)
+    doc.fontSize(size).fillColor(COLOR.ink)
+      .text(caja.nombre, x + 14, lineY - size - 6, { width: w - 28, lineBreak: false, ellipsis: true })
     doc.restore()
   }
   doc.lineWidth(1.2).strokeColor(COLOR.ink).moveTo(x + 14, lineY).lineTo(x + w - 14, lineY).stroke()
