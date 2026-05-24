@@ -238,6 +238,13 @@ function renderTrabajos(doc, orden, ctx) {
     let idx = 1
     for (const punto of puntos) {
       const r = resultadosPorPunto[punto.id]
+      const nFotos = (ctx.incluirFotos && r.fotos) ? r.fotos.length : 0
+      // Estimar alto de la fila para decidir el salto (mínimo de workRow es 30).
+      const altoEvidencia = ui.alturaEvidencia(nFotos)
+      const altoEstimadoFila = 34
+      const bottom = doc.page.height - 50
+      if (doc.y + altoEstimadoFila + altoEvidencia > bottom) doc.addPage()
+
       ui.workRow(doc, cols, ctx.M, {
         idx: String(idx++).padStart(2, '0'),
         componente: punto.nombreComponente,
@@ -248,7 +255,7 @@ function renderTrabajos(doc, orden, ctx) {
         fotosN: r.fotos?.length || 0,
         fotosM: r.fotos?.length || 0,
       })
-      if (ctx.incluirFotos && r.fotos && r.fotos.length > 0) {
+      if (nFotos > 0) {
         ui.evidenceGallery(doc, r.fotos, ctx.fotosBuffers, ctx.M, ctx.W, fmtFecha)
       }
     }
