@@ -250,7 +250,7 @@ export function worksTableHeader(doc, cols, M) {
 }
 
 export function groupHead(doc, nombre, hechos, total, M, W) {
-  ensureSpace(doc, 22)
+  ensureSpace(doc, 18 + 34)  // encabezado de grupo + al menos una fila
   const y = doc.y
   doc.save().rect(M, y, W, 18).fill(COLOR.groupBg).restore()
   font(doc, FONT.monoMed).fontSize(8).fillColor(COLOR.ink)
