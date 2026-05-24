@@ -19,6 +19,7 @@ export default function CierreOTPage() {
   const [submitLoading, setSubmitLoading] = useState(false)
   const [step, setStep] = useState('resumen') // 'resumen' o 'firma'
   const [firmaConfirmada, setFirmaConfirmada] = useState(false)
+  const [incluirFotos, setIncluirFotos] = useState(true)
 
   const { register, handleSubmit, watch, setValue } = useForm({
     defaultValues: {
@@ -68,18 +69,22 @@ export default function CierreOTPage() {
   const cierre = orden?.cierre
   const rolUsuario = user?.rol
   const esSuper = user?.superusuario === true
-  const esAeronave = orden?.producto?.tipoProducto === 'aeronave'
+  const tipoProducto = orden?.producto?.tipoProducto
+  const esAeronave = tipoProducto === 'aeronave'
+  const esGcs = tipoProducto === 'gcs'
 
-  const soporteFirmado = Boolean(cierre?.firmaSoporteId)
-  const gerenteFirmado = Boolean(cierre?.firmaGerenteId)
-  const pilotoFirmado  = Boolean(cierre?.firmaPilotoId)
-  const ordenCerrada   = orden?.estado === 'cerrada'
+  const soporteFirmado  = Boolean(cierre?.firmaSoporteId)
+  const gerenteFirmado  = Boolean(cierre?.firmaGerenteId)
+  const pilotoFirmado   = Boolean(cierre?.firmaPilotoId)
+  const operadorFirmado = Boolean(cierre?.firmaOperadorId)
+  const ordenCerrada    = orden?.estado === 'cerrada'
 
   // Slot de firma que le corresponde al usuario según su rol.
   const miSlot = useMemo(() => {
     if (rolUsuario === 'gerente_soporte') return 'gerente'
     if (rolUsuario === 'tecnico_soporte' || rolUsuario === 'ingeniero_soporte') return 'soporte'
     if (rolUsuario === 'piloto') return 'piloto'
+    if (rolUsuario === 'operador') return 'operador'
     return null
   }, [rolUsuario])
 
@@ -87,22 +92,25 @@ export default function CierreOTPage() {
   const asignadoAMiSlot = useMemo(() => {
     if (!orden || !miSlot) return false
     if (esSuper) return true
-    if (miSlot === 'soporte') return orden.soporte?.id === user.id || orden.ingenieroAuxiliar?.id === user.id
-    if (miSlot === 'gerente') return orden.gerente?.id === user.id
-    if (miSlot === 'piloto')  return esAeronave && orden.piloto?.id === user.id
+    if (miSlot === 'soporte')  return orden.soporte?.id === user.id || orden.ingenieroAuxiliar?.id === user.id
+    if (miSlot === 'gerente')  return orden.gerente?.id === user.id
+    if (miSlot === 'piloto')   return esAeronave && orden.piloto?.id === user.id
+    if (miSlot === 'operador') return esGcs && orden.operador?.id === user.id
     return false
-  }, [orden, miSlot, esSuper, esAeronave, user?.id])
+  }, [orden, miSlot, esSuper, esAeronave, esGcs, user?.id])
 
   const yaFirmoMiRol = useMemo(() => {
     if (!cierre || !miSlot) return false
-    if (miSlot === 'soporte') return soporteFirmado
-    if (miSlot === 'gerente') return gerenteFirmado
-    if (miSlot === 'piloto')  return pilotoFirmado
+    if (miSlot === 'soporte')  return soporteFirmado
+    if (miSlot === 'gerente')  return gerenteFirmado
+    if (miSlot === 'piloto')   return pilotoFirmado
+    if (miSlot === 'operador') return operadorFirmado
     return false
-  }, [cierre, miSlot, soporteFirmado, gerenteFirmado, pilotoFirmado])
+  }, [cierre, miSlot, soporteFirmado, gerenteFirmado, pilotoFirmado, operadorFirmado])
 
   const puedeFirmar = Boolean(cierre) && miSlot && asignadoAMiSlot && !yaFirmoMiRol
     && (miSlot !== 'piloto' || esAeronave)
+    && (miSlot !== 'operador' || esGcs)
 
   // Firmas que aún faltan (para el banner).
   const pendientes = useMemo(() => {
@@ -111,10 +119,11 @@ export default function CierreOTPage() {
     if (!soporteFirmado) arr.push('Soporte')
     if (!gerenteFirmado) arr.push('Gerente')
     if (esAeronave && !pilotoFirmado) arr.push('Piloto')
+    if (esGcs && !operadorFirmado) arr.push('Operador')
     return arr
-  }, [cierre, soporteFirmado, gerenteFirmado, pilotoFirmado, esAeronave])
+  }, [cierre, soporteFirmado, gerenteFirmado, pilotoFirmado, operadorFirmado, esAeronave, esGcs])
 
-  const totalFirmas = esAeronave ? 3 : 2
+  const totalFirmas = (esAeronave || esGcs) ? 3 : 2
 
   const handleFirmar = async () => {
     if (!puedeFirmar) {
@@ -140,11 +149,12 @@ export default function CierreOTPage() {
 
   const descargarPDF = async () => {
     try {
-      const response = await ordenesService.descargarPDF(id)
+      const response = await ordenesService.descargarPDF(id, incluirFotos)
       const url = window.URL.createObjectURL(new Blob([response.data]))
       const link = document.createElement('a')
       link.href = url
-      link.setAttribute('download', `OT-${orden.numeroOt}.pdf`)
+      const sufijo = incluirFotos ? '' : '-sin-fotos'
+      link.setAttribute('download', `OT-${orden.numeroOt}${sufijo}.pdf`)
       document.body.appendChild(link)
       link.click()
       link.parentNode.removeChild(link)
@@ -340,6 +350,7 @@ export default function CierreOTPage() {
                 <KV k="Soporte"  v={orden?.soporte?.nombre} />
                 <KV k="Gerente"  v={orden?.gerente?.nombre} />
                 {esAeronave && <KV k="Piloto" v={orden?.piloto?.nombre} />}
+                {esGcs && <KV k="Operador" v={orden?.operador?.nombre} />}
               </div>
             </Card>
 
@@ -368,6 +379,14 @@ export default function CierreOTPage() {
                     firmado={pilotoFirmado}
                     nombre={cierre?.piloto?.nombre || orden?.piloto?.nombre}
                     fecha={cierre?.fechaFirmaPiloto}
+                  />
+                )}
+                {esGcs && (
+                  <FirmaRow
+                    rol="Operador"
+                    firmado={operadorFirmado}
+                    nombre={cierre?.operador?.nombre || orden?.operador?.nombre}
+                    fecha={cierre?.fechaFirmaOperador}
                   />
                 )}
               </div>
@@ -415,6 +434,18 @@ export default function CierreOTPage() {
                 <p style={{ fontSize: 12, color: T.sub, lineHeight: 1.55, marginBottom: 14 }}>
                   El comprobante en PDF queda disponible para descarga bajo demanda.
                 </p>
+                <label style={{
+                  display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14,
+                  fontSize: 13, color: T.text, cursor: 'pointer',
+                }}>
+                  <input
+                    type="checkbox"
+                    checked={incluirFotos}
+                    onChange={(e) => setIncluirFotos(e.target.checked)}
+                    style={{ width: 16, height: 16, cursor: 'pointer' }}
+                  />
+                  Incluir fotografías en el PDF
+                </label>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   <Btn
                     label="📥 Descargar comprobante"
@@ -536,7 +567,7 @@ export default function CierreOTPage() {
                   <p style={{ fontSize: 12, color: T.sub, lineHeight: 1.55, marginBottom: 14 }}>
                     {yaFirmoMiRol
                       ? `Esperando la firma de: ${pendientes.join(', ') || 'los demás responsables'}.`
-                      : 'Solo el soporte, el gerente' + (esAeronave ? ' y el piloto' : '') + ' asignados pueden firmar el cierre.'}
+                      : 'Solo el soporte, el gerente' + (esAeronave ? ' y el piloto' : esGcs ? ' y el operador' : '') + ' asignados pueden firmar el cierre.'}
                   </p>
                   <Btn
                     variant="ghost"
@@ -556,6 +587,7 @@ export default function CierreOTPage() {
 function slotLabel(slot) {
   if (slot === 'gerente') return 'gerente'
   if (slot === 'piloto') return 'piloto'
+  if (slot === 'operador') return 'operador'
   return 'soporte'
 }
 

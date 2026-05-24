@@ -231,16 +231,16 @@ function DetalleFlota({ tipo, producto }) {
     const d = producto.aeronave || {}
     return <>Total: {d.horasTotales ?? 0}h · M.D: {d.horasMotorDer ?? 0}h · M.I: {d.horasMotorIzq ?? 0}h</>
   }
-  if (tipo === 'camion') {
-    const d = producto.camion || {}
+  if (tipo === 'gcs') {
+    const d = producto.gcs || {}
     return <>Placas: {d.placas || '—'} · {d.odometro ?? 0} km</>
   }
   if (tipo === 'planta') {
     const d = producto.planta || {}
     return <>Horímetro: {d.horimetro ?? 0}h</>
   }
-  if (tipo === 'sensor') {
-    const d = producto.sensor || {}
+  if (tipo === 'sensor_inteligencia') {
+    const d = producto.sensor_inteligencia || {}
     return <>{d.fabricante || '—'} · FW {d.versionFirmware || '—'}</>
   }
   return null

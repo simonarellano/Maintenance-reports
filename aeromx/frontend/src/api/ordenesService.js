@@ -18,8 +18,8 @@ export const ordenesService = {
     client.post(`/ordenes/${id}/recepcion`, { identificadorConfirmado }),
 
   // Hito 3 — inicia el mantenimiento. `lecturas` lleva el medidor según el tipo:
-  // aeronave → { horasTotales, horasMotorDer?, horasMotorIzq? }, camion → { odometro },
-  // planta → { horimetro }, sensor → {}.
+  // aeronave → { horasTotales, horasMotorDer?, horasMotorIzq? }, gcs → { odometro },
+  // planta → { horimetro }, sensor_inteligencia → {}.
   iniciarMantenimiento: (id, lecturas = {}) =>
     client.post(`/ordenes/${id}/iniciar-mantenimiento`, lecturas),
 
@@ -61,6 +61,7 @@ export const ordenesService = {
   firmarCierre: (id) =>
     client.post(`/ordenes/${id}/cierre/firmar`),
 
-  descargarPDF: (id) =>
-    client.get(`/ordenes/${id}/pdf`, { responseType: 'blob' })
+  // conFotos=false agrega ?fotos=false para generar el PDF sin las fotografías embebidas.
+  descargarPDF: (id, conFotos = true) =>
+    client.get(`/ordenes/${id}/pdf${conFotos ? '' : '?fotos=false'}`, { responseType: 'blob' })
 }

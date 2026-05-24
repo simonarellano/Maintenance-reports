@@ -56,6 +56,7 @@ export const ROL_LABELS = {
   tecnico_soporte:   'Técnico de soporte',
   mecanico:          'Mecánico',
   piloto:            'Piloto',
+  operador:          'Operador',
 }
 
 export const ROL_COLOR = {
@@ -64,6 +65,7 @@ export const ROL_COLOR = {
   tecnico_soporte:   { c: T.cyan,   bg: T.cD },
   mecanico:          { c: T.green,  bg: T.gD },
   piloto:            { c: T.text,   bg: T.s2 },
+  operador:          { c: T.cyan,   bg: T.cD },
 }
 
 // Lista de roles para selectores de formularios
@@ -71,10 +73,10 @@ export const ROLES = Object.keys(ROL_LABELS)
 
 // Tipos de producto (multiproducto) → label, color, ícono y orden de pestañas
 export const TIPO_PRODUCTO = {
-  aeronave: { label: 'Aeronave',         icon: '✈', c: T.cyan,   bg: T.cD },
-  camion:   { label: 'Camión',           icon: '🚚', c: T.amber,  bg: T.aD },
-  planta:   { label: 'Planta de energía', icon: '⚡', c: T.green,  bg: T.gD },
-  sensor:   { label: 'Sensor',           icon: '📡', c: T.purple, bg: T.pD },
+  aeronave:            { label: 'Aeronave',          icon: '✈',  c: T.cyan,   bg: T.cD },
+  gcs:                 { label: 'GCS',               icon: '🖥️', c: T.amber,  bg: T.aD },
+  planta:              { label: 'Planta de energía', icon: '⚡', c: T.green,  bg: T.gD },
+  sensor_inteligencia: { label: 'Sensor de inteligencia', icon: '🛰️', c: T.purple, bg: T.pD },
 }
 
 export const TIPOS_PRODUCTO = Object.keys(TIPO_PRODUCTO)

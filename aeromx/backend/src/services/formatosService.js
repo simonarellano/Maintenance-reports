@@ -74,7 +74,7 @@ export async function actualizarSecuencia(formatoId, secuencia) {
 
 // ─── Formatos ───────────────────────────────────────────────────────────────
 
-const TIPOS_VALIDOS = ['aeronave', 'camion', 'planta', 'sensor']
+const TIPOS_VALIDOS = ['aeronave', 'gcs', 'planta', 'sensor_inteligencia']
 
 export function listarFormatos({ soloActivos = true, tipoProducto } = {}) {
   const where = {}

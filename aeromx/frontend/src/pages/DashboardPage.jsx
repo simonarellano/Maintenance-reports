@@ -114,7 +114,8 @@ export default function DashboardPage() {
     o.ingenieroAuxiliar?.id === user?.id ||
     o.mecanico?.id === user?.id ||
     o.gerente?.id === user?.id ||
-    o.piloto?.id === user?.id
+    o.piloto?.id === user?.id ||
+    o.operador?.id === user?.id
 
   const ordenesVisibles = useMemo(() => {
     let lista = ordenes

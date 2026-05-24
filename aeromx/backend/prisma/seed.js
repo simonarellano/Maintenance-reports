@@ -17,6 +17,7 @@ async function main() {
     { nombre: 'Carlos Técnico',  email: 'tecnico@aeromx.com',    rol: 'tecnico_soporte',   superusuario: false, licenciaNum: 'TEC-001' },
     { nombre: 'Pedro Mecánico',  email: 'mecanico@aeromx.com',   rol: 'mecanico',          superusuario: false, licenciaNum: 'MEC-001' },
     { nombre: 'María Piloto',    email: 'piloto@aeromx.com',     rol: 'piloto',            superusuario: false, licenciaNum: 'PIL-001' },
+    { nombre: 'Jorge Operador',  email: 'operador@aeromx.com',   rol: 'operador',          superusuario: false, licenciaNum: 'OPE-001' },
   ]
 
   for (const u of usuarios) {
@@ -31,10 +32,10 @@ async function main() {
 
   // ── Modelos — uno por tipo ────────────────────────────────────────────────
   const modelosData = [
-    { tipoProducto: 'aeronave', nombre: 'Cessna 172S',     fabricante: 'Cessna',   descripcion: 'Avión de entrenamiento monomotor' },
-    { tipoProducto: 'camion',   nombre: 'F-350 Super Duty', fabricante: 'Ford',     descripcion: 'Camión pesado de servicio en rampa' },
-    { tipoProducto: 'planta',   nombre: 'XQ60',            fabricante: 'Cummins',  descripcion: 'Planta de energía portátil 60 kW' },
-    { tipoProducto: 'sensor',   nombre: 'LiDAR VLP-16',    fabricante: 'Velodyne', descripcion: 'Sensor LiDAR de 16 canales' },
+    { tipoProducto: 'aeronave', nombre: 'Cessna 172S',          fabricante: 'Cessna',       descripcion: 'Avión de entrenamiento monomotor' },
+    { tipoProducto: 'gcs',      nombre: 'GCS Móvil V1',         fabricante: 'AutoSentinel', descripcion: 'Estación de control terrestre montada en vehículo' },
+    { tipoProducto: 'planta',   nombre: 'XQ60',                 fabricante: 'Cummins',      descripcion: 'Planta de energía portátil 60 kW' },
+    { tipoProducto: 'sensor_inteligencia', nombre: 'Sensor EO/IR', fabricante: 'AutoSentinel', descripcion: 'Sensor de inteligencia electroóptico/infrarrojo' },
   ]
 
   const modelos = {}
@@ -58,11 +59,11 @@ async function main() {
       detalle: { horasTotales: 1250.5, horasMotorDer: 0, horasMotorIzq: 0 },
     },
     {
-      tipoProducto: 'camion',
-      modeloId: modelos.camion.id,
-      identificador: 'MX-CAM-001',
-      numeroSerie: 'FORD-F350-9876',
-      detalle: { placas: 'MX-CAM-001', vin: '1FT8W3DT5KEE12345', odometro: 84200 },
+      tipoProducto: 'gcs',
+      modeloId: modelos.gcs.id,
+      identificador: 'MX-GCS-001',
+      numeroSerie: 'GCS-V1-9876',
+      detalle: { placas: 'MX-GCS-001', vin: '1FT8W3DT5KEE12345', odometro: 84200 },
     },
     {
       tipoProducto: 'planta',
@@ -72,11 +73,11 @@ async function main() {
       detalle: { horimetro: 320 },
     },
     {
-      tipoProducto: 'sensor',
-      modeloId: modelos.sensor.id,
+      tipoProducto: 'sensor_inteligencia',
+      modeloId: modelos.sensor_inteligencia.id,
       identificador: 'SE-001',
-      numeroSerie: 'VLP16-78900',
-      detalle: { fabricante: 'Velodyne', versionFirmware: '3.2.1', fechaCalibracion: new Date('2026-01-15') },
+      numeroSerie: 'EOIR-78900',
+      detalle: { fabricante: 'AutoSentinel', versionFirmware: '3.2.1', fechaCalibracion: new Date('2026-01-15') },
     },
   ]
 
@@ -104,10 +105,10 @@ async function main() {
 
     // Detalle por tipo
     const detalleArgs = { where: { productoId: producto.id }, update: p.detalle, create: { productoId: producto.id, ...p.detalle } }
-    if (p.tipoProducto === 'aeronave') await prisma.aeronaveDetalle.upsert(detalleArgs)
-    if (p.tipoProducto === 'camion')   await prisma.camionDetalle.upsert(detalleArgs)
-    if (p.tipoProducto === 'planta')   await prisma.plantaDetalle.upsert(detalleArgs)
-    if (p.tipoProducto === 'sensor')   await prisma.sensorDetalle.upsert(detalleArgs)
+    if (p.tipoProducto === 'aeronave')            await prisma.aeronaveDetalle.upsert(detalleArgs)
+    if (p.tipoProducto === 'gcs')                 await prisma.gcsDetalle.upsert(detalleArgs)
+    if (p.tipoProducto === 'planta')              await prisma.plantaDetalle.upsert(detalleArgs)
+    if (p.tipoProducto === 'sensor_inteligencia') await prisma.sensorInteligenciaDetalle.upsert(detalleArgs)
 
     console.log(`✓ Producto: ${p.tipoProducto} · ${p.identificador}`)
   }
@@ -122,13 +123,13 @@ async function main() {
   })
   await poblarFormato(formatoAeronave.id, seccionesMantenimientoMenor())
 
-  // ── Formato Camión: Inspección Preventiva ─────────────────────────────────
-  const formatoCamion = await crearFormato({
-    tipoProducto: 'camion',
+  // ── Formato GCS: Inspección Preventiva ────────────────────────────────────
+  const formatoGcs = await crearFormato({
+    tipoProducto: 'gcs',
     nombre: 'Inspección Preventiva',
-    objetivo: 'Inspección preventiva de camión de servicio',
+    objetivo: 'Inspección preventiva de estación de control terrestre (GCS)',
   })
-  await poblarFormato(formatoCamion.id, [
+  await poblarFormato(formatoGcs.id, [
     {
       nombre: 'Motor',
       descripcion: 'Inspección general del motor y componentes asociados',
@@ -158,16 +159,16 @@ async function main() {
     },
   ])
 
-  // ── Formato Sensor: Calibración y Verificación ────────────────────────────
-  const formatoSensor = await crearFormato({
-    tipoProducto: 'sensor',
+  // ── Formato Sensor de inteligencia: Calibración y Verificación ────────────
+  const formatoSensorInteligencia = await crearFormato({
+    tipoProducto: 'sensor_inteligencia',
     nombre: 'Calibración y Verificación',
-    objetivo: 'Calibración periódica y verificación funcional del sensor',
+    objetivo: 'Calibración periódica y verificación funcional del sensor de inteligencia',
   })
-  await poblarFormato(formatoSensor.id, [
+  await poblarFormato(formatoSensorInteligencia.id, [
     {
       nombre: 'Funcional',
-      descripcion: 'Pruebas funcionales del sensor',
+      descripcion: 'Pruebas funcionales del sensor de inteligencia',
       puntos: [
         p('Lectura de prueba', true,  false, 'Capturar muestra de salida del sensor'),
         p('Firmware',          false, false, 'Verificar versión instalada'),

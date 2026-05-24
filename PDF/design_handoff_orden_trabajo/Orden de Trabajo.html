@@ -1,0 +1,1166 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>Orden de Trabajo — Mantenimiento</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="image-slot.js"></script>
+<style>
+  /* ============================================================
+     Sistema base
+     ============================================================ */
+  :root {
+    --bg: #FAFAF7;
+    --paper: #FFFFFF;
+    --ink: #111110;
+    --ink-2: #3A3A36;
+    --muted: #76746B;
+    --line: #E7E5DD;
+    --line-2: #F0EEE7;
+    --accent: oklch(0.48 0.12 248);
+    --accent-soft: oklch(0.95 0.025 248);
+    --ok: oklch(0.55 0.13 150);
+    --ok-soft: oklch(0.95 0.04 150);
+    --warn: oklch(0.65 0.16 70);
+    --critical: oklch(0.58 0.20 25);
+
+    --radius: 4px;
+    --radius-lg: 8px;
+
+    --fs-mono-xs: 10.5px;
+    --fs-mono-sm: 11.5px;
+    --fs-xs: 11px;
+    --fs-sm: 12.5px;
+    --fs-base: 14px;
+    --fs-md: 16px;
+    --fs-lg: 20px;
+    --fs-xl: 28px;
+    --fs-2xl: 36px;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: 'Geist', ui-sans-serif, system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    font-size: var(--fs-base);
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: 'ss01', 'cv11';
+  }
+  .mono { font-family: 'Geist Mono', ui-monospace, monospace; font-feature-settings: 'zero', 'ss02'; }
+
+  /* ============================================================
+     Página tipo Carta
+     ============================================================ */
+  .page {
+    width: 8.5in;
+    min-height: 11in;
+    margin: 24px auto;
+    background: var(--paper);
+    padding: 0.55in 0.6in 0.5in;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.04), 0 10px 30px -10px rgba(0,0,0,0.10);
+    position: relative;
+    page-break-after: always;
+  }
+  .page:last-of-type { page-break-after: auto; }
+
+  /* ============================================================
+     Header
+     ============================================================ */
+  .doc-head {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: start;
+    gap: 24px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--ink);
+    margin-bottom: 22px;
+  }
+  .brand {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .brand-mark {
+    height: 44px;
+    width: auto;
+    display: block;
+    /* el logo viene en gris claro — lo oscurecemos a tinta */
+    filter: brightness(0) saturate(100%);
+  }
+  .brand-text { display: flex; flex-direction: column; line-height: 1.15; }
+  .brand-name {
+    font-weight: 600;
+    font-size: 15px;
+    letter-spacing: -0.01em;
+  }
+  .brand-sub {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: 'Geist Mono', monospace;
+  }
+
+  .doc-meta {
+    text-align: right;
+    font-family: 'Geist Mono', monospace;
+    font-size: var(--fs-mono-sm);
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .doc-meta b { color: var(--ink); font-weight: 500; }
+
+  /* ============================================================
+     Título de documento
+     ============================================================ */
+  .doc-title-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: end;
+    gap: 24px;
+    margin-bottom: 28px;
+  }
+  .doc-kicker {
+    font-family: 'Geist Mono', monospace;
+    font-size: var(--fs-mono-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .doc-title {
+    font-size: var(--fs-2xl);
+    font-weight: 500;
+    letter-spacing: -0.025em;
+    line-height: 1.0;
+    margin: 0;
+  }
+  .doc-folio {
+    font-family: 'Geist Mono', monospace;
+    font-size: 14px;
+    color: var(--ink-2);
+    margin-top: 6px;
+  }
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: var(--ok-soft);
+    color: var(--ok);
+    font-family: 'Geist Mono', monospace;
+    font-size: var(--fs-mono-sm);
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    border: 1px solid color-mix(in oklch, var(--ok) 25%, transparent);
+  }
+  .status-pill::before {
+    content: '';
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--ok);
+  }
+  .status-pill.open {
+    background: oklch(0.96 0.04 70);
+    color: var(--warn);
+    border-color: color-mix(in oklch, var(--warn) 25%, transparent);
+  }
+  .status-pill.open::before { background: var(--warn); }
+
+  /* ============================================================
+     Timeline
+     ============================================================ */
+  .timeline {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    margin-bottom: 28px;
+    padding: 18px 0 0;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+  .tl-step {
+    padding: 0 18px 18px 0;
+    border-right: 1px solid var(--line-2);
+    position: relative;
+  }
+  .tl-step:last-child { border-right: none; padding-right: 0; }
+  .tl-step + .tl-step { padding-left: 18px; }
+  .tl-num {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--ink);
+    color: var(--paper);
+    display: grid; place-items: center;
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    margin-bottom: 10px;
+  }
+  .tl-label {
+    font-family: 'Geist Mono', monospace;
+    font-size: var(--fs-mono-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .tl-value {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink);
+  }
+  .tl-value .mono { font-size: 12px; color: var(--ink-2); }
+
+  /* ============================================================
+     Sección
+     ============================================================ */
+  .section { margin-bottom: 26px; }
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .section-num {
+    font-family: 'Geist Mono', monospace;
+    font-size: var(--fs-mono-sm);
+    color: var(--muted);
+    font-weight: 500;
+  }
+  .section-title {
+    font-size: var(--fs-md);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+  .section-rule {
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+    margin-left: 8px;
+    transform: translateY(-3px);
+  }
+
+  /* ============================================================
+     Grid de campos clave-valor
+     ============================================================ */
+  .kv-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+  .kv {
+    padding: 12px 14px;
+    border-right: 1px solid var(--line-2);
+    border-bottom: 1px solid var(--line-2);
+    background: var(--paper);
+  }
+  .kv-grid > .kv:nth-child(4n) { border-right: none; }
+  .kv-grid > .kv:nth-last-child(-n+4):nth-child(4n+1),
+  .kv-grid > .kv:nth-last-child(-n+4):nth-child(4n+1) ~ .kv { border-bottom: none; }
+  .kv-label {
+    font-family: 'Geist Mono', monospace;
+    font-size: var(--fs-mono-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .kv-value {
+    font-size: var(--fs-base);
+    color: var(--ink);
+    font-weight: 500;
+    letter-spacing: -0.005em;
+  }
+  .kv-value.mono { font-size: 13px; }
+  .kv-value.lg { font-size: var(--fs-md); }
+  .kv-value.muted { color: var(--muted); font-weight: 400; }
+
+  .kv-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  .kv-grid.cols-3 > .kv:nth-child(3n) { border-right: none; }
+  .kv-grid.cols-3 > .kv { border-right: 1px solid var(--line-2); }
+  .kv-grid.cols-3 > .kv:nth-last-child(-n+3) { border-bottom: none; }
+
+  .kv-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+  .kv-grid.cols-2 > .kv { border-right: 1px solid var(--line-2); border-bottom: 1px solid var(--line-2); }
+  .kv-grid.cols-2 > .kv:nth-child(2n) { border-right: none; }
+  .kv-grid.cols-2 > .kv:nth-last-child(-n+2) { border-bottom: none; }
+
+  /* ============================================================
+     Personal — cards
+     ============================================================ */
+  .people {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .person-card {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    padding: 14px 16px;
+    background: var(--paper);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .person-role {
+    display: flex; align-items: center; justify-content: space-between;
+    font-family: 'Geist Mono', monospace;
+    font-size: var(--fs-mono-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+  }
+  .person-role-tag {
+    padding: 2px 8px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-radius: 999px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+  }
+  .person-name {
+    font-size: var(--fs-md);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+  }
+  .person-meta {
+    display: flex; gap: 14px;
+    font-size: var(--fs-sm);
+    color: var(--muted);
+    padding-top: 6px;
+    border-top: 1px dashed var(--line);
+    margin-top: 2px;
+  }
+  .person-meta b { font-weight: 500; color: var(--ink-2); display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 2px; font-family: 'Geist Mono', monospace;}
+  .person-meta .mono { color: var(--ink); font-size: 12.5px; }
+
+  /* ============================================================
+     Tabla — trabajos realizados
+     ============================================================ */
+  .works {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+  .works-head, .work-row {
+    display: grid;
+    grid-template-columns: 36px 1.4fr 2.4fr 110px 100px 70px;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+  }
+  .works-head {
+    background: #F6F4ED;
+    border-bottom: 1px solid var(--line);
+    font-family: 'Geist Mono', monospace;
+    font-size: var(--fs-mono-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  .work-row {
+    border-top: 1px solid var(--line-2);
+    font-size: var(--fs-sm);
+  }
+  .work-row:first-of-type { border-top: none; }
+  .work-row .idx {
+    font-family: 'Geist Mono', monospace;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .work-row .comp {
+    font-weight: 600;
+    font-size: 13.5px;
+    letter-spacing: -0.005em;
+  }
+  .work-row .desc {
+    color: var(--ink-2);
+    font-size: 13px;
+  }
+  .cond {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--ok-soft);
+    color: var(--ok);
+    text-transform: uppercase;
+  }
+  .cond::before { content:''; width:6px; height:6px; border-radius:50%; background: var(--ok); }
+  .cond.malo { background: oklch(0.95 0.04 25); color: var(--critical); }
+  .cond.malo::before { background: var(--critical); }
+  .cond.na { background: var(--line-2); color: var(--muted); }
+  .cond.na::before { background: var(--muted); }
+
+  .photos-cell {
+    display: flex; align-items: center; gap: 6px;
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .photos-cell.has { color: var(--ink); font-weight: 500; }
+
+  /* Galería de evidencia bajo cada trabajo */
+  .work-item {
+    border-top: 1px solid var(--line-2);
+  }
+  .work-item:first-of-type { border-top: none; }
+  .work-evidence {
+    padding: 4px 14px 16px 62px;     /* alinea bajo "Componente" */
+    background: #FDFCF7;
+    border-top: 1px dashed var(--line);
+  }
+  .evidence-head {
+    display: flex; align-items: center; justify-content: space-between;
+    font-family: 'Geist Mono', monospace;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 10px;
+    padding-top: 12px;
+  }
+  .evidence-head .hint {
+    font-style: italic;
+    text-transform: none;
+    letter-spacing: 0.02em;
+    color: var(--muted);
+  }
+  .evidence-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+  .ev-slot {
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .ev-slot image-slot {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    display: block;
+    border-radius: 6px;
+    border: 1px dashed var(--line);
+    background: #FBFAF4;
+  }
+  .ev-slot image-slot:hover { border-color: var(--accent); }
+  .ev-caption {
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: 'Geist Mono', monospace;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+  }
+  .ev-caption .ev-num {
+    color: var(--ink);
+    font-weight: 500;
+  }
+  .ev-caption .ev-tag {
+    background: var(--line-2);
+    padding: 2px 6px;
+    border-radius: 99px;
+    color: var(--ink-2);
+    font-size: 9.5px;
+  }
+
+  @media print {
+    .ev-slot image-slot { border-style: solid; }
+  }
+  .sign-cell {
+    color: var(--muted);
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+  }
+
+  .group-head {
+    background: #FBFAF4;
+    padding: 8px 14px;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line-2);
+    display: flex; align-items: center; justify-content: space-between;
+    font-family: 'Geist Mono', monospace;
+    font-size: var(--fs-mono-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .group-head .count {
+    font-weight: 400;
+    color: var(--muted);
+  }
+  .legend {
+    display: flex; gap: 16px; align-items: center;
+    margin-top: 8px;
+    font-family: 'Geist Mono', monospace;
+    font-size: 10.5px;
+    color: var(--muted);
+  }
+  .legend .star { color: var(--critical); }
+
+  /* ============================================================
+     Dictamen
+     ============================================================ */
+  .dict {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+  .dict-cell {
+    padding: 16px 18px;
+    border-right: 1px solid var(--line-2);
+  }
+  .dict-cell:last-child { border-right: none; }
+  .dict-label {
+    font-family: 'Geist Mono', monospace;
+    font-size: var(--fs-mono-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  .dict-value {
+    font-size: 22px;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    line-height: 1.0;
+  }
+  .dict-value .frac {
+    font-family: 'Geist Mono', monospace;
+    color: var(--muted);
+    font-weight: 400;
+    font-size: 16px;
+  }
+  .progress {
+    margin-top: 10px;
+    height: 4px;
+    background: var(--line-2);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+  .progress > span {
+    display: block; height: 100%;
+    background: var(--ok);
+    border-radius: 99px;
+  }
+
+  .obs-block {
+    margin-top: 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    padding: 14px 16px;
+    background: #FCFBF6;
+  }
+  .obs-block .kv-label { margin-bottom: 8px; }
+  .obs-text {
+    font-size: 13.5px;
+    color: var(--ink-2);
+    min-height: 36px;
+    line-height: 1.5;
+  }
+  .obs-text.empty {
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  /* ============================================================
+     Firmas
+     ============================================================ */
+  .signs {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+  }
+  .sign-card {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    padding: 18px 20px 16px;
+    background: var(--paper);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    position: relative;
+  }
+  .sign-card.signed { background: linear-gradient(180deg, #FBFCFA 0%, #FFFFFF 80%); }
+  .sign-role {
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: 'Geist Mono', monospace;
+    font-size: var(--fs-mono-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+  }
+  .sign-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--ok);
+    font-weight: 500;
+  }
+  .sign-status::before {
+    content: '';
+    width: 12px; height: 12px;
+    background: var(--ok);
+    -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='%23000' d='M6.5 10.6 3.7 7.8l-1.1 1.1 3.9 3.9 7.4-7.4-1.1-1.1z'/></svg>") center/contain no-repeat;
+            mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='%23000' d='M6.5 10.6 3.7 7.8l-1.1 1.1 3.9 3.9 7.4-7.4-1.1-1.1z'/></svg>") center/contain no-repeat;
+  }
+  .sign-line {
+    height: 56px;
+    border-bottom: 1.5px solid var(--ink);
+    display: flex; align-items: flex-end; justify-content: flex-start;
+    padding-bottom: 4px;
+    font-family: 'Geist Mono', monospace;
+    font-style: italic;
+    font-size: 22px;
+    color: var(--ink);
+    letter-spacing: -0.02em;
+    font-weight: 500;
+  }
+  .sign-name { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+  .sign-role-text { font-size: 12px; color: var(--muted); margin-top: -6px; }
+  .sign-ts {
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    border-top: 1px dashed var(--line);
+    padding-top: 8px;
+    display: flex; justify-content: space-between;
+  }
+
+  /* ============================================================
+     Footer
+     ============================================================ */
+  .doc-foot {
+    position: absolute;
+    bottom: 0.35in;
+    left: 0.6in; right: 0.6in;
+    display: flex; justify-content: space-between;
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    padding-top: 8px;
+    border-top: 1px solid var(--line);
+    letter-spacing: 0.04em;
+  }
+
+  /* ============================================================
+     Print
+     ============================================================ */
+  @page { size: Letter; margin: 0; }
+  @media print {
+    body { background: #fff; }
+    .page {
+      margin: 0; box-shadow: none;
+      width: 8.5in; min-height: 11in;
+    }
+    .toolbar { display: none !important; }
+  }
+
+  /* ============================================================
+     Toolbar (solo pantalla)
+     ============================================================ */
+  .toolbar {
+    position: fixed;
+    top: 12px; right: 12px;
+    display: flex; gap: 6px;
+    background: var(--ink);
+    color: var(--paper);
+    padding: 6px;
+    border-radius: 999px;
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    z-index: 100;
+    box-shadow: 0 6px 24px -8px rgba(0,0,0,0.4);
+  }
+  .toolbar button {
+    background: transparent; color: inherit; border: none;
+    padding: 6px 12px; border-radius: 999px; cursor: pointer;
+    font-family: inherit; font-size: inherit;
+    letter-spacing: 0.05em;
+  }
+  .toolbar button:hover { background: rgba(255,255,255,0.1); }
+
+  /* Indicador de punto crítico */
+  .crit {
+    color: var(--critical);
+    margin-left: 4px;
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <button onclick="window.print()">Imprimir / PDF</button>
+</div>
+
+<!-- ============================================================
+     PÁGINA 1
+============================================================ -->
+<section class="page" data-screen-label="01 Página 1">
+
+  <!-- Header -->
+  <header class="doc-head">
+    <div class="brand">
+      <img class="brand-mark" src="hydra-logo.png" alt="HYDRA" />
+      <div class="brand-text">
+        <span class="brand-name">HYDRA · Gestión de mantenimiento</span>
+        <span class="brand-sub">Planta 20 City · México &nbsp;·&nbsp; +52 (55) 0000-0000 &nbsp;·&nbsp; soporte@hydra.mx</span>
+      </div>
+    </div>
+    <div class="doc-meta">
+      <div>Documento <b>O/T</b></div>
+      <div>Generado <b>21/05/2026 · 10:26 p.m.</b></div>
+      <div>Formato <b>v1.0</b> · Calibración y Verificación</div>
+    </div>
+  </header>
+
+  <!-- Título -->
+  <div class="doc-title-row">
+    <div>
+      <div class="doc-kicker">Orden de trabajo de mantenimiento</div>
+      <h1 class="doc-title">Calibración y verificación de sensor LiDAR</h1>
+      <div class="doc-folio mono">N.º &nbsp; OT-20260521-0012</div>
+    </div>
+    <div class="status-pill">Cerrada</div>
+  </div>
+
+  <!-- Timeline -->
+  <div class="timeline">
+    <div class="tl-step">
+      <div class="tl-num">1</div>
+      <div class="tl-label">Creación de orden</div>
+      <div class="tl-value">21 May 2026 <span class="mono">· 10:25 p.m.</span></div>
+    </div>
+    <div class="tl-step">
+      <div class="tl-num">2</div>
+      <div class="tl-label">Recepción de sensor</div>
+      <div class="tl-value">21 May 2026 <span class="mono">· 10:25 p.m.</span></div>
+    </div>
+    <div class="tl-step">
+      <div class="tl-num">3</div>
+      <div class="tl-label">Inicio mantenimiento</div>
+      <div class="tl-value">21 May 2026 <span class="mono">· 10:25 p.m.</span></div>
+    </div>
+    <div class="tl-step">
+      <div class="tl-num">4</div>
+      <div class="tl-label">Cierre / firma</div>
+      <div class="tl-value">21 May 2026 <span class="mono">· 10:26 p.m.</span></div>
+    </div>
+  </div>
+
+  <!-- §1 Datos generales -->
+  <section class="section">
+    <div class="section-head">
+      <span class="section-num">§ 01</span>
+      <h2 class="section-title">Datos generales del servicio</h2>
+      <span class="section-rule"></span>
+    </div>
+    <div class="kv-grid">
+      <div class="kv">
+        <div class="kv-label">N.º Orden</div>
+        <div class="kv-value mono">OT-20260521-0012</div>
+      </div>
+      <div class="kv">
+        <div class="kv-label">Tipo de producto</div>
+        <div class="kv-value">Sensor</div>
+      </div>
+      <div class="kv">
+        <div class="kv-label">Formato</div>
+        <div class="kv-value">Calibración y verificación <span class="muted mono" style="font-size:11px">v1.0</span></div>
+      </div>
+      <div class="kv">
+        <div class="kv-label">Cliente</div>
+        <div class="kv-value mono">01</div>
+      </div>
+      <div class="kv">
+        <div class="kv-label">Orden de servicio</div>
+        <div class="kv-value mono">666</div>
+      </div>
+      <div class="kv">
+        <div class="kv-label">Lugar de mantenimiento</div>
+        <div class="kv-value">Torreón, Coah.</div>
+      </div>
+      <div class="kv">
+        <div class="kv-label">Duración total</div>
+        <div class="kv-value">1 min <span class="muted mono" style="font-size:11px">aprox.</span></div>
+      </div>
+      <div class="kv">
+        <div class="kv-label">Estado actual</div>
+        <div class="kv-value" style="color: var(--ok); font-weight:600;">Cerrada</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- §2 Datos del sensor -->
+  <section class="section">
+    <div class="section-head">
+      <span class="section-num">§ 02</span>
+      <h2 class="section-title">Datos del sensor</h2>
+      <span class="section-rule"></span>
+    </div>
+    <div class="kv-grid cols-3">
+      <div class="kv">
+        <div class="kv-label">N.º de serie</div>
+        <div class="kv-value mono lg">SE-001</div>
+      </div>
+      <div class="kv">
+        <div class="kv-label">Modelo</div>
+        <div class="kv-value lg">LiDAR VLP-16</div>
+      </div>
+      <div class="kv">
+        <div class="kv-label">Fabricante</div>
+        <div class="kv-value lg">Velodyne</div>
+      </div>
+      <div class="kv">
+        <div class="kv-label">Firmware</div>
+        <div class="kv-value mono">3.2.1</div>
+      </div>
+      <div class="kv">
+        <div class="kv-label">Última calibración</div>
+        <div class="kv-value">14 Ene 2026</div>
+      </div>
+      <div class="kv">
+        <div class="kv-label">N.º interno</div>
+        <div class="kv-value mono">VLP16-78900</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- §3 Personal -->
+  <section class="section">
+    <div class="section-head">
+      <span class="section-num">§ 03</span>
+      <h2 class="section-title">Personal responsable</h2>
+      <span class="section-rule"></span>
+    </div>
+    <div class="people">
+      <div class="person-card">
+        <div class="person-role">
+          <span>Soporte</span>
+          <span class="person-role-tag">Técnico</span>
+        </div>
+        <div class="person-name">Carlos Técnico</div>
+        <div class="person-meta">
+          <div>
+            <b>Rol</b>
+            <span>Técnico soporte</span>
+          </div>
+          <div>
+            <b>Licencia</b>
+            <span class="mono">TEC-001</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="person-card">
+        <div class="person-role">
+          <span>Mantenimiento</span>
+          <span class="person-role-tag">Mecánico</span>
+        </div>
+        <div class="person-name">Pedro Mecánico</div>
+        <div class="person-meta">
+          <div>
+            <b>Rol</b>
+            <span>Mecánico</span>
+          </div>
+          <div>
+            <b>Licencia</b>
+            <span class="mono">MEC-001</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="person-card">
+        <div class="person-role">
+          <span>Aprobación</span>
+          <span class="person-role-tag">Gerente</span>
+        </div>
+        <div class="person-name">Desarrollador</div>
+        <div class="person-meta">
+          <div>
+            <b>Rol</b>
+            <span>Gerente soporte</span>
+          </div>
+          <div>
+            <b>Licencia</b>
+            <span class="mono">DEV-000</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <div class="doc-foot">
+    <span>HYDRA · O/T OT-20260521-0012 · Generado 21/05/2026 10:26 p.m.</span>
+    <span>Página 1 de 2</span>
+  </div>
+</section>
+
+<!-- ============================================================
+     PÁGINA 2
+============================================================ -->
+<section class="page" data-screen-label="02 Página 2">
+
+  <header class="doc-head">
+    <div class="brand">
+      <img class="brand-mark" src="hydra-logo.png" alt="HYDRA" />
+      <div class="brand-text">
+        <span class="brand-name">HYDRA · Gestión de mantenimiento</span>
+        <span class="brand-sub">Continuación · O/T OT-20260521-0012</span>
+      </div>
+    </div>
+    <div class="doc-meta">
+      <div>Sensor <b>SE-001 · LiDAR VLP-16</b></div>
+      <div>Estado <b style="color: var(--ok)">Cerrada</b></div>
+    </div>
+  </header>
+
+  <!-- §4 Trabajos realizados -->
+  <section class="section">
+    <div class="section-head">
+      <span class="section-num">§ 04</span>
+      <h2 class="section-title">Trabajos realizados</h2>
+      <span class="section-rule"></span>
+    </div>
+
+    <div class="works">
+      <div class="works-head">
+        <div>#</div>
+        <div>Componente</div>
+        <div>Descripción</div>
+        <div>Condición</div>
+        <div>Firma</div>
+        <div>Fotos</div>
+      </div>
+
+      <div class="group-head">
+        <span>Grupo · Funcional</span>
+        <span class="count">2 de 2 ejecutados</span>
+      </div>
+
+      <div class="work-item">
+        <div class="work-row">
+          <div class="idx">01</div>
+          <div class="comp">Lectura de prueba</div>
+          <div class="desc">Capturar muestra de salida del sensor y validar integridad de datos.</div>
+          <div><span class="cond">Bueno</span></div>
+          <div class="sign-cell">— No requerida</div>
+          <div class="photos-cell has" data-photos-for="w1">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="3.5" width="13" height="9" rx="1"/><circle cx="8" cy="8" r="2.2"/></svg>
+            <span class="count">0/4</span>
+          </div>
+        </div>
+        <div class="work-evidence">
+          <div class="evidence-head">
+            <span>Evidencia fotográfica · Trabajo 01</span>
+            <span class="hint">Arrastra una imagen a cada espacio · se guarda automáticamente</span>
+          </div>
+          <div class="evidence-grid">
+            <div class="ev-slot">
+              <image-slot id="ot12-w1-photo-1" shape="rounded" radius="6" placeholder="Antes"></image-slot>
+              <div class="ev-caption"><span class="ev-num">Foto 01</span><span class="ev-tag">Antes</span></div>
+            </div>
+            <div class="ev-slot">
+              <image-slot id="ot12-w1-photo-2" shape="rounded" radius="6" placeholder="Captura de salida"></image-slot>
+              <div class="ev-caption"><span class="ev-num">Foto 02</span><span class="ev-tag">Evidencia</span></div>
+            </div>
+            <div class="ev-slot">
+              <image-slot id="ot12-w1-photo-3" shape="rounded" radius="6" placeholder="Detalle"></image-slot>
+              <div class="ev-caption"><span class="ev-num">Foto 03</span><span class="ev-tag">Detalle</span></div>
+            </div>
+            <div class="ev-slot">
+              <image-slot id="ot12-w1-photo-4" shape="rounded" radius="6" placeholder="Después"></image-slot>
+              <div class="ev-caption"><span class="ev-num">Foto 04</span><span class="ev-tag">Después</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="work-item">
+        <div class="work-row">
+          <div class="idx">02</div>
+          <div class="comp">Firmware</div>
+          <div class="desc">Verificar versión instalada coincida con la versión aprobada.</div>
+          <div><span class="cond">Bueno</span></div>
+          <div class="sign-cell">— No requerida</div>
+          <div class="photos-cell has" data-photos-for="w2">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="3.5" width="13" height="9" rx="1"/><circle cx="8" cy="8" r="2.2"/></svg>
+            <span class="count">0/4</span>
+          </div>
+        </div>
+        <div class="work-evidence">
+          <div class="evidence-head">
+            <span>Evidencia fotográfica · Trabajo 02</span>
+            <span class="hint">Arrastra una imagen a cada espacio · se guarda automáticamente</span>
+          </div>
+          <div class="evidence-grid">
+            <div class="ev-slot">
+              <image-slot id="ot12-w2-photo-1" shape="rounded" radius="6" placeholder="Pantalla del firmware"></image-slot>
+              <div class="ev-caption"><span class="ev-num">Foto 01</span><span class="ev-tag">Versión</span></div>
+            </div>
+            <div class="ev-slot">
+              <image-slot id="ot12-w2-photo-2" shape="rounded" radius="6" placeholder="Etiqueta del sensor"></image-slot>
+              <div class="ev-caption"><span class="ev-num">Foto 02</span><span class="ev-tag">Etiqueta</span></div>
+            </div>
+            <div class="ev-slot">
+              <image-slot id="ot12-w2-photo-3" shape="rounded" radius="6" placeholder="Log de actualización"></image-slot>
+              <div class="ev-caption"><span class="ev-num">Foto 03</span><span class="ev-tag">Log</span></div>
+            </div>
+            <div class="ev-slot">
+              <image-slot id="ot12-w2-photo-4" shape="rounded" radius="6" placeholder="Resultado"></image-slot>
+              <div class="ev-caption"><span class="ev-num">Foto 04</span><span class="ev-tag">Resultado</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <span><span class="star">✦</span> Punto crítico — requiere firma individual</span>
+      <span>· Condición · <span style="color: var(--ok); font-weight:500;">BUENO</span> &nbsp; <span style="color: var(--critical); font-weight:500;">MALO</span> &nbsp; <span style="color: var(--muted); font-weight:500;">N/A</span></span>
+    </div>
+  </section>
+
+  <!-- §5 Dictamen -->
+  <section class="section">
+    <div class="section-head">
+      <span class="section-num">§ 05</span>
+      <h2 class="section-title">Dictamen y observaciones generales</h2>
+      <span class="section-rule"></span>
+    </div>
+
+    <div class="dict">
+      <div class="dict-cell">
+        <div class="dict-label">Puntos ejecutados</div>
+        <div class="dict-value"><span class="mono">2</span> <span class="frac">/ 2</span></div>
+        <div class="progress"><span style="width: 100%"></span></div>
+      </div>
+      <div class="dict-cell">
+        <div class="dict-label">¿Se encontró defecto?</div>
+        <div class="dict-value" style="color: var(--ok)">No</div>
+        <div style="font-family:'Geist Mono', monospace; font-size:11px; color: var(--muted); margin-top:8px;">Equipo apto para servicio.</div>
+      </div>
+      <div class="dict-cell">
+        <div class="dict-label">Documento correctivo</div>
+        <div class="dict-value muted">—</div>
+        <div style="font-family:'Geist Mono', monospace; font-size:11px; color: var(--muted); margin-top:8px;">No aplica</div>
+      </div>
+    </div>
+
+    <div class="obs-block">
+      <div class="kv-label">Observaciones generales</div>
+      <div class="obs-text empty">Sin observaciones adicionales registradas por el técnico responsable.</div>
+    </div>
+  </section>
+
+  <!-- §6 Firmas -->
+  <section class="section">
+    <div class="section-head">
+      <span class="section-num">§ 06</span>
+      <h2 class="section-title">Firmas de conformidad</h2>
+      <span class="section-rule"></span>
+    </div>
+
+    <div class="signs">
+      <div class="sign-card signed">
+        <div class="sign-role">
+          <span>Soporte</span>
+          <span class="sign-status">Firmado</span>
+        </div>
+        <div class="sign-line">Carlos&nbsp;T.</div>
+        <div>
+          <div class="sign-name">Carlos Técnico</div>
+          <div class="sign-role-text">Técnico soporte · Lic. TEC-001</div>
+        </div>
+        <div class="sign-ts">
+          <span>Firmado</span>
+          <span>21/05/2026 · 10:26 p.m.</span>
+        </div>
+      </div>
+
+      <div class="sign-card signed">
+        <div class="sign-role">
+          <span>Aprobación</span>
+          <span class="sign-status">Firmado</span>
+        </div>
+        <div class="sign-line">Desarrollador</div>
+        <div>
+          <div class="sign-name">Desarrollador</div>
+          <div class="sign-role-text">Gerente soporte · Lic. DEV-000</div>
+        </div>
+        <div class="sign-ts">
+          <span>Firmado</span>
+          <span>21/05/2026 · 10:25 p.m.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="doc-foot">
+    <span>HYDRA · O/T OT-20260521-0012 · Generado 21/05/2026 10:26 p.m.</span>
+    <span>Página 2 de 2</span>
+  </div>
+</section>
+
+<script>
+  // ============================================================
+  //  Actualiza el contador "N/M" en cada renglón de trabajo
+  //  cuando se sueltan / quitan fotos en sus image-slots.
+  // ============================================================
+  (function () {
+    function refresh(workItem) {
+      const slots = workItem.querySelectorAll('image-slot');
+      const total = slots.length;
+      const filled = workItem.querySelectorAll('image-slot[data-filled]').length;
+      const cell = workItem.querySelector('.photos-cell .count');
+      if (!cell) return;
+      cell.textContent = filled + '/' + total;
+      const photosCell = workItem.querySelector('.photos-cell');
+      photosCell.classList.toggle('has', filled > 0);
+    }
+
+    const items = document.querySelectorAll('.work-item');
+    const mo = new MutationObserver((muts) => {
+      const touched = new Set();
+      muts.forEach(m => {
+        const item = m.target.closest && m.target.closest('.work-item');
+        if (item) touched.add(item);
+      });
+      touched.forEach(refresh);
+    });
+
+    items.forEach(item => {
+      refresh(item);
+      item.querySelectorAll('image-slot').forEach(slot => {
+        mo.observe(slot, { attributes: true, attributeFilter: ['data-filled'] });
+      });
+    });
+  })();
+</script>
+
+</body>
+</html>

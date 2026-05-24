@@ -1,6 +1,6 @@
 import prisma from '../lib/prisma.js'
 
-const TIPOS_VALIDOS = ['aeronave', 'camion', 'planta', 'sensor']
+const TIPOS_VALIDOS = ['aeronave', 'gcs', 'planta', 'sensor_inteligencia']
 
 export function listarModelos({ tipoProducto } = {}) {
   const where = {}

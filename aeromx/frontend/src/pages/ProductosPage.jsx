@@ -267,8 +267,8 @@ function DetalleResumen({ tipo, producto }) {
       </div>
     )
   }
-  if (tipo === 'camion') {
-    const d = producto.camion || {}
+  if (tipo === 'gcs') {
+    const d = producto.gcs || {}
     return (
       <div style={mono}>
         Placas: {d.placas || '—'} · {d.odometro ?? 0} km
@@ -280,8 +280,8 @@ function DetalleResumen({ tipo, producto }) {
     const d = producto.planta || {}
     return <div style={mono}>Horímetro: {d.horimetro ?? 0}h</div>
   }
-  if (tipo === 'sensor') {
-    const d = producto.sensor || {}
+  if (tipo === 'sensor_inteligencia') {
+    const d = producto.sensor_inteligencia || {}
     return (
       <div style={mono}>
         {d.fabricante || '—'} · FW {d.versionFirmware || '—'}
@@ -339,10 +339,10 @@ function FormularioProducto({ tipo, inicial, modelos, onCancelar, onGuardar }) {
   const [saving, setSaving] = useState(false)
   const meta = TIPO_PRODUCTO[tipo]
 
-  const idLabel = tipo === 'camion' ? 'Placas / Identificador'
+  const idLabel = tipo === 'gcs' ? 'Placas / Identificador'
     : tipo === 'aeronave' ? 'Matrícula' : 'Identificador'
   const idPlaceholder = tipo === 'aeronave' ? 'XB-ABC'
-    : tipo === 'camion' ? 'MX-CAM-001'
+    : tipo === 'gcs' ? 'MX-GCS-001'
     : tipo === 'planta' ? 'PE-001' : 'SE-001'
 
   const construirDetalle = () => {
@@ -351,13 +351,13 @@ function FormularioProducto({ tipo, inicial, modelos, onCancelar, onGuardar }) {
       horasMotorDer: parseFloat(horasMotorDer) || 0,
       horasMotorIzq: parseFloat(horasMotorIzq) || 0,
     }
-    if (tipo === 'camion') return {
+    if (tipo === 'gcs') return {
       placas: placas.trim().toUpperCase(),
       vin: vin.trim() || null,
       odometro: parseFloat(odometro) || 0,
     }
     if (tipo === 'planta') return { horimetro: parseFloat(horimetro) || 0 }
-    if (tipo === 'sensor') return {
+    if (tipo === 'sensor_inteligencia') return {
       fabricante: fabricante.trim() || null,
       versionFirmware: versionFirmware.trim() || null,
       fechaCalibracion: fechaCalibracion || null,
@@ -368,7 +368,7 @@ function FormularioProducto({ tipo, inicial, modelos, onCancelar, onGuardar }) {
   const submit = async (e) => {
     e.preventDefault()
     if (!identificador.trim() || !modeloId) return
-    if (tipo === 'camion' && !placas.trim()) return
+    if (tipo === 'gcs' && !placas.trim()) return
     setSaving(true)
     try {
       await onGuardar({
@@ -411,9 +411,9 @@ function FormularioProducto({ tipo, inicial, modelos, onCancelar, onGuardar }) {
             <Field label="Horas motor izq." type="number" value={horasMotorIzq} onChange={setHorasMotorIzq} mono inputProps={{ step: '0.1', min: '0' }} />
           </div>
         )}
-        {tipo === 'camion' && (
+        {tipo === 'gcs' && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-            <Field label="Placas" required value={placas} onChange={(v) => setPlacas(v.toUpperCase())} placeholder="MX-CAM-001" mono />
+            <Field label="Placas" required value={placas} onChange={(v) => setPlacas(v.toUpperCase())} placeholder="MX-GCS-001" mono />
             <Field label="VIN" value={vin} onChange={setVin} placeholder="1FT8W3DT5KEE12345" mono />
             <Field label="Odómetro (km)" type="number" value={odometro} onChange={setOdometro} mono inputProps={{ step: '1', min: '0' }} />
           </div>
@@ -423,9 +423,9 @@ function FormularioProducto({ tipo, inicial, modelos, onCancelar, onGuardar }) {
             <Field label="Horímetro (h)" type="number" value={horimetro} onChange={setHorimetro} mono inputProps={{ step: '0.1', min: '0' }} />
           </div>
         )}
-        {tipo === 'sensor' && (
+        {tipo === 'sensor_inteligencia' && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-            <Field label="Fabricante" value={fabricante} onChange={setFabricante} placeholder="Velodyne" />
+            <Field label="Fabricante" value={fabricante} onChange={setFabricante} placeholder="AutoSentinel" />
             <Field label="Versión firmware" value={versionFirmware} onChange={setVersionFirmware} placeholder="3.2.1" mono />
             <Field label="Fecha de calibración" type="date" value={fechaCalibracion} onChange={setFechaCalibracion} />
           </div>
@@ -436,7 +436,7 @@ function FormularioProducto({ tipo, inicial, modelos, onCancelar, onGuardar }) {
           <Btn
             type="submit"
             label={saving ? 'Guardando…' : (inicial ? 'Guardar cambios' : `Registrar ${meta.label.toLowerCase()}`)}
-            disabled={saving || !identificador.trim() || !modeloId || (tipo === 'camion' && !placas.trim())}
+            disabled={saving || !identificador.trim() || !modeloId || (tipo === 'gcs' && !placas.trim())}
             style={{ flex: 1 }}
           />
         </div>

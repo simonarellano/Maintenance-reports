@@ -21,6 +21,14 @@ const REQUIERE_OBSERVACION = ['correcto_con_danos', 'requiere_atencion']
 
 const ROLES_SOPORTE = ['tecnico_soporte', 'ingeniero_soporte']
 
+// Requisitos de personal por tipo de producto (espejo del backend).
+const REQUISITOS_PERSONAL = {
+  aeronave:            { mecanico: 'obligatorio', piloto: 'obligatorio', operador: 'prohibido'   },
+  gcs:                 { mecanico: 'opcional',    piloto: 'prohibido',   operador: 'obligatorio' },
+  planta:              { mecanico: 'obligatorio', piloto: 'prohibido',   operador: 'prohibido'   },
+  sensor_inteligencia: { mecanico: 'prohibido',   piloto: 'prohibido',   operador: 'prohibido'   },
+}
+
 export default function InspeccionPage() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -201,7 +209,7 @@ export default function InspeccionPage() {
   const esSuper = user?.superusuario === true
   const esGerente = esSuper || user?.rol === 'gerente_soporte'
   const asignado = esSuper || [
-    orden.soporte, orden.ingenieroAuxiliar, orden.mecanico, orden.gerente,
+    orden.soporte, orden.ingenieroAuxiliar, orden.mecanico, orden.gerente, orden.operador,
   ].some((u) => u?.id === uid)
   const puedeEditar = asignado && orden.estado !== 'cerrada'
 
@@ -253,7 +261,8 @@ export default function InspeccionPage() {
             gap: 12, paddingTop: 12, borderTop: `1px solid ${T.border}`,
           }}>
             <KV k="Soporte"  v={soporteLabel(orden.soporte, orden.ingenieroAuxiliar)} />
-            <KV k="Mecánico" v={orden.mecanico?.nombre || 'Sin asignar'} />
+            {orden.mecanico && <KV k="Mecánico" v={orden.mecanico.nombre} />}
+            {tipo === 'gcs' && <KV k="Operador" v={orden.operador?.nombre || 'Sin asignar'} />}
             <KV k="Gerente"  v={orden.gerente?.nombre || 'Sin asignar'} />
             {tipo === 'aeronave' && <KV k="Piloto" v={orden.piloto?.nombre || 'Sin asignar'} />}
             {orden.cliente && <KV k="Cliente" v={orden.cliente} />}
@@ -560,12 +569,12 @@ function LecturasMedidor({ tipo, orden }) {
       { label: 'Motor derecho', v: orden.horasMotorDer, unidad: 'h' },
       { label: 'Motor izquierdo', v: orden.horasMotorIzq, unidad: 'h' },
     ]
-  } else if (tipo === 'camion') {
+  } else if (tipo === 'gcs') {
     chips = [{ label: 'Odómetro', v: orden.odometro, unidad: 'km' }]
   } else if (tipo === 'planta') {
     chips = [{ label: 'Horímetro', v: orden.horimetro, unidad: 'h' }]
   } else {
-    return null // sensor: sin medidor
+    return null // sensor_inteligencia: sin medidor
   }
   return (
     <div style={{
@@ -616,7 +625,7 @@ function IniciarPanel({ tipo, producto, onIniciar, onError }) {
       lecturas.horasTotales = Number(horasTotales)
       if (horasMotorDer !== '') lecturas.horasMotorDer = Number(horasMotorDer)
       if (horasMotorIzq !== '') lecturas.horasMotorIzq = Number(horasMotorIzq)
-    } else if (tipo === 'camion') {
+    } else if (tipo === 'gcs') {
       if (odometro === '') { onError('El odómetro es obligatorio para iniciar el mantenimiento'); return }
       lecturas.odometro = Number(odometro)
     } else if (tipo === 'planta') {
@@ -684,7 +693,7 @@ function IniciarPanel({ tipo, producto, onIniciar, onError }) {
           </div>
         </div>
       )}
-      {tipo === 'camion' && (
+      {tipo === 'gcs' && (
         <div style={{ maxWidth: 240, marginBottom: 14 }}>
           <label style={labelStyle}>Odómetro (km) *</label>
           <input type="number" step="1" min="0" value={odometro}
@@ -698,9 +707,9 @@ function IniciarPanel({ tipo, producto, onIniciar, onError }) {
             onChange={(e) => setHorimetro(e.target.value)} placeholder="0.0" style={inputStyle} />
         </div>
       )}
-      {tipo === 'sensor' && (
+      {tipo === 'sensor_inteligencia' && (
         <p style={{ fontSize: 12, color: T.sub, marginBottom: 14 }}>
-          Los sensores no llevan medidor — solo confirma el inicio del mantenimiento.
+          Los sensores de inteligencia no llevan medidor — solo confirma el inicio del mantenimiento.
         </p>
       )}
 
@@ -792,16 +801,21 @@ function Th({ children, width, minWidth }) {
   )
 }
 
-// ── Modal asignación (5 slots) ───────────────────────────────
+// ── Modal asignación ─────────────────────────────────────────
 function ModalAsignacionContent({ orden, usuarios, onClose, onGuardar }) {
   const tipo = orden.producto?.tipoProducto
   const esAeronave = tipo === 'aeronave'
+  const req = REQUISITOS_PERSONAL[tipo] || REQUISITOS_PERSONAL.aeronave
+  const muestraMecanico = req.mecanico !== 'prohibido'
+  const mecanicoObligatorio = req.mecanico === 'obligatorio'
+  const muestraOperador = req.operador !== 'prohibido'
 
   const [soporteId, setSoporteId] = useState(orden.soporte?.id || '')
   const [ingenieroAuxiliarId, setIngenieroAuxiliarId] = useState(orden.ingenieroAuxiliar?.id || '')
   const [mecanicoId, setMecanicoId] = useState(orden.mecanico?.id || '')
   const [gerenteId, setGerenteId] = useState(orden.gerente?.id || '')
   const [pilotoId, setPilotoId] = useState(orden.piloto?.id || '')
+  const [operadorId, setOperadorId] = useState(orden.operador?.id || '')
   const [saving, setSaving] = useState(false)
 
   const soportes  = usuarios.filter((u) => ROLES_SOPORTE.includes(u.rol))
@@ -809,6 +823,7 @@ function ModalAsignacionContent({ orden, usuarios, onClose, onGuardar }) {
   const mecanicos  = usuarios.filter((u) => u.rol === 'mecanico')
   const gerentes   = usuarios.filter((u) => u.rol === 'gerente_soporte')
   const pilotos    = usuarios.filter((u) => u.rol === 'piloto')
+  const operadores = usuarios.filter((u) => u.rol === 'operador')
 
   const soporteEsTecnico = soportes.find((u) => u.id === soporteId)?.rol === 'tecnico_soporte'
 
@@ -823,16 +838,20 @@ function ModalAsignacionContent({ orden, usuarios, onClose, onGuardar }) {
       await onGuardar({
         soporteId,
         ingenieroAuxiliarId: soporteEsTecnico ? (ingenieroAuxiliarId || null) : null,
-        mecanicoId,
+        mecanicoId: muestraMecanico ? (mecanicoId || null) : null,
         gerenteId,
         ...(esAeronave ? { pilotoId } : {}),
+        ...(muestraOperador ? { operadorId } : {}),
       })
     } finally {
       setSaving(false)
     }
   }
 
-  const completo = soporteId && mecanicoId && gerenteId && (!esAeronave || pilotoId)
+  const completo = soporteId && gerenteId
+    && (!mecanicoObligatorio || mecanicoId)
+    && (!esAeronave || pilotoId)
+    && (!muestraOperador || operadorId)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -850,12 +869,22 @@ function ModalAsignacionContent({ orden, usuarios, onClose, onGuardar }) {
           options={ingenieros.map(opcion)}
         />
       )}
-      <FieldSelect
-        label="Mecánico"
-        required value={mecanicoId} onChange={setMecanicoId}
-        placeholder="-- Selecciona --"
-        options={mecanicos.map(opcion)}
-      />
+      {muestraMecanico && (
+        <FieldSelect
+          label={mecanicoObligatorio ? 'Mecánico' : 'Mecánico (opcional)'}
+          required={mecanicoObligatorio} value={mecanicoId} onChange={setMecanicoId}
+          placeholder={mecanicoObligatorio ? '-- Selecciona --' : '-- Sin mecánico --'}
+          options={mecanicos.map(opcion)}
+        />
+      )}
+      {muestraOperador && (
+        <FieldSelect
+          label="Operador"
+          required value={operadorId} onChange={setOperadorId}
+          placeholder="-- Selecciona --"
+          options={operadores.map(opcion)}
+        />
+      )}
       <FieldSelect
         label="Gerente de soporte"
         required value={gerenteId} onChange={setGerenteId}
@@ -871,8 +900,8 @@ function ModalAsignacionContent({ orden, usuarios, onClose, onGuardar }) {
         />
       )}
       <p style={{ fontSize: 11, color: T.sub, lineHeight: 1.5 }}>
-        El soporte, ingeniero auxiliar, mecánico y gerente asignados tienen permisos de edición.
-        El piloto solo firma el cierre (aeronaves).
+        El soporte, ingeniero auxiliar, mecánico, operador y gerente asignados tienen permisos de edición.
+        El piloto (aeronave) y el operador (GCS) firman el cierre.
       </p>
       <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
         <Btn variant="ghost" label="Cancelar" onClick={onClose} style={{ flex: 1 }} />

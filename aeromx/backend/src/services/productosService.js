@@ -1,6 +1,6 @@
 import prisma from '../lib/prisma.js'
 
-const TIPOS_VALIDOS = ['aeronave', 'camion', 'planta', 'sensor']
+const TIPOS_VALIDOS = ['aeronave', 'gcs', 'planta', 'sensor_inteligencia']
 
 // ─── Listar / obtener ───────────────────────────────────────────────────────
 
@@ -16,9 +16,9 @@ export function listarProductos({ tipoProducto, activo } = {}) {
     include: {
       modelo:   { select: { id: true, nombre: true, fabricante: true } },
       aeronave: true,
-      camion:   true,
+      gcs:      true,
       planta:   true,
-      sensor:   true,
+      sensor_inteligencia: true,
     },
   })
 }
@@ -29,9 +29,9 @@ export function obtenerProducto(id) {
     include: {
       modelo:   true,
       aeronave: true,
-      camion:   true,
+      gcs:      true,
       planta:   true,
-      sensor:   true,
+      sensor_inteligencia: true,
     },
   })
 }
@@ -78,11 +78,11 @@ export async function crearProducto({ tipoProducto, modeloId, identificador, num
           horasMotorIzq: Number(detalle.horasMotorIzq ?? 0),
         },
       })
-    } else if (tipoProducto === 'camion') {
+    } else if (tipoProducto === 'gcs') {
       if (!detalle.placas) {
-        throw Object.assign(new Error('placas es obligatorio para camión'), { code: 'BAD_INPUT' })
+        throw Object.assign(new Error('placas es obligatorio para GCS'), { code: 'BAD_INPUT' })
       }
-      await tx.camionDetalle.create({
+      await tx.gcsDetalle.create({
         data: {
           productoId: producto.id,
           placas: String(detalle.placas).toUpperCase(),
@@ -97,8 +97,8 @@ export async function crearProducto({ tipoProducto, modeloId, identificador, num
           horimetro: Number(detalle.horimetro ?? 0),
         },
       })
-    } else if (tipoProducto === 'sensor') {
-      await tx.sensorDetalle.create({
+    } else if (tipoProducto === 'sensor_inteligencia') {
+      await tx.sensorInteligenciaDetalle.create({
         data: {
           productoId: producto.id,
           fabricante: detalle.fabricante || null,
@@ -113,9 +113,9 @@ export async function crearProducto({ tipoProducto, modeloId, identificador, num
       include: {
         modelo:   true,
         aeronave: true,
-        camion:   true,
+        gcs:      true,
         planta:   true,
-        sensor:   true,
+        sensor_inteligencia: true,
       },
     })
   })
@@ -159,13 +159,13 @@ export async function actualizarProducto(id, { modeloId, identificador, numeroSe
         if (Object.keys(u).length > 0) {
           await tx.aeronaveDetalle.update({ where: { productoId: id }, data: u })
         }
-      } else if (tipo === 'camion') {
+      } else if (tipo === 'gcs') {
         const u = {}
         if (detalle.placas   !== undefined) u.placas   = String(detalle.placas).toUpperCase()
         if (detalle.vin      !== undefined) u.vin      = detalle.vin || null
         if (detalle.odometro !== undefined) u.odometro = Number(detalle.odometro)
         if (Object.keys(u).length > 0) {
-          await tx.camionDetalle.update({ where: { productoId: id }, data: u })
+          await tx.gcsDetalle.update({ where: { productoId: id }, data: u })
         }
       } else if (tipo === 'planta') {
         if (detalle.horimetro !== undefined) {
@@ -174,13 +174,13 @@ export async function actualizarProducto(id, { modeloId, identificador, numeroSe
             data: { horimetro: Number(detalle.horimetro) },
           })
         }
-      } else if (tipo === 'sensor') {
+      } else if (tipo === 'sensor_inteligencia') {
         const u = {}
         if (detalle.fabricante       !== undefined) u.fabricante       = detalle.fabricante || null
         if (detalle.versionFirmware  !== undefined) u.versionFirmware  = detalle.versionFirmware || null
         if (detalle.fechaCalibracion !== undefined) u.fechaCalibracion = detalle.fechaCalibracion ? new Date(detalle.fechaCalibracion) : null
         if (Object.keys(u).length > 0) {
-          await tx.sensorDetalle.update({ where: { productoId: id }, data: u })
+          await tx.sensorInteligenciaDetalle.update({ where: { productoId: id }, data: u })
         }
       }
     }
@@ -190,9 +190,9 @@ export async function actualizarProducto(id, { modeloId, identificador, numeroSe
       include: {
         modelo:   true,
         aeronave: true,
-        camion:   true,
+        gcs:      true,
         planta:   true,
-        sensor:   true,
+        sensor_inteligencia: true,
       },
     })
   })

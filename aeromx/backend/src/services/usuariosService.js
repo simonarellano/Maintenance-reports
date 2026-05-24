@@ -7,6 +7,7 @@ const ROLES_VALIDOS = [
   'tecnico_soporte',
   'mecanico',
   'piloto',
+  'operador',
 ]
 
 const SELECT_USUARIO = {

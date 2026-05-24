@@ -897,6 +897,38 @@ cd ../frontend && npm run dev             # UI :5173 — login dev@aeromx.com / 
 
 ---
 
+### Cambios en Sesión 17 — Renombrado de tipos de producto: `camion`→`gcs`, `sensor`→`sensor_inteligencia`
+**Fecha:** 2026-05-23 | **Rama:** `development` | **Estado:** renombrado completo y verificado (API + build + alta de ambos tipos) · sin commit aún
+
+> Cambio de tipificación pedido por el usuario: el tipo "Camión" pasa a **GCS** (estación de control terrestre) y "Sensor" a **Sensor de inteligencia**. Decisión: **renombrado profundo** (enum, tablas, relaciones, servicios, seed, frontend, PDF), **conservando las estructuras de detalle** (GCS mantiene placas/VIN/odómetro; sensor de inteligencia mantiene fabricante/firmware/calibración — solo cambian los nombres, no las columnas).
+
+#### Schema (`prisma/schema.prisma`)
+- Enum `TipoProducto`: `camion`→`gcs`, `sensor`→`sensor_inteligencia`.
+- `model CamionDetalle`→`GcsDetalle` (`@@map("gcs_detalle")`); `model SensorDetalle`→`SensorInteligenciaDetalle` (`@@map("sensor_inteligencia_detalle")`). Columnas idénticas.
+- Relaciones en `Producto`: `gcs GcsDetalle?` y `sensor_inteligencia SensorInteligenciaDetalle?`.
+- ⚠️ **Decisión clave:** el nombre del campo de relación se eligió **idéntico al valor del enum** (incluido el snake_case `sensor_inteligencia`, válido en Prisma) para preservar el acceso dinámico `producto[tipoProducto]` que usan `InspeccionPage.jsx` y `ProductosPage.jsx`. Si en el futuro se agrega un tipo, mantener esta convención.
+
+#### Migración (`prisma/migrations/20260523000000_rename_camion_gcs_sensor_inteligencia/`)
+- Escrita **a mano** (no `migrate diff`, que haría DROP/CREATE del enum). Usa `ALTER TYPE ... RENAME VALUE` (in-place, no pierde datos) + `ALTER TABLE ... RENAME`. Los nombres de índices/constraints (`camion_detalle_*`) quedan con el prefijo viejo — inofensivo, no rompe nada.
+- Verificada vía `migrate reset --force --skip-seed`: las 6 migraciones (incl. el rename) replican limpio en secuencia. Cliente regenerado con backend detenido (EPERM si corre).
+
+#### Código actualizado
+- **Backend:** `productosService.js`, `ordenesService.js`, `formatosService.js`, `modelosService.js` (`TIPOS_VALIDOS`, includes `gcs`/`sensor_inteligencia: true`, ramas por tipo, `tx.gcsDetalle`/`tx.sensorInteligenciaDetalle`, mensajes de error), `pdfController.js` (mapas de labels + `p.gcs`/`p.sensor_inteligencia`), `seed.js` (tipos, modelos/productos de muestra renombrados a GCS Móvil V1 / Sensor EO/IR, formatos).
+- **Frontend:** `tokens/design.js` (`TIPO_PRODUCTO`: claves+labels "GCS"/"Sensor de inteligencia", íconos 🖥️/🛰️), `ProductosPage.jsx`, `InspeccionPage.jsx`, `FlotaPage.jsx`, `api/ordenesService.js` (comentario).
+- **No tocado:** `docs/ARQUITECTURA-MULTIPRODUCTO.md` conserva las referencias históricas a `camion`/`sensor` (es registro de las fases pasadas, no fuente de verdad operativa).
+
+#### Verificación (PASS ✅)
+- Grep: cero referencias a `camion`/`sensor`-como-clave en código (solo en `.md`).
+- `migrate reset` + `db:seed` limpio: 4 modelos/productos/formatos con los tipos nuevos.
+- API real `:3001`: `GET /productos?tipoProducto=gcs` y `?tipoProducto=sensor_inteligencia` devuelven el producto con su detalle correcto; **alta** de ambos tipos → HTTP 201 (dispatcher de creación + tablas de detalle OK). Productos de prueba eliminados tras verificar.
+- `npm run build` (Vite) del frontend: verde.
+
+#### Pendiente
+- **Sin commit** — el usuario commitea cuando decida (hay también cambios previos sin commitear en `pdfController.js`/`ordenesService.js`/`CierreOTPage.jsx` desde antes de esta sesión; revisar `git status` antes de commitear para no mezclar).
+- Datos de prueba reseedeados: las O/T de QA previas (0009–0012) se perdieron en el `migrate reset` (eran scratch).
+
+---
+
 ### Siguiente paso — Sesión 17
 
 > **El rediseño de arquitectura (Fases A–E) está 100% completo y verificado** — confirmado contra los checklists de §8 del doc de arquitectura (todos los ítems `[x]`). El **rediseño visual del PDF** (Sesión 16) también está completo. Lo que queda **NO es arquitectura**: se construye encima de la arquitectura ya estable. Son dos frentes distintos: — confirmado contra los checklists de §8 del doc de arquitectura (todos los ítems `[x]`). Lo que queda **NO es arquitectura**: se construye encima de la arquitectura ya estable. Son dos frentes distintos:
@@ -923,3 +955,61 @@ cd backend && npm run dev                 # API :3001  (revisa GET /api/health p
 cd ../frontend && npm run dev             # UI :5173 — login dev@aeromx.com / aeromx123
 ```
 > Almacenamiento activo = MinIO (`STORAGE_PROVIDER=minio`). Las 23 fotos previas ya están en el bucket `aeromx-fotos`. Para migrar fotos de disco a un bucket nuevo: `node scripts/migrar-fotos-a-storage.js`.
+
+---
+
+### Cambios en Sesión 18 — Rol "operador" + matriz de personal por tipo de producto
+**Fecha:** 2026-05-24 | **Rama:** `development` | **Estado:** completo, migrado y verificado (API + build) · sin commit aún
+
+> Cambio de reglas de negocio en la **selección de personal de la O/T**, ahora **dependiente del tipo de producto**. Nuevo rol `operador` (para GCS). El mecánico deja de ser obligatorio global. Solo se tocó asignación/firma de O/T; formatos, fotos y almacenamiento intactos.
+
+#### Matriz de personal por tipo (nueva regla)
+| Tipo | soporte | gerente | ing. aux. | mecánico | piloto | operador | firmas cierre |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|---|
+| aeronave | obl | obl | opc¹ | **obl** | **obl** | — | 3: soporte+gerente+piloto |
+| gcs | obl | obl | opc¹ | **opcional** | — | **obligatorio** | 3: soporte+gerente+**operador** |
+| planta | obl | obl | opc¹ | **obl** | — | — | 2: soporte+gerente |
+| sensor_inteligencia | obl | obl | opc¹ | **prohibido** | — | — | 2: soporte+gerente |
+
+¹ Ingeniero auxiliar: opcional y solo permitido cuando el soporte es **técnico** (sin cambios respecto a antes).
+
+#### Schema (`prisma/schema.prisma`)
+- Enum `Rol`: nuevo valor `operador` (6 roles).
+- `OrdenTrabajo`: `mecanicoId` ahora **opcional** (`String?`, relación `mecanico Usuario?`); nuevo `operadorId String? @map("operador_id")` + relación `operador Usuario? @relation("OperadorOT")`.
+- `CierreOT`: nuevos `firmaOperadorId`/`fechaFirmaOperador` + relación `operador Usuario? @relation("CierreOperador")`.
+- `Usuario`: relaciones `ordenesComoOperador` (`OperadorOT`) y `cierresOperador` (`CierreOperador`).
+
+#### Migración — `20260524000000_add_rol_operador_y_asignacion`
+- Escrita a mano, **puramente aditiva**: `ALTER TYPE "Rol" ADD VALUE 'operador'` + `ALTER COLUMN "mecanico_id" DROP NOT NULL` + `ADD COLUMN operador_id / firma_operador_id / fecha_firma_operador` + 2 FKs `ON DELETE SET NULL`.
+- ⚠️ `ADD VALUE` corre dentro de la transacción de la migración en **PG16** porque el valor nuevo NO se usa en la misma migración. Aplicada con `migrate deploy` (sin reset). El cliente se regeneró con el backend **detenido** (EPERM si corre).
+
+#### Backend
+- `services/ordenesService.js`: nuevo `ROL_OPERADOR`; tabla `REQUISITOS_PERSONAL` (obligatorio/opcional/prohibido por tipo) + helper `validarSlotPorTipo`; `validarAsignaciones` reescrita con la matriz; helper `firmasRequeridas(tipoProducto)` usado en `firmarCierre` para el chequeo de cierre (3 firmas aeronave/gcs, 2 resto); `crearOrden`/`asignarOrden` aceptan `operadorId` (connect/disconnect); `firmarCierre` infiere slot `operador` por rol; `reabrirOrden` también borra firma de operador; includes (`obtenerOrden`/`listarOrdenes`/`crearOActualizarCierre`) traen `operador`.
+- `controllers/ordenes/workflowController.js`: `verificarPermisoEdicion` incluye `operadorId`; `asignar` acepta `operadorId`.
+- `services/usuariosService.js`: `operador` en `ROLES_VALIDOS`.
+- `controllers/ordenes/pdfController.js`: card de **Operador** en `renderPersonal` (mecánico ahora condicional a presencia); firma de operador en `renderFirmas` para GCS.
+- `prisma/seed.js`: usuario `operador@aeromx.com` (rol operador). **No se corrió el seed** (ver abajo).
+
+#### Frontend
+- `tokens/design.js`: `ROL_LABELS.operador` = "Operador" + `ROL_COLOR.operador`.
+- `CrearOTPage.jsx` e `InspeccionPage.jsx` (modal de asignación): tabla `REQUISITOS_PERSONAL` espejo del backend; selector de **operador** (obligatorio en GCS) y mecánico condicional (oculto en sensor, opcional en GCS, obligatorio en aeronave/planta); limpieza de campos prohibidos al cambiar de tipo; payload con `operadorId`.
+- `CierreOTPage.jsx`: slot de firma `operador` (inferencia por rol, `operadorFirmado`, pendientes, display, `totalFirmas` = 3 si aeronave **o** gcs).
+- `InspeccionPage.jsx`: `puedeEditar` y display de personal incluyen operador (GCS).
+- `DashboardPage.jsx`: filtro "Mis órdenes" incluye el slot operador.
+
+#### Verificación (PASS ✅)
+- `migrate deploy` aplicó la migración sin tocar datos; backend levanta en `:3001` con cliente nuevo (sin errores de schema); `npm run build` del frontend verde.
+- API (no destructivo): GCS sin operador → 400 *"Operador es obligatorio para órdenes de gcs"*; GCS con operador → creada (operador persiste, mecánico omitido OK), luego **eliminada** sin residuos.
+
+#### ⚠️ Dato crítico aprendido — NO correr `db:seed` sobre la BD real
+- La BD de desarrollo **ya tiene formatos reales creados a mano** (respaldo de esta sesión: 5 formatos / 25 secciones / **181 puntos**). `seed.js` → `poblarFormato` hace `deleteMany` de secciones+puntos de los formatos cuyo nombre+tipo coincidan → **destruye el trabajo manual**. Para cambios de schema sobre datos reales usar **solo `migrate deploy`**; nunca `migrate reset` ni `db:seed`. Para datos puntuales (ej. el usuario operador) usar un script `upsert` mínimo.
+- Respaldo de esta sesión: `aeromx/backend/backups/aeromx_backup_20260524_123441.sql` (`pg_dump`). La carpeta `backend/backups/` se agregó al `.gitignore`.
+
+#### Usuario de prueba nuevo
+| Email | Password | Rol | Super |
+|---|---|---|:-:|
+| `operador@aeromx.com` | `aeromx123` | operador | ❌ |
+
+#### Pendiente
+- **Sin commit** (el usuario commitea cuando decida). Recordar: `backend/prisma/migrations/` está en `.gitignore`, así que la migración nueva no se versiona con la convención actual del repo — decidir si versionarla.
+- QA visual en navegador de los 4 tipos (alta de O/T + cierre con la nueva matriz) queda pendiente del usuario.

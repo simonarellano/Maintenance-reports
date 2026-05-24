@@ -9,7 +9,7 @@ async function verificarPermisoEdicion(ordenId, user) {
     select: {
       estado: true,
       soporteId: true, ingenieroAuxiliarId: true,
-      mecanicoId: true, gerenteId: true, pilotoId: true,
+      mecanicoId: true, gerenteId: true, pilotoId: true, operadorId: true,
     },
   })
   if (!orden) return { ok: false, status: 404, error: 'Orden no encontrada' }
@@ -24,6 +24,7 @@ async function verificarPermisoEdicion(ordenId, user) {
     || orden.ingenieroAuxiliarId === uid
     || orden.mecanicoId === uid
     || orden.gerenteId === uid
+    || orden.operadorId === uid
   )
   if (!asignado) {
     return {
@@ -73,12 +74,12 @@ export async function iniciarMantenimiento(req, res, next) {
 
 export async function asignar(req, res, next) {
   try {
-    const { soporteId, ingenieroAuxiliarId, mecanicoId, gerenteId, pilotoId } = req.body
-    if ([soporteId, ingenieroAuxiliarId, mecanicoId, gerenteId, pilotoId].every((v) => v === undefined)) {
+    const { soporteId, ingenieroAuxiliarId, mecanicoId, gerenteId, pilotoId, operadorId } = req.body
+    if ([soporteId, ingenieroAuxiliarId, mecanicoId, gerenteId, pilotoId, operadorId].every((v) => v === undefined)) {
       return res.status(400).json({ error: 'Debes especificar al menos una asignación' })
     }
     const orden = await svc.asignarOrden(req.params.id, {
-      soporteId, ingenieroAuxiliarId, mecanicoId, gerenteId, pilotoId,
+      soporteId, ingenieroAuxiliarId, mecanicoId, gerenteId, pilotoId, operadorId,
     })
     res.json(orden)
   } catch (e) {

@@ -16,7 +16,7 @@ const COMPANY = {
 }
 
 const TIPO_LABELS = {
-  aeronave: 'Aeronave', camion: 'Camión', planta: 'Planta de energía', sensor: 'Sensor',
+  aeronave: 'Aeronave', gcs: 'GCS', planta: 'Planta de energía', sensor_inteligencia: 'Sensor de inteligencia',
 }
 
 
@@ -42,8 +42,8 @@ function filasDatosProducto(orden) {
       ['Horas motor izq', orden.horasMotorIzq != null ? `${orden.horasMotorIzq} h` : `${d.horasMotorIzq ?? '—'} h (actual)`],
     ]
   }
-  if (p.tipoProducto === 'camion') {
-    const d = p.camion || {}
+  if (p.tipoProducto === 'gcs') {
+    const d = p.gcs || {}
     return [
       ['Placas',       d.placas || p.identificador],
       ['Modelo',       modeloNombre],
@@ -63,8 +63,8 @@ function filasDatosProducto(orden) {
       ['Horímetro',    orden.horimetro != null ? `${orden.horimetro} h` : `${d.horimetro ?? '—'} h (actual)`],
     ]
   }
-  if (p.tipoProducto === 'sensor') {
-    const d = p.sensor || {}
+  if (p.tipoProducto === 'sensor_inteligencia') {
+    const d = p.sensor_inteligencia || {}
     return [
       ['N.º de serie',     p.identificador],
       ['Modelo',           modeloNombre],
@@ -84,6 +84,9 @@ export async function generar(req, res, next) {
     const orden = await svc.obtenerOrden(req.params.id)
     if (!orden) return res.status(404).json({ error: 'Orden no encontrada' })
 
+    // Por defecto el PDF incluye las fotos; con ?fotos=false se genera sin ellas.
+    const incluirFotos = req.query.fotos !== 'false'
+
     const { default: PDFDocument } = await import('pdfkit')
     const doc = new PDFDocument({
       margin: 40,
@@ -97,8 +100,9 @@ export async function generar(req, res, next) {
       },
     })
 
+    const sufijo = incluirFotos ? '' : '-sin-fotos'
     res.setHeader('Content-Type', 'application/pdf')
-    res.setHeader('Content-Disposition', `attachment; filename="OT-${orden.numeroOt}.pdf"`)
+    res.setHeader('Content-Disposition', `attachment; filename="OT-${orden.numeroOt}${sufijo}.pdf"`)
     doc.pipe(res)
 
     const PAGE_W = doc.page.width
@@ -114,8 +118,9 @@ export async function generar(req, res, next) {
     const secuencia = resolverSecuencia(orden.formato)
     let nextSectionNum = 1
     // Pre-cargar los buffers de fotos (async) antes del render síncrono del PDF.
-    const fotosBuffers = await precargarFotos(orden)
-    const ctx = { M, W: CONTENT_W, nextSectionNum: () => nextSectionNum++, totales, fotosBuffers }
+    // Si el PDF se pidió sin fotos, no se descarga nada y la galería no se dibuja.
+    const fotosBuffers = incluirFotos ? await precargarFotos(orden) : new Map()
+    const ctx = { M, W: CONTENT_W, nextSectionNum: () => nextSectionNum++, totales, fotosBuffers, incluirFotos }
     const bloquesPorId = Object.fromEntries((orden.formato.bloquesTexto || []).map((b) => [b.id, b]))
 
     for (const item of secuencia) {
@@ -172,8 +177,8 @@ function renderDatosGenerales(doc, orden, ctx) {
 function renderDatosProducto(doc, orden, ctx) {
   const tipo = orden.producto?.tipoProducto || 'producto'
   const tituloMap = {
-    aeronave: 'Datos de la aeronave', camion: 'Datos del camión',
-    planta: 'Datos de la planta', sensor: 'Datos del sensor',
+    aeronave: 'Datos de la aeronave', gcs: 'Datos de la GCS',
+    planta: 'Datos de la planta', sensor_inteligencia: 'Datos del sensor de inteligencia',
   }
   ui.sectionHead(doc, ctx.nextSectionNum(), tituloMap[tipo] || 'Datos del producto', ctx.M, ctx.W)
   // filasDatosProducto devuelve [label, value]; marcamos mono/lg para los prominentes
@@ -195,7 +200,8 @@ function renderPersonal(doc, orden, ctx) {
 
   const cards = [mk('Soporte', 'Técnico', orden.soporte)]
   if (orden.ingenieroAuxiliar) cards.push(mk('Soporte', 'Ing. aux.', orden.ingenieroAuxiliar))
-  cards.push(mk('Mantenimiento', 'Mecánico', orden.mecanico))
+  if (orden.mecanico) cards.push(mk('Mantenimiento', 'Mecánico', orden.mecanico))
+  if (orden.operador) cards.push(mk('Operación', 'Operador', orden.operador))
   cards.push(mk('Aprobación', 'Gerente', orden.gerente))
   if (orden.producto?.tipoProducto === 'aeronave') cards.push(mk('Operación', 'Piloto', orden.piloto))
 
@@ -242,7 +248,7 @@ function renderTrabajos(doc, orden, ctx) {
         fotosN: r.fotos?.length || 0,
         fotosM: r.fotos?.length || 0,
       })
-      if (r.fotos && r.fotos.length > 0) {
+      if (ctx.incluirFotos && r.fotos && r.fotos.length > 0) {
         ui.evidenceGallery(doc, r.fotos, ctx.fotosBuffers, ctx.M, ctx.W, fmtFecha)
       }
     }
@@ -307,14 +313,16 @@ function renderDictamen(doc, orden, ctx) {
 function renderFirmas(doc, orden, ctx) {
   ui.sectionHead(doc, ctx.nextSectionNum(), 'Firmas de conformidad', ctx.M, ctx.W)
   const c = orden.cierre
-  const esAeronave = orden.producto?.tipoProducto === 'aeronave'
+  const tipo = orden.producto?.tipoProducto
 
   const cajas = [
     { categoria: 'Soporte', persona: c?.soporte || orden.soporte, fecha: c?.fechaFirmaSoporte },
     { categoria: 'Aprobación', persona: c?.gerente || orden.gerente, fecha: c?.fechaFirmaGerente },
   ]
-  if (esAeronave) {
+  if (tipo === 'aeronave') {
     cajas.push({ categoria: 'Operación', persona: c?.piloto || orden.piloto, fecha: c?.fechaFirmaPiloto })
+  } else if (tipo === 'gcs') {
+    cajas.push({ categoria: 'Operación', persona: c?.operador || orden.operador, fecha: c?.fechaFirmaOperador })
   }
 
   const gap = 14
@@ -389,8 +397,8 @@ function drawHeader(doc, orden, M, W) {
 
 function drawTimeline(doc, orden, M, W) {
   const tipo = orden.producto?.tipoProducto
-  const labelRecepcion = { aeronave: 'Recepción aeronave', camion: 'Recepción camión',
-    planta: 'Recepción planta', sensor: 'Recepción sensor' }[tipo] || 'Recepción'
+  const labelRecepcion = { aeronave: 'Recepción aeronave', gcs: 'Recepción GCS',
+    planta: 'Recepción planta', sensor_inteligencia: 'Recepción sensor de inteligencia' }[tipo] || 'Recepción'
   ui.timeline(doc, [
     { num: 1, label: 'Creación de orden', value: orden.createdAt ? fmtFecha(orden.createdAt) : 'Pendiente' },
     { num: 2, label: labelRecepcion,      value: orden.fechaRecepcion ? fmtFecha(orden.fechaRecepcion) : 'Pendiente' },

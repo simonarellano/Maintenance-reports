@@ -17,13 +17,14 @@ enum Rol {
   tecnico_soporte
   mecanico
   piloto
+  operador
 }
 
 enum TipoProducto {
   aeronave
-  camion
+  gcs
   planta
-  sensor
+  sensor_inteligencia
 }
 
 enum EstadoOT {
@@ -64,12 +65,14 @@ model Usuario {
   ordenesComoMecanico          OrdenTrabajo[]      @relation("MecanicoOT")
   ordenesComoGerente           OrdenTrabajo[]      @relation("GerenteOT")
   ordenesComoPiloto            OrdenTrabajo[]      @relation("PilotoOT")
+  ordenesComoOperador          OrdenTrabajo[]      @relation("OperadorOT")
   // Otros
   firmasPorPaso                ResultadoPunto[]    @relation("FirmaPaso")
   fotosSubidas                 FotoInspeccion[]    @relation("FotoSubida")
   cierresSoporte               CierreOT[]          @relation("CierreSoporte")
   cierresGerente               CierreOT[]          @relation("CierreGerente")
   cierresPiloto                CierreOT[]          @relation("CierrePiloto")
+  cierresOperador              CierreOT[]          @relation("CierreOperador")
   historialEstados             HistorialEstadoOT[]
 
   @@map("usuarios")
@@ -113,10 +116,12 @@ model Producto {
   ordenes OrdenTrabajo[]
 
   // Detalles 1:1 — solo uno estará poblado según tipoProducto
-  aeronave AeronaveDetalle?
-  camion   CamionDetalle?
-  planta   PlantaDetalle?
-  sensor   SensorDetalle?
+  // El nombre de cada relación coincide con el valor del enum TipoProducto
+  // para permitir el acceso dinámico producto[tipoProducto] en el frontend.
+  aeronave            AeronaveDetalle?
+  gcs                 GcsDetalle?
+  planta              PlantaDetalle?
+  sensor_inteligencia SensorInteligenciaDetalle?
 
   @@unique([tipoProducto, identificador])
   @@map("productos")
@@ -138,7 +143,7 @@ model AeronaveDetalle {
   @@map("aeronave_detalle")
 }
 
-model CamionDetalle {
+model GcsDetalle {
   productoId String  @id @map("producto_id")
   placas     String  @unique
   vin        String? @unique
@@ -146,7 +151,7 @@ model CamionDetalle {
 
   producto Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
 
-  @@map("camion_detalle")
+  @@map("gcs_detalle")
 }
 
 model PlantaDetalle {
@@ -158,7 +163,7 @@ model PlantaDetalle {
   @@map("planta_detalle")
 }
 
-model SensorDetalle {
+model SensorInteligenciaDetalle {
   productoId       String    @id @map("producto_id")
   // Se guarda directo, no se hereda del modelo
   fabricante       String?
@@ -167,7 +172,7 @@ model SensorDetalle {
 
   producto Producto @relation(fields: [productoId], references: [id], onDelete: Cascade)
 
-  @@map("sensor_detalle")
+  @@map("sensor_inteligencia_detalle")
 }
 
 // ─────────────────────────────────────────────
@@ -269,9 +274,10 @@ model OrdenTrabajo {
   // Asignaciones — todas FK a Usuario
   soporteId           String  @map("soporte_id")
   ingenieroAuxiliarId String? @map("ingeniero_auxiliar_id")
-  mecanicoId          String  @map("mecanico_id")
+  mecanicoId          String? @map("mecanico_id")
   gerenteId           String  @map("gerente_id")
   pilotoId            String? @map("piloto_id")
+  operadorId          String? @map("operador_id")
 
   cliente            String?
   ordenServicio      String? @map("orden_servicio")
@@ -298,9 +304,10 @@ model OrdenTrabajo {
   producto          Producto            @relation(fields: [productoId], references: [id])
   soporte           Usuario             @relation("SoporteOT",           fields: [soporteId],           references: [id])
   ingenieroAuxiliar Usuario?            @relation("IngenieroAuxiliarOT", fields: [ingenieroAuxiliarId], references: [id])
-  mecanico          Usuario             @relation("MecanicoOT",          fields: [mecanicoId],          references: [id])
+  mecanico          Usuario?            @relation("MecanicoOT",          fields: [mecanicoId],          references: [id])
   gerente           Usuario             @relation("GerenteOT",           fields: [gerenteId],           references: [id])
   piloto            Usuario?            @relation("PilotoOT",            fields: [pilotoId],            references: [id])
+  operador          Usuario?            @relation("OperadorOT",          fields: [operadorId],          references: [id])
   resultados        ResultadoPunto[]
   cierre            CierreOT?
   historial         HistorialEstadoOT[]
@@ -362,14 +369,17 @@ model CierreOT {
   fechaFirmaGerente DateTime? @map("fecha_firma_gerente")
   firmaPilotoId     String?   @map("firma_piloto_id")
   fechaFirmaPiloto  DateTime? @map("fecha_firma_piloto")
+  firmaOperadorId   String?   @map("firma_operador_id")
+  fechaFirmaOperador DateTime? @map("fecha_firma_operador")
 
   firmaFisicaUrl String?  @map("firma_fisica_url")
   createdAt      DateTime @default(now()) @map("created_at")
 
-  orden   OrdenTrabajo @relation(fields: [ordenId], references: [id])
-  soporte Usuario?     @relation("CierreSoporte", fields: [firmaSoporteId], references: [id])
-  gerente Usuario?     @relation("CierreGerente", fields: [firmaGerenteId], references: [id])
-  piloto  Usuario?     @relation("CierrePiloto",  fields: [firmaPilotoId],  references: [id])
+  orden    OrdenTrabajo @relation(fields: [ordenId], references: [id])
+  soporte  Usuario?     @relation("CierreSoporte",  fields: [firmaSoporteId],  references: [id])
+  gerente  Usuario?     @relation("CierreGerente",  fields: [firmaGerenteId],  references: [id])
+  piloto   Usuario?     @relation("CierrePiloto",   fields: [firmaPilotoId],   references: [id])
+  operador Usuario?     @relation("CierreOperador", fields: [firmaOperadorId], references: [id])
 
   @@map("cierre_ot")
 }

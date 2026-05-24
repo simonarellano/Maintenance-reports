@@ -9,6 +9,25 @@ const ROL_TECNICO   = 'tecnico_soporte'
 const ROL_MECANICO  = 'mecanico'
 const ROL_GERENTE   = 'gerente_soporte'
 const ROL_PILOTO    = 'piloto'
+const ROL_OPERADOR  = 'operador'
+
+// Requisitos de personal por tipo de producto. soporte y gerente siempre son
+// obligatorios; ingenieroAuxiliar es opcional (solo si el soporte es técnico).
+// Valores: 'obligatorio' | 'opcional' | 'prohibido'.
+const REQUISITOS_PERSONAL = {
+  aeronave:            { mecanico: 'obligatorio', piloto: 'obligatorio', operador: 'prohibido'   },
+  gcs:                 { mecanico: 'opcional',    piloto: 'prohibido',   operador: 'obligatorio' },
+  planta:              { mecanico: 'obligatorio', piloto: 'prohibido',   operador: 'prohibido'   },
+  sensor_inteligencia: { mecanico: 'prohibido',   piloto: 'prohibido',   operador: 'prohibido'   },
+}
+
+// Slots de firma requeridos para cerrar, según tipo de producto.
+function firmasRequeridas(tipoProducto) {
+  const base = ['soporte', 'gerente']
+  if (tipoProducto === 'aeronave') return [...base, 'piloto']
+  if (tipoProducto === 'gcs')      return [...base, 'operador']
+  return base
+}
 
 // ─── Generador de número de O/T ─────────────────────────────────────────────
 // Formato: OT-YYYYMMDD-XXXX (secuencial por día)
@@ -25,9 +44,9 @@ async function generarNumeroOT() {
 const INCLUDE_PRODUCTO_COMPLETO = {
   modelo: true,
   aeronave: true,
-  camion: true,
+  gcs: true,
   planta: true,
-  sensor: true,
+  sensor_inteligencia: true,
 }
 
 const INCLUDE_USUARIO_BASICO = {
@@ -58,21 +77,46 @@ async function verificarUsuarioConRol(usuarioId, rolesPermitidos, etiqueta) {
   return u
 }
 
-// Valida coherencia de las 4-5 asignaciones y devuelve el rol del soporte
-// (para que crearOrden sepa si puede aceptar ingenieroAuxiliar).
+// Valida una asignación por tipo según REQUISITOS_PERSONAL. `valor` es el FK
+// (o nulo), `rolesPermitidos` los roles válidos, `etiqueta` el nombre legible.
+async function validarSlotPorTipo(valor, requisito, rolesPermitidos, etiqueta, tipoProducto) {
+  if (requisito === 'prohibido') {
+    if (valor) {
+      throw Object.assign(
+        new Error(`Los productos de tipo ${tipoProducto} no admiten ${etiqueta.toLowerCase()}`),
+        { code: 'BAD_INPUT' },
+      )
+    }
+    return
+  }
+  if (requisito === 'obligatorio' && !valor) {
+    throw Object.assign(
+      new Error(`${etiqueta} es obligatorio para órdenes de ${tipoProducto}`),
+      { code: 'BAD_INPUT' },
+    )
+  }
+  if (valor) {
+    await verificarUsuarioConRol(valor, rolesPermitidos, etiqueta)
+  }
+}
+
+// Valida coherencia de las asignaciones según el tipo de producto.
 async function validarAsignaciones({
-  soporteId, ingenieroAuxiliarId, mecanicoId, gerenteId, pilotoId, tipoProducto,
+  soporteId, ingenieroAuxiliarId, mecanicoId, gerenteId, pilotoId, operadorId, tipoProducto,
 }) {
-  // Obligatorios
-  if (!soporteId)  throw Object.assign(new Error('soporteId es obligatorio'),  { code: 'BAD_INPUT' })
-  if (!mecanicoId) throw Object.assign(new Error('mecanicoId es obligatorio'), { code: 'BAD_INPUT' })
-  if (!gerenteId)  throw Object.assign(new Error('gerenteId es obligatorio'),  { code: 'BAD_INPUT' })
+  const req = REQUISITOS_PERSONAL[tipoProducto]
+  if (!req) {
+    throw Object.assign(new Error(`Tipo de producto desconocido: ${tipoProducto}`), { code: 'BAD_INPUT' })
+  }
+
+  // Siempre obligatorios: soporte y gerente.
+  if (!soporteId) throw Object.assign(new Error('soporteId es obligatorio'), { code: 'BAD_INPUT' })
+  if (!gerenteId) throw Object.assign(new Error('gerenteId es obligatorio'), { code: 'BAD_INPUT' })
 
   const soporte = await verificarUsuarioConRol(soporteId, ROLES_SOPORTE, 'Soporte')
-  await verificarUsuarioConRol(mecanicoId, [ROL_MECANICO], 'Mecánico')
-  await verificarUsuarioConRol(gerenteId,  [ROL_GERENTE],  'Gerente')
+  await verificarUsuarioConRol(gerenteId, [ROL_GERENTE], 'Gerente')
 
-  // Ingeniero auxiliar — solo permitido si el soporte es técnico
+  // Ingeniero auxiliar — solo permitido si el soporte es técnico.
   if (ingenieroAuxiliarId) {
     if (soporte.rol !== ROL_TECNICO) {
       throw Object.assign(
@@ -83,18 +127,10 @@ async function validarAsignaciones({
     await verificarUsuarioConRol(ingenieroAuxiliarId, [ROL_INGENIERO], 'Ingeniero auxiliar')
   }
 
-  // Piloto — obligatorio solo en aeronave, prohibido en otros
-  if (tipoProducto === 'aeronave') {
-    if (!pilotoId) {
-      throw Object.assign(new Error('pilotoId es obligatorio para órdenes de aeronave'), { code: 'BAD_INPUT' })
-    }
-    await verificarUsuarioConRol(pilotoId, [ROL_PILOTO], 'Piloto')
-  } else if (pilotoId) {
-    throw Object.assign(
-      new Error(`Solo las aeronaves admiten pilotoId (tipoProducto actual: ${tipoProducto})`),
-      { code: 'BAD_INPUT' },
-    )
-  }
+  // Slots dependientes del tipo.
+  await validarSlotPorTipo(mecanicoId, req.mecanico, [ROL_MECANICO],  'Mecánico', tipoProducto)
+  await validarSlotPorTipo(pilotoId,   req.piloto,   [ROL_PILOTO],    'Piloto',   tipoProducto)
+  await validarSlotPorTipo(operadorId, req.operador, [ROL_OPERADOR],  'Operador', tipoProducto)
 }
 
 // ─── Listar / obtener ───────────────────────────────────────────────────────
@@ -125,6 +161,7 @@ export async function listarOrdenes(filtros = {}) {
       mecanico:          INCLUDE_USUARIO_BASICO,
       gerente:           INCLUDE_USUARIO_BASICO,
       piloto:            INCLUDE_USUARIO_BASICO,
+      operador:          INCLUDE_USUARIO_BASICO,
       resultados: { select: { id: true, completado: true } },
       _count: { select: { resultados: true } },
     },
@@ -150,6 +187,7 @@ export function obtenerOrden(id) {
       mecanico:          INCLUDE_USUARIO_BASICO,
       gerente:           INCLUDE_USUARIO_BASICO,
       piloto:            INCLUDE_USUARIO_BASICO,
+      operador:          INCLUDE_USUARIO_BASICO,
       resultados: {
         include: {
           punto: { include: { seccion: true } },
@@ -160,9 +198,10 @@ export function obtenerOrden(id) {
       },
       cierre: {
         include: {
-          soporte: { select: { id: true, nombre: true, rol: true, licenciaNum: true } },
-          gerente: { select: { id: true, nombre: true, rol: true, licenciaNum: true } },
-          piloto:  { select: { id: true, nombre: true, rol: true, licenciaNum: true } },
+          soporte:  { select: { id: true, nombre: true, rol: true, licenciaNum: true } },
+          gerente:  { select: { id: true, nombre: true, rol: true, licenciaNum: true } },
+          piloto:   { select: { id: true, nombre: true, rol: true, licenciaNum: true } },
+          operador: { select: { id: true, nombre: true, rol: true, licenciaNum: true } },
         },
       },
       historial: {
@@ -178,7 +217,7 @@ export function obtenerOrden(id) {
 export async function crearOrden(data) {
   const {
     formatoId, productoId,
-    soporteId, ingenieroAuxiliarId, mecanicoId, gerenteId, pilotoId,
+    soporteId, ingenieroAuxiliarId, mecanicoId, gerenteId, pilotoId, operadorId,
     cliente, ordenServicio, lugarMantenimiento,
   } = data
 
@@ -210,9 +249,9 @@ export async function crearOrden(data) {
     )
   }
 
-  // Validar las 4-5 asignaciones
+  // Validar las asignaciones según el tipo de producto
   await validarAsignaciones({
-    soporteId, ingenieroAuxiliarId, mecanicoId, gerenteId, pilotoId,
+    soporteId, ingenieroAuxiliarId, mecanicoId, gerenteId, pilotoId, operadorId,
     tipoProducto: producto.tipoProducto,
   })
 
@@ -226,9 +265,10 @@ export async function crearOrden(data) {
       producto: { connect: { id: productoId } },
       soporte:  { connect: { id: soporteId } },
       ...(ingenieroAuxiliarId ? { ingenieroAuxiliar: { connect: { id: ingenieroAuxiliarId } } } : {}),
-      mecanico: { connect: { id: mecanicoId } },
+      ...(mecanicoId ? { mecanico: { connect: { id: mecanicoId } } } : {}),
       gerente:  { connect: { id: gerenteId } },
       ...(pilotoId ? { piloto: { connect: { id: pilotoId } } } : {}),
+      ...(operadorId ? { operador: { connect: { id: operadorId } } } : {}),
       cliente,
       ordenServicio,
       lugarMantenimiento,
@@ -313,9 +353,9 @@ export async function iniciarMantenimiento(id, lecturas = {}) {
     data.horasTotales  = Number(lecturas.horasTotales)
     if (lecturas.horasMotorDer !== undefined) data.horasMotorDer = Number(lecturas.horasMotorDer)
     if (lecturas.horasMotorIzq !== undefined) data.horasMotorIzq = Number(lecturas.horasMotorIzq)
-  } else if (tipo === 'camion') {
+  } else if (tipo === 'gcs') {
     if (lecturas.odometro === undefined || lecturas.odometro === null) {
-      throw Object.assign(new Error('odometro es obligatorio para camión'), { code: 'BAD_INPUT' })
+      throw Object.assign(new Error('odometro es obligatorio para GCS'), { code: 'BAD_INPUT' })
     }
     data.odometro = Number(lecturas.odometro)
   } else if (tipo === 'planta') {
@@ -324,7 +364,7 @@ export async function iniciarMantenimiento(id, lecturas = {}) {
     }
     data.horimetro = Number(lecturas.horimetro)
   }
-  // sensor: sin lecturas
+  // sensor_inteligencia: sin lecturas
 
   return prisma.ordenTrabajo.update({ where: { id }, data })
 }
@@ -372,32 +412,30 @@ export async function asignarOrden(id, asignacionesParciales) {
   if (!orden) throw Object.assign(new Error('Orden no encontrada'), { code: 'NOT_FOUND' })
 
   // Fusionar lo que viene con lo actual para revalidar coherencia
+  const fusion = (campo) => asignacionesParciales[campo] !== undefined
+    ? asignacionesParciales[campo] : orden[campo]
   const merged = {
-    soporteId:           asignacionesParciales.soporteId           ?? orden.soporteId,
-    ingenieroAuxiliarId: asignacionesParciales.ingenieroAuxiliarId !== undefined
-      ? asignacionesParciales.ingenieroAuxiliarId : orden.ingenieroAuxiliarId,
-    mecanicoId:          asignacionesParciales.mecanicoId          ?? orden.mecanicoId,
-    gerenteId:           asignacionesParciales.gerenteId           ?? orden.gerenteId,
-    pilotoId:            asignacionesParciales.pilotoId !== undefined
-      ? asignacionesParciales.pilotoId : orden.pilotoId,
+    soporteId:           fusion('soporteId'),
+    ingenieroAuxiliarId: fusion('ingenieroAuxiliarId'),
+    mecanicoId:          fusion('mecanicoId'),
+    gerenteId:           fusion('gerenteId'),
+    pilotoId:            fusion('pilotoId'),
+    operadorId:          fusion('operadorId'),
   }
   await validarAsignaciones({ ...merged, tipoProducto: orden.producto.tipoProducto })
 
   // Aplicar solo los cambios explícitos
   const data = {}
-  if (asignacionesParciales.soporteId  !== undefined) data.soporte  = { connect: { id: asignacionesParciales.soporteId  } }
-  if (asignacionesParciales.mecanicoId !== undefined) data.mecanico = { connect: { id: asignacionesParciales.mecanicoId } }
-  if (asignacionesParciales.gerenteId  !== undefined) data.gerente  = { connect: { id: asignacionesParciales.gerenteId  } }
-  if (asignacionesParciales.ingenieroAuxiliarId !== undefined) {
-    data.ingenieroAuxiliar = asignacionesParciales.ingenieroAuxiliarId
-      ? { connect: { id: asignacionesParciales.ingenieroAuxiliarId } }
-      : { disconnect: true }
+  if (asignacionesParciales.soporteId !== undefined) data.soporte = { connect: { id: asignacionesParciales.soporteId } }
+  if (asignacionesParciales.gerenteId !== undefined) data.gerente = { connect: { id: asignacionesParciales.gerenteId } }
+  // Slots opcionales: id → connect, null/'' → disconnect.
+  const conectarODesconectar = (relacion, valor) => {
+    data[relacion] = valor ? { connect: { id: valor } } : { disconnect: true }
   }
-  if (asignacionesParciales.pilotoId !== undefined) {
-    data.piloto = asignacionesParciales.pilotoId
-      ? { connect: { id: asignacionesParciales.pilotoId } }
-      : { disconnect: true }
-  }
+  if (asignacionesParciales.ingenieroAuxiliarId !== undefined) conectarODesconectar('ingenieroAuxiliar', asignacionesParciales.ingenieroAuxiliarId)
+  if (asignacionesParciales.mecanicoId          !== undefined) conectarODesconectar('mecanico',          asignacionesParciales.mecanicoId)
+  if (asignacionesParciales.pilotoId            !== undefined) conectarODesconectar('piloto',            asignacionesParciales.pilotoId)
+  if (asignacionesParciales.operadorId          !== undefined) conectarODesconectar('operador',          asignacionesParciales.operadorId)
 
   return prisma.ordenTrabajo.update({
     where: { id }, data,
@@ -407,6 +445,7 @@ export async function asignarOrden(id, asignacionesParciales) {
       mecanico:          INCLUDE_USUARIO_BASICO,
       gerente:           INCLUDE_USUARIO_BASICO,
       piloto:            INCLUDE_USUARIO_BASICO,
+      operador:          INCLUDE_USUARIO_BASICO,
     },
   })
 }
@@ -435,9 +474,10 @@ export async function reabrirOrden(id, { motivo, usuarioId }) {
       await tx.cierreOT.update({
         where: { ordenId: id },
         data: {
-          firmaSoporteId: null,    fechaFirmaSoporte: null,
-          firmaGerenteId: null,    fechaFirmaGerente: null,
-          firmaPilotoId:  null,    fechaFirmaPiloto:  null,
+          firmaSoporteId:  null,   fechaFirmaSoporte:  null,
+          firmaGerenteId:  null,   fechaFirmaGerente:  null,
+          firmaPilotoId:   null,   fechaFirmaPiloto:   null,
+          firmaOperadorId: null,   fechaFirmaOperador: null,
         },
       })
     }
@@ -523,9 +563,10 @@ export function crearOActualizarCierre(ordenId, data) {
     create: { ordenId, seEncontroDefecto, refDocCorrectivo, observacionesGenerales },
     update: { seEncontroDefecto, refDocCorrectivo, observacionesGenerales },
     include: {
-      soporte: { select: { id: true, nombre: true, rol: true } },
-      gerente: { select: { id: true, nombre: true, rol: true } },
-      piloto:  { select: { id: true, nombre: true, rol: true } },
+      soporte:  { select: { id: true, nombre: true, rol: true } },
+      gerente:  { select: { id: true, nombre: true, rol: true } },
+      piloto:   { select: { id: true, nombre: true, rol: true } },
+      operador: { select: { id: true, nombre: true, rol: true } },
     },
   })
 }
@@ -547,11 +588,11 @@ async function sincronizarLecturasProducto(tx, orden) {
     if (Object.keys(data).length > 0) {
       await tx.aeronaveDetalle.update({ where: { productoId: orden.productoId }, data })
     }
-  } else if (tipo === 'camion') {
-    const detalle = await tx.camionDetalle.findUnique({ where: { productoId: orden.productoId } })
+  } else if (tipo === 'gcs') {
+    const detalle = await tx.gcsDetalle.findUnique({ where: { productoId: orden.productoId } })
     if (!detalle) return
     if (orden.odometro != null && orden.odometro >= (detalle.odometro ?? 0)) {
-      await tx.camionDetalle.update({
+      await tx.gcsDetalle.update({
         where: { productoId: orden.productoId },
         data: { odometro: orden.odometro },
       })
@@ -566,7 +607,7 @@ async function sincronizarLecturasProducto(tx, orden) {
       })
     }
   }
-  // sensor: sin lecturas que sincronizar
+  // sensor_inteligencia: sin lecturas que sincronizar
 }
 
 // Firma de cierre. El slot a firmar se infiere del rol del usuario + asignación.
@@ -579,8 +620,9 @@ export async function firmarCierre(ordenId, usuarioId) {
       producto: { select: { id: true, tipoProducto: true } },
       soporte: { select: { id: true } },
       ingenieroAuxiliar: { select: { id: true } },
-      gerente: { select: { id: true } },
-      piloto:  { select: { id: true } },
+      gerente:  { select: { id: true } },
+      piloto:   { select: { id: true } },
+      operador: { select: { id: true } },
     },
   })
   if (!orden) throw Object.assign(new Error('Orden no encontrada'), { code: 'NOT_FOUND' })
@@ -634,6 +676,15 @@ export async function firmarCierre(ordenId, usuarioId) {
     }
     data.firmaPilotoId    = usuarioId
     data.fechaFirmaPiloto = ahora
+  } else if (usuario.rol === ROL_OPERADOR) {
+    if (orden.producto.tipoProducto !== 'gcs') {
+      throw Object.assign(new Error('Solo las GCS requieren firma de operador'), { code: 'BAD_STATE' })
+    }
+    if (!esSuper && orden.operador?.id !== usuarioId) {
+      throw Object.assign(new Error('No eres el operador asignado a esta orden'), { code: 'FORBIDDEN' })
+    }
+    data.firmaOperadorId    = usuarioId
+    data.fechaFirmaOperador = ahora
   } else {
     throw Object.assign(new Error(`El rol ${usuario.rol} no puede firmar el cierre`), { code: 'FORBIDDEN' })
   }
@@ -644,16 +695,21 @@ export async function firmarCierre(ordenId, usuarioId) {
       where: { ordenId },
       data,
       include: {
-        soporte: { select: { id: true, nombre: true, rol: true } },
-        gerente: { select: { id: true, nombre: true, rol: true } },
-        piloto:  { select: { id: true, nombre: true, rol: true } },
+        soporte:  { select: { id: true, nombre: true, rol: true } },
+        gerente:  { select: { id: true, nombre: true, rol: true } },
+        piloto:   { select: { id: true, nombre: true, rol: true } },
+        operador: { select: { id: true, nombre: true, rol: true } },
       },
     })
 
     const tipo = orden.producto.tipoProducto
-    const completo = tipo === 'aeronave'
-      ? cierre.firmaSoporteId && cierre.firmaGerenteId && cierre.firmaPilotoId
-      : cierre.firmaSoporteId && cierre.firmaGerenteId
+    const slotFirma = {
+      soporte:  cierre.firmaSoporteId,
+      gerente:  cierre.firmaGerenteId,
+      piloto:   cierre.firmaPilotoId,
+      operador: cierre.firmaOperadorId,
+    }
+    const completo = firmasRequeridas(tipo).every((slot) => slotFirma[slot])
 
     if (completo) {
       const ordenConDatos = await tx.ordenTrabajo.findUnique({

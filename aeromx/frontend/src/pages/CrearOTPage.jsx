@@ -14,6 +14,15 @@ import {
 
 const ROLES_SOPORTE = ['tecnico_soporte', 'ingeniero_soporte']
 
+// Requisitos de personal por tipo de producto (espejo del backend).
+// 'obligatorio' | 'opcional' | 'prohibido'. soporte y gerente siempre obligatorios.
+const REQUISITOS_PERSONAL = {
+  aeronave:            { mecanico: 'obligatorio', piloto: 'obligatorio', operador: 'prohibido'   },
+  gcs:                 { mecanico: 'opcional',    piloto: 'prohibido',   operador: 'obligatorio' },
+  planta:              { mecanico: 'obligatorio', piloto: 'prohibido',   operador: 'prohibido'   },
+  sensor_inteligencia: { mecanico: 'prohibido',   piloto: 'prohibido',   operador: 'prohibido'   },
+}
+
 export default function CrearOTPage() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
@@ -44,6 +53,7 @@ export default function CrearOTPage() {
       mecanicoId: '',
       gerenteId: '',
       pilotoId: '',
+      operadorId: '',
       cliente: '',
       ordenServicio: '',
       lugarMantenimiento: '',
@@ -53,6 +63,10 @@ export default function CrearOTPage() {
   const tipoProducto = watch('tipoProducto')
   const soporteId = watch('soporteId')
   const esAeronave = tipoProducto === 'aeronave'
+  const req = REQUISITOS_PERSONAL[tipoProducto] || REQUISITOS_PERSONAL.aeronave
+  const muestraMecanico = req.mecanico !== 'prohibido'
+  const mecanicoObligatorio = req.mecanico === 'obligatorio'
+  const muestraOperador = req.operador !== 'prohibido'
 
   // ── Selectores derivados de la lista de usuarios ──
   const soportes  = usuarios.filter((u) => ROLES_SOPORTE.includes(u.rol))
@@ -60,6 +74,7 @@ export default function CrearOTPage() {
   const mecanicos  = usuarios.filter((u) => u.rol === 'mecanico')
   const gerentes   = usuarios.filter((u) => u.rol === 'gerente_soporte')
   const pilotos    = usuarios.filter((u) => u.rol === 'piloto')
+  const operadores = usuarios.filter((u) => u.rol === 'operador')
 
   const soporteEsTecnico = soportes.find((u) => u.id === soporteId)?.rol === 'tecnico_soporte'
 
@@ -71,7 +86,9 @@ export default function CrearOTPage() {
     cargarPorTipo(tipoProducto)
     setValue('formatoId', '')
     setValue('productoId', '')
-    if (tipoProducto !== 'aeronave') setValue('pilotoId', '')
+    if (req.piloto === 'prohibido') setValue('pilotoId', '')
+    if (req.operador === 'prohibido') setValue('operadorId', '')
+    if (req.mecanico === 'prohibido') setValue('mecanicoId', '')
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tipoProducto])
 
@@ -122,9 +139,10 @@ export default function CrearOTPage() {
         productoId: data.productoId,
         soporteId: data.soporteId,
         ingenieroAuxiliarId: (soporteEsTecnico && data.ingenieroAuxiliarId) ? data.ingenieroAuxiliarId : undefined,
-        mecanicoId: data.mecanicoId,
+        mecanicoId: (muestraMecanico && data.mecanicoId) ? data.mecanicoId : undefined,
         gerenteId: data.gerenteId,
-        pilotoId: esAeronave ? data.pilotoId : undefined,
+        pilotoId: req.piloto !== 'prohibido' ? data.pilotoId : undefined,
+        operadorId: muestraOperador ? data.operadorId : undefined,
         cliente: data.cliente?.trim() || undefined,
         ordenServicio: data.ordenServicio?.trim() || undefined,
         lugarMantenimiento: data.lugarMantenimiento?.trim() || undefined,
@@ -297,14 +315,43 @@ export default function CrearOTPage() {
                 </div>
               )}
 
-              <FieldSelect
-                label="Mecánico"
-                required
-                register={register('mecanicoId', { required: 'Selecciona un mecánico' })}
-                error={errors.mecanicoId?.message}
-                placeholder="-- Selecciona mecánico --"
-                options={mecanicos.map(opcionUsuario)}
-              />
+              {muestraMecanico && (
+                <div>
+                  <FieldSelect
+                    label={mecanicoObligatorio ? 'Mecánico' : 'Mecánico (opcional)'}
+                    required={mecanicoObligatorio}
+                    register={register('mecanicoId', {
+                      validate: (v) => !mecanicoObligatorio || !!v || 'Selecciona un mecánico',
+                    })}
+                    error={errors.mecanicoId?.message}
+                    placeholder={mecanicoObligatorio ? '-- Selecciona mecánico --' : '-- Sin mecánico --'}
+                    options={mecanicos.map(opcionUsuario)}
+                  />
+                  {!mecanicoObligatorio && (
+                    <p style={{ fontSize: 11, color: T.sub, marginTop: 6 }}>
+                      Opcional para este tipo de producto.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {muestraOperador && (
+                <div>
+                  <FieldSelect
+                    label="Operador"
+                    required
+                    register={register('operadorId', {
+                      validate: (v) => !muestraOperador || !!v || 'Selecciona un operador',
+                    })}
+                    error={errors.operadorId?.message}
+                    placeholder="-- Selecciona operador --"
+                    options={operadores.map(opcionUsuario)}
+                  />
+                  <p style={{ fontSize: 11, color: T.sub, marginTop: 6 }}>
+                    Obligatorio para GCS. El operador firma el cierre junto con soporte y gerente.
+                  </p>
+                </div>
+              )}
 
               <FieldSelect
                 label="Gerente de soporte"
