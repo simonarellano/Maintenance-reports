@@ -413,6 +413,15 @@ export function signatureCard(doc, x, y, w, h, caja, fmtFechaHoraFn) {
   doc.fillColor(COLOR.ink)
 }
 
+// Alto total que ocupará evidenceGallery para `nFotos` (mismas constantes internas).
+export function alturaEvidencia(nFotos) {
+  if (!nFotos || nFotos === 0) return 0
+  const cols = 3, gap = 8, imgH = 92, capH = 16
+  const cellH = imgH + capH
+  const rows = Math.ceil(nFotos / cols)
+  return 22 + rows * cellH + (rows - 1) * gap + 8
+}
+
 // Galería de fotos bajo un renglón de trabajo. fotos: [{ urlArchivo, nombreArchivo, fechaCaptura }]
 // buffers: Map<urlArchivo, Buffer|null>. fmtFechaFn: (date)=>string.
 export function evidenceGallery(doc, fotos, buffers, M, W, fmtFechaFn) {
@@ -428,7 +437,7 @@ export function evidenceGallery(doc, fotos, buffers, M, W, fmtFechaFn) {
 
   // banda de evidencia (fondo + borde punteado superior)
   const rows = Math.ceil(fotos.length / cols)
-  const blockH = 22 + rows * cellH + (rows - 1) * gap + 8
+  const blockH = alturaEvidencia(fotos.length)
   ensureSpace(doc, blockH)
   const y0 = doc.y
 
