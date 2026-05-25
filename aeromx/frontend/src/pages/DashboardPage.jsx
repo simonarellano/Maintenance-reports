@@ -5,7 +5,7 @@ import { ordenesService } from '../api/ordenesService'
 import { useAuthStore } from '../store/authStore'
 import { T, STATUS, TIPO_PRODUCTO } from '../tokens/design'
 import {
-  Btn, BtnSm, Card, ErrorBanner, Modal, Pill, ProgressBar, Spinner,
+  Btn, BtnSm, Card, ErrorBanner, MenuKebab, Modal, Pill, ProgressBar, Spinner,
 } from '../components/ui'
 
 const ESTADO_LABELS = {
@@ -421,6 +421,10 @@ function OrdenCard({ orden, esGerente, onClick, onArchivar, onEliminar, onReabri
   const esCerrada = orden.estado === 'cerrada'
   const esBorrador = orden.estado === 'borrador'
   const tipoMeta = TIPO_PRODUCTO[orden.producto?.tipoProducto] || { label: 'Producto', icon: '📦', c: T.sub, bg: T.s2 }
+  // Rechazo reciente: orden devuelta a en_proceso cuyo último evento de estado es un rechazo.
+  const ultimoEvento = orden.historial?.[0]
+  const fueRechazada = orden.estado === 'en_proceso' && ultimoEvento?.motivo?.startsWith('Rechazo:')
+  const motivoRechazo = fueRechazada ? ultimoEvento.motivo.replace(/^Rechazo:\s*/, '') : ''
 
   return (
     <div
@@ -462,6 +466,30 @@ function OrdenCard({ orden, esGerente, onClick, onArchivar, onEliminar, onReabri
           )}
         </div>
       </div>
+
+      {/* Banner de rechazo — visible para todos en la lista */}
+      {fueRechazada && (
+        <div style={{
+          background: T.rD, border: `1px solid ${T.red}40`,
+          borderRadius: 10, padding: '8px 12px', marginBottom: 10,
+        }}>
+          <div style={{
+            fontSize: 11, fontWeight: 700, color: T.red,
+            textTransform: 'uppercase', letterSpacing: '0.05em',
+            display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
+          }}>
+            ✗ Rechazada
+            {ultimoEvento?.usuario?.nombre && (
+              <span style={{ color: T.sub, fontWeight: 500, textTransform: 'none', letterSpacing: 0 }}>
+                por {ultimoEvento.usuario.nombre} · {new Date(ultimoEvento.createdAt).toLocaleDateString('es-MX')}
+              </span>
+            )}
+          </div>
+          <div style={{ fontSize: 12, color: T.text, marginTop: 4, lineHeight: 1.5 }}>
+            {motivoRechazo}
+          </div>
+        </div>
+      )}
 
       {/* Meta grid */}
       <div style={{
@@ -511,47 +539,45 @@ function OrdenCard({ orden, esGerente, onClick, onArchivar, onEliminar, onReabri
         </div>
       )}
 
-      {/* Acciones */}
-      <div style={{
-        marginTop: 12, display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end',
-      }}>
-        {esCerrada && (
-          <>
-            <BtnSm
-              variant="surface"
-              onClick={onPDF}
-              label={
-                <>
-                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                    <path d="M3 12v2h10v-2M8 3v8M5 8l3 3 3-3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  <span>PDF</span>
-                </>
-              }
-            />
-            <BtnSm
-              variant="ghost"
-              onClick={onPDFSinFotos}
-              label="PDF sin fotos"
-            />
-          </>
-        )}
-        {esGerente && (
-          <>
+      {/* Acciones — PDF directo + menú "···" para lo secundario */}
+      {(() => {
+        const accionesMenu = [
+          esCerrada && { label: 'PDF sin fotos', onClick: onPDFSinFotos },
+          esGerente && esCerrada && { label: '↺ Reabrir', onClick: onReabrir, variant: 'amber' },
+          esGerente && {
+            label: orden.archivada ? '↩ Desarchivar' : '🗄 Archivar',
+            onClick: onArchivar,
+          },
+          esGerente && (esBorrador || orden.archivada) && {
+            label: '🗑 Eliminar', onClick: onEliminar, variant: 'danger',
+          },
+        ].filter(Boolean)
+
+        if (!esCerrada && accionesMenu.length === 0) return null
+
+        return (
+          <div style={{
+            marginTop: 12, display: 'flex', gap: 6,
+            justifyContent: 'flex-end', alignItems: 'center',
+          }}>
             {esCerrada && (
-              <BtnSm variant="amber" onClick={onReabrir} label="↺ Reabrir" />
+              <BtnSm
+                variant="surface"
+                onClick={onPDF}
+                label={
+                  <>
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                      <path d="M3 12v2h10v-2M8 3v8M5 8l3 3 3-3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    <span>PDF</span>
+                  </>
+                }
+              />
             )}
-            <BtnSm
-              variant={orden.archivada ? 'surface' : 'ghost'}
-              onClick={onArchivar}
-              label={orden.archivada ? '↩ Desarchivar' : '🗄 Archivar'}
-            />
-            {(esBorrador || orden.archivada) && (
-              <BtnSm variant="danger" onClick={onEliminar} label="🗑 Eliminar" />
-            )}
-          </>
-        )}
-      </div>
+            <MenuKebab items={accionesMenu} />
+          </div>
+        )
+      })()}
     </div>
   )
 }

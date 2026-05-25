@@ -164,6 +164,16 @@ export async function listarOrdenes(filtros = {}) {
       operador:          INCLUDE_USUARIO_BASICO,
       resultados: { select: { id: true, completado: true } },
       _count: { select: { resultados: true } },
+      // Último evento de estado — el frontend lo usa para detectar un rechazo reciente
+      // (estado en_proceso + motivo "Rechazo: …") y mostrarlo en la tarjeta.
+      historial: {
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        select: {
+          estadoAnterior: true, estadoNuevo: true, motivo: true, createdAt: true,
+          usuario: { select: { id: true, nombre: true, rol: true } },
+        },
+      },
     },
   })
 }

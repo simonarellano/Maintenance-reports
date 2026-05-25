@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect } from 'react'
 import { T } from '../tokens/design'
 
 // ── DroneMark (logo SVG) ──────────────────────────────────────
@@ -110,6 +111,110 @@ export function BtnSm({ label, children, onClick, variant = 'ghost', disabled, t
     >
       {label || children}
     </button>
+  )
+}
+
+// ── MenuKebab (menú "···" de acciones secundarias) ────────────
+// items: array de { label, onClick(e), variant?, disabled? }. Los falsy se ignoran,
+// así el llamador puede usar `cond && {…}`. Si no queda ningún item, no renderiza nada.
+const MENU_ITEM_COLOR = {
+  danger: T.red,
+  amber:  T.amber,
+  green:  T.green,
+}
+export function MenuKebab({ items = [], title = 'Más acciones' }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+  const visibles = items.filter(Boolean)
+
+  useEffect(() => {
+    if (!open) return
+    const cerrar = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+    const tecla = (e) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', cerrar)
+    document.addEventListener('keydown', tecla)
+    return () => {
+      document.removeEventListener('mousedown', cerrar)
+      document.removeEventListener('keydown', tecla)
+    }
+  }, [open])
+
+  if (visibles.length === 0) return null
+
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-flex' }}>
+      <button
+        type="button"
+        title={title}
+        aria-label={title}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v) }}
+        style={{
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          width: 32, height: 32, borderRadius: 10,
+          background: open ? T.s2 : 'transparent',
+          color: T.sub,
+          border: `1px solid ${T.border}`,
+          cursor: 'pointer', fontFamily: T.font,
+          transition: 'background .15s, color .15s',
+        }}
+      >
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+          <circle cx="8" cy="3" r="1.5" />
+          <circle cx="8" cy="8" r="1.5" />
+          <circle cx="8" cy="13" r="1.5" />
+        </svg>
+      </button>
+      {open && (
+        <div
+          role="menu"
+          style={{
+            position: 'absolute', top: 38, right: 0, zIndex: 50,
+            minWidth: 178, padding: 5,
+            background: T.s1,
+            border: `1px solid ${T.border}`,
+            borderRadius: 12,
+            boxShadow: '0 12px 32px rgba(0,0,0,0.45)',
+            display: 'flex', flexDirection: 'column', gap: 2,
+          }}
+        >
+          {visibles.map((it, i) => {
+            const color = it.disabled ? T.dim : (MENU_ITEM_COLOR[it.variant] || T.text)
+            return (
+              <button
+                key={i}
+                type="button"
+                role="menuitem"
+                disabled={it.disabled}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (it.disabled) return
+                  setOpen(false)
+                  it.onClick?.(e)
+                }}
+                onMouseEnter={(e) => { if (!it.disabled) e.currentTarget.style.background = T.s2 }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  width: '100%', textAlign: 'left',
+                  padding: '9px 11px', borderRadius: 8,
+                  background: 'transparent', border: 'none',
+                  color,
+                  cursor: it.disabled ? 'not-allowed' : 'pointer',
+                  fontSize: 13, fontWeight: 600, fontFamily: T.font,
+                  whiteSpace: 'nowrap',
+                  opacity: it.disabled ? 0.5 : 1,
+                  transition: 'background .12s',
+                }}
+              >
+                {it.label}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
   )
 }
 

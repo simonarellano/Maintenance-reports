@@ -1072,6 +1072,8 @@ cd ../frontend && npm run dev             # UI :5173 — login dev@aeromx.com / 
 - `InspeccionPage.jsx`: indicador "🔍 En revisión" por punto (comentario + solicitante) + acciones "Pedir revisión" / "Resolver" para involucrados (oculto si `inspeccionBloqueada`). "Pedir revisión" abre un **modal in-app** para el motivo (no `window.prompt`).
 - `CierreOTPage.jsx`: botón gerente "✗ Rechazar orden" → **modal in-app** de motivo (no `window.prompt`); el error 400 del gate de revisiones se muestra en el cierre.
 - ⚠️ Ajuste de QA visual (mismo día): el motivo de rechazo y el de pedir revisión se capturan con el componente `Modal` (patrón del modal de "Reabrir" del Dashboard), reemplazando los `window.prompt`/diálogo nativo de Chrome.
+- ⚠️ Visibilidad del rechazo (mismo día): `listarOrdenes` ahora incluye el **último evento de historial** (`take:1` + `usuario`). El Dashboard muestra un banner "✗ Rechazada por X · fecha + motivo" en la tarjeta cuando `estado === 'en_proceso'` y el último evento es un `Rechazo:`; `InspeccionPage` muestra el mismo banner al abrir la orden (la sección "Historial de estados" está colapsada). El badge desaparece solo cuando la orden avanza a `pendiente_firma`.
+- ⚠️ El commit de esta mejora arrastró el refactor "kebab" del Dashboard (`components/ui.jsx` `MenuKebab` + acciones de `OrdenCard` en menú "···") que estaba sin commitear desde antes — el badge depende de `DashboardPage.jsx`, que importa `MenuKebab`, así que no se podían separar.
 - **Badge de revisiones en el Dashboard: OMITIDO a propósito** (es opcional en el plan y `DashboardPage.jsx`/`ui.jsx` tenían un refactor "kebab" sin commitear ajeno a esta sesión — no se tocaron para no mezclar).
 
 #### Verificación (API real `:3001` + build)

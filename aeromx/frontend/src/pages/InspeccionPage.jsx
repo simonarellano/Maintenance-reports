@@ -276,6 +276,9 @@ export default function InspeccionPage() {
 
   const st = STATUS[orden.estado] || { label: orden.estado, c: T.sub, bg: T.s2 }
   const historial = orden.historial || []
+  // Rechazo reciente: orden en en_proceso cuyo último evento de estado es un rechazo.
+  const ultimoEvento = historial[0]
+  const fueRechazada = orden.estado === 'en_proceso' && ultimoEvento?.motivo?.startsWith('Rechazo:')
 
   return (
     <div style={{ minHeight: '100vh', background: T.bg }}>
@@ -354,6 +357,33 @@ export default function InspeccionPage() {
             </div>
           )}
         </Card>
+
+        {/* Banner de rechazo — motivo visible al abrir la orden */}
+        {fueRechazada && (
+          <div style={{
+            background: T.rD, border: `1px solid ${T.red}40`,
+            borderRadius: 12, padding: '12px 16px', marginBottom: 14,
+          }}>
+            <div style={{
+              fontSize: 12, fontWeight: 700, color: T.red,
+              textTransform: 'uppercase', letterSpacing: '0.05em',
+              display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+            }}>
+              ✗ Orden rechazada
+              {ultimoEvento?.usuario?.nombre && (
+                <span style={{ color: T.sub, fontWeight: 500, textTransform: 'none', letterSpacing: 0 }}>
+                  por {ultimoEvento.usuario.nombre} · {new Date(ultimoEvento.createdAt).toLocaleString('es-MX')}
+                </span>
+              )}
+            </div>
+            <div style={{ fontSize: 13, color: T.text, marginTop: 6, lineHeight: 1.55 }}>
+              {ultimoEvento.motivo.replace(/^Rechazo:\s*/, '')}
+            </div>
+            <div style={{ fontSize: 11, color: T.sub, marginTop: 6 }}>
+              Corrige lo señalado y vuelve a enviar la orden a firma.
+            </div>
+          </div>
+        )}
 
         {/* Paso 1: Recepción */}
         {!tieneRecepcion && puedeEditar && (
