@@ -6,7 +6,7 @@ import { ordenesService } from '../api/ordenesService'
 import { useAuthStore } from '../store/authStore'
 import { T, ROL_LABELS } from '../tokens/design'
 import {
-  Btn, Card, ErrorBanner, FieldTextarea, Hdr, KV, Pill, Spinner,
+  Btn, Card, ErrorBanner, FieldTextarea, Hdr, KV, Modal, Pill, Spinner,
 } from '../components/ui'
 
 export default function CierreOTPage() {
@@ -20,6 +20,9 @@ export default function CierreOTPage() {
   const [step, setStep] = useState('resumen') // 'resumen' o 'firma'
   const [firmaConfirmada, setFirmaConfirmada] = useState(false)
   const [incluirFotos, setIncluirFotos] = useState(true)
+  const [rechazoAbierto, setRechazoAbierto] = useState(false)
+  const [motivoRechazo, setMotivoRechazo] = useState('')
+  const [rechazoLoading, setRechazoLoading] = useState(false)
 
   const { register, handleSubmit, watch, setValue } = useForm({
     defaultValues: {
@@ -148,14 +151,21 @@ export default function CierreOTPage() {
     }
   }
 
-  const handleRechazar = async () => {
-    const motivo = window.prompt('Motivo del rechazo (obligatorio):')
-    if (!motivo || !motivo.trim()) return
+  const confirmarRechazo = async () => {
+    if (!motivoRechazo.trim()) {
+      setError('El motivo del rechazo es obligatorio')
+      return
+    }
+    setRechazoLoading(true)
     try {
-      await ordenesService.rechazar(id, motivo.trim())
+      await ordenesService.rechazar(id, motivoRechazo.trim())
+      setRechazoAbierto(false)
+      setMotivoRechazo('')
       navigate('/dashboard')
     } catch (err) {
       setError(err.response?.data?.error || 'Error al rechazar la orden')
+    } finally {
+      setRechazoLoading(false)
     }
   }
 
@@ -355,7 +365,7 @@ export default function CierreOTPage() {
             <Btn
               variant="danger"
               label="✗ Rechazar orden"
-              onClick={handleRechazar}
+              onClick={() => { setMotivoRechazo(''); setRechazoAbierto(true) }}
             />
           </div>
         )}
@@ -606,6 +616,53 @@ export default function CierreOTPage() {
           </div>
         )}
       </main>
+
+      {/* Modal de rechazo */}
+      <Modal
+        open={rechazoAbierto}
+        onClose={() => setRechazoAbierto(false)}
+        title="Rechazar orden"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <p style={{ fontSize: 13, color: T.sub, lineHeight: 1.55 }}>
+            La orden <strong style={{ color: T.text }}>{orden?.numeroOt}</strong> volverá a estado{' '}
+            <strong style={{ color: T.amber }}>en proceso</strong>. Se borrarán las firmas del cierre
+            y el equipo deberá corregir y volver a firmar. El evento queda registrado en el historial.
+          </p>
+          <div>
+            <div style={{
+              fontSize: 11, color: T.sub, fontWeight: 600,
+              letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 6,
+            }}>
+              Motivo del rechazo <span style={{ color: T.red }}>*</span>
+            </div>
+            <textarea
+              value={motivoRechazo}
+              onChange={(e) => setMotivoRechazo(e.target.value)}
+              placeholder="Ej. Falta evidencia fotográfica en el punto 12 y el torque no fue registrado…"
+              rows={3}
+              autoFocus
+              style={{
+                width: '100%', minHeight: 80,
+                background: T.s2, border: `1px solid ${T.border}`,
+                borderRadius: 10, padding: '10px 12px',
+                color: T.text, fontSize: 14, fontFamily: T.font,
+                resize: 'vertical', outline: 'none',
+              }}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Btn variant="ghost" label="Cancelar" onClick={() => setRechazoAbierto(false)} style={{ flex: 1 }} />
+            <Btn
+              variant="danger"
+              label={rechazoLoading ? 'Rechazando…' : 'Rechazar orden'}
+              onClick={confirmarRechazo}
+              disabled={rechazoLoading || !motivoRechazo.trim()}
+              style={{ flex: 1 }}
+            />
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

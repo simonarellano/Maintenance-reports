@@ -42,6 +42,9 @@ export default function InspeccionPage() {
   const [showAsignacion, setShowAsignacion] = useState(false)
   const [usuarios, setUsuarios] = useState([])
   const [showHistorial, setShowHistorial] = useState(false)
+  const [revisionPara, setRevisionPara] = useState(null)
+  const [comentarioRevision, setComentarioRevision] = useState('')
+  const [revisionLoading, setRevisionLoading] = useState(false)
 
   useEffect(() => { cargarOrden() }, [id])
 
@@ -149,15 +152,27 @@ export default function InspeccionPage() {
     }
   }
 
-  const pedirRevision = async (resultadoId) => {
-    const comentario = window.prompt('Motivo de la revisión:')
-    if (!comentario || !comentario.trim()) return
+  const pedirRevision = (resultadoId) => {
+    setComentarioRevision('')
+    setRevisionPara(resultadoId)
+  }
+
+  const confirmarPedirRevision = async () => {
+    if (!comentarioRevision.trim()) {
+      setError('El motivo de la revisión es obligatorio')
+      return
+    }
+    setRevisionLoading(true)
     try {
-      await ordenesService.pedirRevisionPunto(id, resultadoId, comentario.trim())
+      await ordenesService.pedirRevisionPunto(id, revisionPara, comentarioRevision.trim())
+      setRevisionPara(null)
+      setComentarioRevision('')
       await cargarOrden()
     } catch (e) {
       console.error(e)
       setError(e.response?.data?.error || 'Error al pedir revisión')
+    } finally {
+      setRevisionLoading(false)
     }
   }
 
@@ -425,6 +440,53 @@ export default function InspeccionPage() {
             onClose={() => setShowAsignacion(false)}
             onGuardar={guardarAsignacion}
           />
+        </Modal>
+
+        {/* Modal de pedir revisión de un punto */}
+        <Modal
+          open={Boolean(revisionPara)}
+          onClose={() => setRevisionPara(null)}
+          title="Pedir revisión del punto"
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <p style={{ fontSize: 13, color: T.sub, lineHeight: 1.55 }}>
+              El punto quedará marcado <strong style={{ color: T.amber }}>en revisión</strong> y
+              <strong style={{ color: T.text }}> bloqueará el cierre</strong> de la orden hasta que
+              alguien lo resuelva.
+            </p>
+            <div>
+              <div style={{
+                fontSize: 11, color: T.sub, fontWeight: 600,
+                letterSpacing: '0.07em', textTransform: 'uppercase', marginBottom: 6,
+              }}>
+                Motivo de la revisión <span style={{ color: T.red }}>*</span>
+              </div>
+              <textarea
+                value={comentarioRevision}
+                onChange={(e) => setComentarioRevision(e.target.value)}
+                placeholder="Ej. Verificar el torque del tornillo y volver a fotografiar…"
+                rows={3}
+                autoFocus
+                style={{
+                  width: '100%', minHeight: 80,
+                  background: T.s2, border: `1px solid ${T.border}`,
+                  borderRadius: 10, padding: '10px 12px',
+                  color: T.text, fontSize: 14, fontFamily: T.font,
+                  resize: 'vertical', outline: 'none',
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <Btn variant="ghost" label="Cancelar" onClick={() => setRevisionPara(null)} style={{ flex: 1 }} />
+              <Btn
+                variant="amber"
+                label={revisionLoading ? 'Enviando…' : 'Pedir revisión'}
+                onClick={confirmarPedirRevision}
+                disabled={revisionLoading || !comentarioRevision.trim()}
+                style={{ flex: 1 }}
+              />
+            </div>
+          </div>
         </Modal>
 
         {/* Progreso global sticky */}

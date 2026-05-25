@@ -1069,8 +1069,9 @@ cd ../frontend && npm run dev             # UI :5173 — login dev@aeromx.com / 
 
 #### Frontend
 - `api/ordenesService.js`: `rechazar`, `mandarARevision`, `pedirRevisionPunto`, `resolverRevision`.
-- `InspeccionPage.jsx`: indicador "🔍 En revisión" por punto (comentario + solicitante) + acciones "Pedir revisión" / "Resolver" para involucrados (oculto si `inspeccionBloqueada`).
-- `CierreOTPage.jsx`: botón gerente "✗ Rechazar orden" (motivo obligatorio); el error 400 del gate de revisiones se muestra en el cierre.
+- `InspeccionPage.jsx`: indicador "🔍 En revisión" por punto (comentario + solicitante) + acciones "Pedir revisión" / "Resolver" para involucrados (oculto si `inspeccionBloqueada`). "Pedir revisión" abre un **modal in-app** para el motivo (no `window.prompt`).
+- `CierreOTPage.jsx`: botón gerente "✗ Rechazar orden" → **modal in-app** de motivo (no `window.prompt`); el error 400 del gate de revisiones se muestra en el cierre.
+- ⚠️ Ajuste de QA visual (mismo día): el motivo de rechazo y el de pedir revisión se capturan con el componente `Modal` (patrón del modal de "Reabrir" del Dashboard), reemplazando los `window.prompt`/diálogo nativo de Chrome.
 - **Badge de revisiones en el Dashboard: OMITIDO a propósito** (es opcional en el plan y `DashboardPage.jsx`/`ui.jsx` tenían un refactor "kebab" sin commitear ajeno a esta sesión — no se tocaron para no mezclar).
 
 #### Verificación (API real `:3001` + build)
