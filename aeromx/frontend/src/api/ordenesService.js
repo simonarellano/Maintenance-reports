@@ -63,5 +63,21 @@ export const ordenesService = {
 
   // conFotos=false agrega ?fotos=false para generar el PDF sin las fotografías embebidas.
   descargarPDF: (id, conFotos = true) =>
-    client.get(`/ordenes/${id}/pdf${conFotos ? '' : '?fotos=false'}`, { responseType: 'blob' })
+    client.get(`/ordenes/${id}/pdf${conFotos ? '' : '?fotos=false'}`, { responseType: 'blob' }),
+
+  // Rechaza la orden (gerente/super): la devuelve a en_proceso y borra firmas.
+  rechazar: (id, motivo) =>
+    client.post(`/ordenes/${id}/rechazar`, { motivo }),
+
+  // Manda varios puntos a revisión masiva (gerente, orden en pendiente_firma).
+  mandarARevision: (id, resultadoIds, comentario) =>
+    client.post(`/ordenes/${id}/revision`, { resultadoIds, comentario }),
+
+  // Pide revisión de un punto individual (cualquier involucrado).
+  pedirRevisionPunto: (id, resultadoId, comentario) =>
+    client.post(`/ordenes/${id}/puntos/${resultadoId}/revision`, { comentario }),
+
+  // Marca una revisión como resuelta (cualquier involucrado).
+  resolverRevision: (id, revisionId) =>
+    client.post(`/ordenes/${id}/revisiones/${revisionId}/resolver`),
 }

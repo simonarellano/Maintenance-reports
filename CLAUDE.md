@@ -1050,5 +1050,36 @@ cd ../frontend && npm run dev             # UI :5173 — login dev@aeromx.com / 
 - **`InspeccionPage.jsx`**: handler `descargarPDF(conFotos = true)` (cierra sobre `orden`); dos `Btn` en la barra de acciones de cabecera solo si `orden.estado === 'cerrada'`: "📥 Descargar PDF" (`variant="primary"`) y "Descargar sin fotos" (`variant="ghost"`).
 - **Verificación:** `npm run build` verde (120 módulos). Revisión spec = SPEC COMPLIANT; revisión calidad = APROBADO (nota menor no bloqueante: el handler `descargarPDF` queda duplicado entre las dos páginas — preexistente; extraer helper compartido si aparece una 3ª copia).
 
+---
+
+### Cambios en Sesión 20 — Plan PDF-fixes Sesión 4: rechazo de orden + revisión de puntos (gate de cierre)
+**Fecha:** 2026-05-25 | **Rama:** `development` | **Estado:** completa y verificada (API real + build verde) · commiteada
+
+> Ejecutada con `subagent-driven-development` (un implementador por bloque + revisión de spec + revisión de calidad, con loops de corrección). Corresponde a la **Sesión 4** del plan [`docs/superpowers/plans/2026-05-24-pdf-fixes-revision-y-asignacion.md`](docs/superpowers/plans/2026-05-24-pdf-fixes-revision-y-asignacion.md) (punto 6). Schema + migración + backend + frontend.
+
+#### Modelo de datos
+- Nuevo enum `EstadoRevision { abierta resuelta }` y modelo `RevisionPunto` (`@@map("revisiones_punto")`): `id, resultadoId, solicitanteId, comentario, estado, resueltoPorId?, fechaResuelto?, createdAt` + relaciones (`resultado` onDelete Cascade, `solicitante` RESTRICT, `resueltoPor` SET NULL). Relaciones inversas en `ResultadoPunto` (`revisiones`) y `Usuario` (`revisionesSolicitadas`/`revisionesResueltas`).
+- Migración aditiva a mano `prisma/migrations/20260524120000_revision_punto/migration.sql`, aplicada con `migrate deploy` (sin reset/seed). Respaldo previo: `backups/aeromx_backup_20260525_094315.sql`.
+
+#### Backend
+- `ordenesService.js`: `rechazarOrden` (gerente — vuelve la orden a `en_proceso`, borra las firmas del cierre, registra `historial_estados_ot`; solo desde `pendiente_firma`/`cerrada`), `crearRevisionPunto`, `mandarARevision` (gerente, solo `pendiente_firma`), `resolverRevision` (cruza `revisionId` contra la orden — anti-IDOR), `verificarRevisionesResueltas` (gate). Gate de revisiones en `firmarCierre` (defensa en profundidad) e include `revisiones` en `obtenerOrden`.
+- `workflowController.js`: `rechazar`, `mandarARevision`, `pedirRevision`, `resolverRevision` (las dos últimas usan `verificarPermisoEdicion`).
+- `cierreController.gestionar`: gate de revisiones tras el de críticos.
+- `routes/ordenes.js`: `POST /:id/rechazar` y `/:id/revision` (`SOLO_GERENTE`); `POST /:id/puntos/:resultadoId/revision` y `/:id/revisiones/:revisionId/resolver` (sin requireRole — permiso vía `verificarPermisoEdicion`).
+
+#### Frontend
+- `api/ordenesService.js`: `rechazar`, `mandarARevision`, `pedirRevisionPunto`, `resolverRevision`.
+- `InspeccionPage.jsx`: indicador "🔍 En revisión" por punto (comentario + solicitante) + acciones "Pedir revisión" / "Resolver" para involucrados (oculto si `inspeccionBloqueada`).
+- `CierreOTPage.jsx`: botón gerente "✗ Rechazar orden" (motivo obligatorio); el error 400 del gate de revisiones se muestra en el cierre.
+- **Badge de revisiones en el Dashboard: OMITIDO a propósito** (es opcional en el plan y `DashboardPage.jsx`/`ui.jsx` tenían un refactor "kebab" sin commitear ajeno a esta sesión — no se tocaron para no mezclar).
+
+#### Verificación (API real `:3001` + build)
+- Rechazar cerrada → `en_proceso`, firmas borradas, historial +1. Pedir revisión → 201 `abierta`. Cerrar con revisión abierta → **400 bloqueado**. IDOR (ordenId falso) → 404. `mandarARevision` en `en_proceso` → 400 BAD_STATE. Resolver → `resuelta`; cerrar de nuevo → 200. `mandarARevision` (gerente, `pendiente_firma`) → `{creadas:2}`; `firmarCierre` con abiertas → 400; resolver todas → 0 restantes.
+- `npm run build` (frontend) verde (120 módulos).
+- ⚠️ La verificación dejó **OT-20260524-0001** en `pendiente_firma` (era `cerrada`) con 3 revisiones ya resueltas (data de QA, no bloquea).
+
+#### Gates de cierre acumulados (tras Sesión 20)
+1. Puntos completados · 2. Críticos firmados · **3. (nuevo) Sin revisiones `abierta`** · + firmas de slot por tipo. (Falta el punto 4 — firma de tareas asignadas — que llega en la Sesión 5 del plan.)
+
 #### Siguiente paso
-- **Sesión 4 del plan** (rechazo + revisión de puntos): incluye migración Prisma. Leer las "Notas de proceso" del plan **antes** de tocar el schema (respaldo `pg_dump`, SQL a mano, `migrate deploy`, nunca `migrate reset`/`db:seed`; detener backend antes de `prisma generate`).
+- **Sesión 5 del plan** (asignación de tareas por punto + firma de tarea como gate de cierre): incluye migración Prisma (campos `asignadoId`/`firmaTareaPorId`/`fechaFirmaTarea` en `resultados_puntos`). Mismas precauciones: respaldo `pg_dump`, SQL a mano, `migrate deploy`, nunca `migrate reset`/`db:seed`, detener backend antes de `prisma generate`.

@@ -193,6 +193,10 @@ export function obtenerOrden(id) {
           punto: { include: { seccion: true } },
           firmante: { select: { id: true, nombre: true } },
           fotos: true,
+          revisiones: {
+            orderBy: { createdAt: 'desc' },
+            include: { solicitante: { select: { id: true, nombre: true, rol: true } } },
+          },
         },
         orderBy: { createdAt: 'asc' },
       },
@@ -504,6 +508,60 @@ export async function reabrirOrden(id, { motivo, usuarioId }) {
   })
 }
 
+// Rechazo del gerente — devuelve la orden a en_proceso, invalida firmas, registra audit.
+export async function rechazarOrden(id, { motivo, usuarioId }) {
+  if (!motivo?.trim()) {
+    throw Object.assign(new Error('El motivo de rechazo es obligatorio'), { code: 'BAD_INPUT' })
+  }
+
+  const orden = await prisma.ordenTrabajo.findUnique({
+    where: { id },
+    include: { cierre: true },
+  })
+  if (!orden) throw Object.assign(new Error('Orden no encontrada'), { code: 'NOT_FOUND' })
+  if (orden.estado !== 'pendiente_firma' && orden.estado !== 'cerrada') {
+    throw Object.assign(
+      new Error('Solo se puede rechazar una orden en pendiente de firma o cerrada'),
+      { code: 'BAD_STATE' },
+    )
+  }
+
+  return prisma.$transaction(async (tx) => {
+    // Borrar firmas del cierre
+    if (orden.cierre) {
+      await tx.cierreOT.update({
+        where: { ordenId: id },
+        data: {
+          firmaSoporteId:  null,   fechaFirmaSoporte:  null,
+          firmaGerenteId:  null,   fechaFirmaGerente:  null,
+          firmaPilotoId:   null,   fechaFirmaPiloto:   null,
+          firmaOperadorId: null,   fechaFirmaOperador: null,
+        },
+      })
+    }
+
+    // Audit trail
+    await tx.historialEstadoOT.create({
+      data: {
+        ordenId: id,
+        estadoAnterior: orden.estado,
+        estadoNuevo: 'en_proceso',
+        motivo: `Rechazo: ${motivo.trim()}`,
+        usuarioId,
+      },
+    })
+
+    return tx.ordenTrabajo.update({
+      where: { id },
+      data: { estado: 'en_proceso', fechaCierre: null },
+      include: {
+        cierre: true,
+        producto: { select: { id: true, identificador: true, tipoProducto: true } },
+      },
+    })
+  })
+}
+
 // ─── Resultados de puntos ───────────────────────────────────────────────────
 
 export function obtenerResultado(ordenId, resultadoId) {
@@ -641,6 +699,15 @@ export async function firmarCierre(ordenId, usuarioId) {
     )
   }
 
+  // Las revisiones abiertas también bloquean el cierre (defensa en profundidad).
+  const revisiones = await verificarRevisionesResueltas(ordenId)
+  if (!revisiones.completo) {
+    throw Object.assign(
+      new Error(`Hay ${revisiones.abiertas} punto(s) en revisión pendientes de resolver`),
+      { code: 'BAD_STATE' },
+    )
+  }
+
   const usuario = await prisma.usuario.findUnique({
     where: { id: usuarioId },
     select: { id: true, rol: true, superusuario: true },
@@ -738,6 +805,61 @@ export async function firmarCierre(ordenId, usuarioId) {
   })
 }
 
+// ─── Revisiones de puntos ────────────────────────────────────────────────────
+
+// Crea una solicitud de revisión sobre un resultado de punto.
+export async function crearRevisionPunto(ordenId, resultadoId, { comentario, solicitanteId }) {
+  if (!comentario?.trim()) {
+    throw Object.assign(new Error('El comentario de revisión es obligatorio'), { code: 'BAD_INPUT' })
+  }
+  const resultado = await prisma.resultadoPunto.findFirst({ where: { id: resultadoId, ordenId } })
+  if (!resultado) throw Object.assign(new Error('Resultado no encontrado'), { code: 'NOT_FOUND' })
+  return prisma.revisionPunto.create({
+    data: { resultadoId, solicitanteId, comentario: comentario.trim() },
+    include: { solicitante: { select: { id: true, nombre: true, rol: true } } },
+  })
+}
+
+// Gerente manda a revisión uno o varios puntos. La orden permanece en pendiente_firma.
+export async function mandarARevision(ordenId, { resultadoIds, comentario, solicitanteId }) {
+  if (!Array.isArray(resultadoIds) || resultadoIds.length === 0) {
+    throw Object.assign(new Error('Debes indicar al menos un punto'), { code: 'BAD_INPUT' })
+  }
+  if (!comentario?.trim()) {
+    throw Object.assign(new Error('El comentario es obligatorio'), { code: 'BAD_INPUT' })
+  }
+  const orden = await prisma.ordenTrabajo.findUnique({ where: { id: ordenId }, select: { estado: true } })
+  if (!orden) throw Object.assign(new Error('Orden no encontrada'), { code: 'NOT_FOUND' })
+  if (orden.estado !== 'pendiente_firma') {
+    throw Object.assign(new Error('Solo se puede mandar a revisión una orden en estado pendiente de firma'), { code: 'BAD_STATE' })
+  }
+  const validos = await prisma.resultadoPunto.findMany({
+    where: { id: { in: resultadoIds }, ordenId }, select: { id: true },
+  })
+  if (validos.length === 0) throw Object.assign(new Error('Ningún punto válido'), { code: 'BAD_INPUT' })
+  await prisma.revisionPunto.createMany({
+    data: validos.map((r) => ({ resultadoId: r.id, solicitanteId, comentario: comentario.trim() })),
+  })
+  return { creadas: validos.length }
+}
+
+// Marca una revisión como resuelta.
+export async function resolverRevision(ordenId, revisionId, usuarioId) {
+  const rev = await prisma.revisionPunto.findFirst({
+    where: { id: revisionId, resultado: { ordenId } },
+  })
+  if (!rev) throw Object.assign(new Error('Revisión no encontrada'), { code: 'NOT_FOUND' })
+  if (rev.estado === 'resuelta') return rev
+  return prisma.revisionPunto.update({
+    where: { id: revisionId },
+    data: { estado: 'resuelta', resueltoPorId: usuarioId, fechaResuelto: new Date() },
+    include: {
+      solicitante: { select: { id: true, nombre: true, rol: true } },
+      resueltoPor:  { select: { id: true, nombre: true, rol: true } },
+    },
+  })
+}
+
 // ─── Validaciones ───────────────────────────────────────────────────────────
 
 export async function verificarPuntosCompletos(ordenId) {
@@ -758,4 +880,12 @@ export async function verificarCriticosFirmados(ordenId) {
     }),
   ])
   return { total, firmados, faltan: total - firmados, completo: total === firmados }
+}
+
+// El cierre se bloquea si hay revisiones abiertas en cualquier punto de la orden.
+export async function verificarRevisionesResueltas(ordenId) {
+  const abiertas = await prisma.revisionPunto.count({
+    where: { estado: 'abierta', resultado: { ordenId } },
+  })
+  return { abiertas, completo: abiertas === 0 }
 }

@@ -41,6 +41,11 @@ enum EstadoResultado {
   no_aplica
 }
 
+enum EstadoRevision {
+  abierta
+  resuelta
+}
+
 // ─────────────────────────────────────────────
 // USUARIOS
 // ─────────────────────────────────────────────
@@ -74,6 +79,8 @@ model Usuario {
   cierresPiloto                CierreOT[]          @relation("CierrePiloto")
   cierresOperador              CierreOT[]          @relation("CierreOperador")
   historialEstados             HistorialEstadoOT[]
+  revisionesSolicitadas        RevisionPunto[]     @relation("RevisionSolicitante")
+  revisionesResueltas          RevisionPunto[]     @relation("RevisionResuelta")
 
   @@map("usuarios")
 }
@@ -328,10 +335,11 @@ model ResultadoPunto {
   createdAt       DateTime        @default(now()) @map("created_at")
   updatedAt       DateTime        @updatedAt @map("updated_at")
 
-  orden    OrdenTrabajo    @relation(fields: [ordenId], references: [id])
-  punto    PuntoInspeccion @relation(fields: [puntoId], references: [id])
-  firmante Usuario?        @relation("FirmaPaso", fields: [firmadoPor], references: [id])
-  fotos    FotoInspeccion[]
+  orden      OrdenTrabajo    @relation(fields: [ordenId], references: [id])
+  punto      PuntoInspeccion @relation(fields: [puntoId], references: [id])
+  firmante   Usuario?        @relation("FirmaPaso", fields: [firmadoPor], references: [id])
+  fotos      FotoInspeccion[]
+  revisiones RevisionPunto[]
 
   @@unique([ordenId, puntoId])
   @@map("resultados_puntos")
@@ -351,6 +359,28 @@ model FotoInspeccion {
   usuario   Usuario        @relation("FotoSubida", fields: [subidaPor], references: [id])
 
   @@map("fotos_inspeccion")
+}
+
+// ─────────────────────────────────────────────
+// REVISIONES DE PUNTO — solicitud de corrección por involucrado
+// ─────────────────────────────────────────────
+
+model RevisionPunto {
+  id            String         @id @default(uuid())
+  resultadoId   String         @map("resultado_id")
+  solicitanteId String         @map("solicitante_id")
+  comentario    String
+  estado        EstadoRevision @default(abierta)
+  resueltoPorId String?        @map("resuelto_por_id")
+  fechaResuelto DateTime?      @map("fecha_resuelto")
+  createdAt     DateTime       @default(now()) @map("created_at")
+
+  resultado    ResultadoPunto @relation(fields: [resultadoId], references: [id], onDelete: Cascade)
+  solicitante  Usuario        @relation("RevisionSolicitante", fields: [solicitanteId], references: [id])
+  resueltoPor  Usuario?       @relation("RevisionResuelta", fields: [resueltoPorId], references: [id])
+
+  @@index([resultadoId])
+  @@map("revisiones_punto")
 }
 
 // ─────────────────────────────────────────────

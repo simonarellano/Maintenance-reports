@@ -23,6 +23,13 @@ export async function gestionar(req, res, next) {
       })
     }
 
+    const revisiones = await svc.verificarRevisionesResueltas(ordenId)
+    if (!revisiones.completo) {
+      return res.status(400).json({
+        error: `No se puede cerrar: hay ${revisiones.abiertas} punto(s) en revisión pendientes`,
+      })
+    }
+
     if (seEncontroDefecto && !refDocCorrectivo?.trim()) {
       return res.status(400).json({ error: 'refDocCorrectivo es requerido cuando se encontró defecto' })
     }

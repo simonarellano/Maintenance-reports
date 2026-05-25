@@ -69,6 +69,7 @@ export default function CierreOTPage() {
   const cierre = orden?.cierre
   const rolUsuario = user?.rol
   const esSuper = user?.superusuario === true
+  const esGerente = esSuper || rolUsuario === 'gerente_soporte'
   const tipoProducto = orden?.producto?.tipoProducto
   const esAeronave = tipoProducto === 'aeronave'
   const esGcs = tipoProducto === 'gcs'
@@ -144,6 +145,17 @@ export default function CierreOTPage() {
       setError(err.response?.data?.error || err.response?.data?.message || 'Error firmando cierre')
     } finally {
       setSubmitLoading(false)
+    }
+  }
+
+  const handleRechazar = async () => {
+    const motivo = window.prompt('Motivo del rechazo (obligatorio):')
+    if (!motivo || !motivo.trim()) return
+    try {
+      await ordenesService.rechazar(id, motivo.trim())
+      navigate('/dashboard')
+    } catch (err) {
+      setError(err.response?.data?.error || 'Error al rechazar la orden')
     }
   }
 
@@ -331,6 +343,20 @@ export default function CierreOTPage() {
                 </div>
               </form>
             </Card>
+          </div>
+        )}
+
+        {step === 'firma' && esGerente &&
+          (orden?.estado === 'pendiente_firma' || orden?.estado === 'cerrada') && (
+          <div style={{
+            display: 'flex', justifyContent: 'flex-end',
+            marginBottom: 4,
+          }}>
+            <Btn
+              variant="danger"
+              label="✗ Rechazar orden"
+              onClick={handleRechazar}
+            />
           </div>
         )}
 

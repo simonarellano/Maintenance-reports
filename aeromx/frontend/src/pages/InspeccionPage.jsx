@@ -149,6 +149,29 @@ export default function InspeccionPage() {
     }
   }
 
+  const pedirRevision = async (resultadoId) => {
+    const comentario = window.prompt('Motivo de la revisión:')
+    if (!comentario || !comentario.trim()) return
+    try {
+      await ordenesService.pedirRevisionPunto(id, resultadoId, comentario.trim())
+      await cargarOrden()
+    } catch (e) {
+      console.error(e)
+      setError(e.response?.data?.error || 'Error al pedir revisión')
+    }
+  }
+
+  const resolverRevision = async (revisionId) => {
+    if (!window.confirm('¿Marcar esta revisión como resuelta?')) return
+    try {
+      await ordenesService.resolverRevision(id, revisionId)
+      await cargarOrden()
+    } catch (e) {
+      console.error(e)
+      setError(e.response?.data?.error || 'Error al resolver revisión')
+    }
+  }
+
   const descargarPDF = async (conFotos = true) => {
     try {
       const response = await ordenesService.descargarPDF(orden.id, conFotos)
@@ -499,6 +522,9 @@ export default function InspeccionPage() {
                             onFirmar={firmarPunto}
                             onSubirFoto={subirFoto}
                             onEliminarFoto={eliminarFoto}
+                            puedeRevisar={puedeEditar && !inspeccionBloqueada}
+                            onPedirRevision={pedirRevision}
+                            onResolverRevision={resolverRevision}
                           />
                         ))}
                       </tbody>
@@ -941,7 +967,7 @@ function ModalAsignacionContent({ orden, usuarios, onClose, onGuardar }) {
 }
 
 // ── Fila de la tabla ─────────────────────────────────────────
-function FilaPunto({ index, resultado, soloLectura, onCambiar, onFirmar, onSubirFoto, onEliminarFoto }) {
+function FilaPunto({ index, resultado, soloLectura, onCambiar, onFirmar, onSubirFoto, onEliminarFoto, puedeRevisar, onPedirRevision, onResolverRevision }) {
   const punto = resultado.punto
   const [obs, setObs] = useState(resultado.observacion || '')
   const fileInputRef = useRef(null)
@@ -1047,6 +1073,61 @@ function FilaPunto({ index, resultado, soloLectura, onCambiar, onFirmar, onSubir
             }}>Foto obligatoria</span>
           )}
         </div>
+
+        {/* Revisiones abiertas */}
+        {(resultado.revisiones || []).filter((rev) => rev.estado === 'abierta').map((rev) => (
+          <div key={rev.id} style={{
+            marginTop: 6,
+            background: T.aD,
+            border: `1px solid ${T.amber}40`,
+            borderLeft: `3px solid ${T.amber}`,
+            borderRadius: 8, padding: '6px 8px',
+          }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: T.amber, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+              🔍 En revisión
+            </div>
+            <div style={{ fontSize: 11, color: T.text, marginTop: 2, lineHeight: 1.4 }}>
+              {rev.comentario}
+            </div>
+            <div style={{ fontSize: 10, color: T.sub, marginTop: 2 }}>
+              — {rev.solicitante?.nombre}
+            </div>
+            {puedeRevisar && (
+              <button
+                type="button"
+                onClick={() => onResolverRevision(rev.id)}
+                style={{
+                  marginTop: 5,
+                  fontSize: 10, fontWeight: 600,
+                  color: T.green, background: T.gD,
+                  border: `1px solid ${T.green}40`,
+                  borderRadius: 5, padding: '2px 8px',
+                  cursor: 'pointer', fontFamily: T.font,
+                }}
+              >
+                Resolver
+              </button>
+            )}
+          </div>
+        ))}
+
+        {/* Enlace discreto para pedir revisión (solo si no hay revisiones abiertas y puede revisar) */}
+        {puedeRevisar && !(resultado.revisiones || []).some((rev) => rev.estado === 'abierta') && (
+          <button
+            type="button"
+            onClick={() => onPedirRevision(resultado.id)}
+            style={{
+              marginTop: 6,
+              fontSize: 10, color: T.sub,
+              background: 'none', border: 'none',
+              padding: 0, cursor: 'pointer',
+              textDecoration: 'underline', fontFamily: T.font,
+            }}
+          >
+            Pedir revisión
+          </button>
+        )}
+
         <label style={{
           display: 'flex', alignItems: 'center', gap: 6,
           marginTop: 8, fontSize: 12, color: T.sub, cursor: soloLectura ? 'not-allowed' : 'pointer',

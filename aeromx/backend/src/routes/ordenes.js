@@ -27,12 +27,16 @@ router.patch('/:id/asignacion',           requireRole(SOLO_GERENTE), workflow.as
 router.patch('/:id/archivar',             requireRole(SOLO_GERENTE), workflow.archivar)
 router.delete('/:id',                     requireRole(SOLO_GERENTE), workflow.eliminar)
 router.post('/:id/reabrir',               requireRole(SOLO_GERENTE), workflow.reabrir)
+router.post('/:id/rechazar',              requireRole(SOLO_GERENTE), workflow.rechazar)
+router.post('/:id/revision',              requireRole(SOLO_GERENTE), workflow.mandarARevision)
 
 // ── Resultados / fotos ──────────────────────────────────────────────────────
 router.patch('/:id/puntos/:resultadoId',         resultados.actualizar)
 router.post('/:id/puntos/:resultadoId/firmar',   resultados.firmar)
 router.post('/:id/puntos/:resultadoId/fotos',    upload.single('foto'), fotos.subir)
 router.delete('/:id/puntos/:resultadoId/fotos/:fotoId', fotos.eliminar)
+router.post('/:id/puntos/:resultadoId/revision',     workflow.pedirRevision)
+router.post('/:id/revisiones/:revisionId/resolver',  workflow.resolverRevision)
 
 // ── Cierre / PDF ────────────────────────────────────────────────────────────
 router.post('/:id/cierre',        cierre.gestionar)

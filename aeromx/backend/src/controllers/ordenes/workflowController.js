@@ -125,3 +125,59 @@ export async function reabrir(req, res, next) {
     next(e)
   }
 }
+
+export async function rechazar(req, res, next) {
+  try {
+    const { motivo } = req.body || {}
+    const orden = await svc.rechazarOrden(req.params.id, { motivo, usuarioId: req.user.sub })
+    res.json(orden)
+  } catch (e) {
+    if (e.code === 'BAD_INPUT') return res.status(400).json({ error: e.message })
+    if (e.code === 'BAD_STATE') return res.status(400).json({ error: e.message })
+    if (e.code === 'NOT_FOUND') return res.status(404).json({ error: e.message })
+    next(e)
+  }
+}
+
+export async function mandarARevision(req, res, next) {
+  try {
+    const { resultadoIds, comentario } = req.body || {}
+    const out = await svc.mandarARevision(req.params.id, {
+      resultadoIds, comentario, solicitanteId: req.user.sub,
+    })
+    res.json(out)
+  } catch (e) {
+    if (e.code === 'BAD_INPUT') return res.status(400).json({ error: e.message })
+    if (e.code === 'BAD_STATE') return res.status(400).json({ error: e.message })
+    if (e.code === 'NOT_FOUND') return res.status(404).json({ error: e.message })
+    next(e)
+  }
+}
+
+export async function pedirRevision(req, res, next) {
+  try {
+    const perm = await verificarPermisoEdicion(req.params.id, req.user)
+    if (!perm.ok) return res.status(perm.status).json({ error: perm.error })
+    const { comentario } = req.body || {}
+    const rev = await svc.crearRevisionPunto(req.params.id, req.params.resultadoId, {
+      comentario, solicitanteId: req.user.sub,
+    })
+    res.status(201).json(rev)
+  } catch (e) {
+    if (e.code === 'BAD_INPUT') return res.status(400).json({ error: e.message })
+    if (e.code === 'NOT_FOUND') return res.status(404).json({ error: e.message })
+    next(e)
+  }
+}
+
+export async function resolverRevision(req, res, next) {
+  try {
+    const perm = await verificarPermisoEdicion(req.params.id, req.user)
+    if (!perm.ok) return res.status(perm.status).json({ error: perm.error })
+    const rev = await svc.resolverRevision(req.params.id, req.params.revisionId, req.user.sub)
+    res.json(rev)
+  } catch (e) {
+    if (e.code === 'NOT_FOUND') return res.status(404).json({ error: e.message })
+    next(e)
+  }
+}
