@@ -1013,3 +1013,42 @@ cd ../frontend && npm run dev             # UI :5173 — login dev@aeromx.com / 
 #### Pendiente
 - **Sin commit** (el usuario commitea cuando decida). Recordar: `backend/prisma/migrations/` está en `.gitignore`, así que la migración nueva no se versiona con la convención actual del repo — decidir si versionarla.
 - QA visual en navegador de los 4 tipos (alta de O/T + cierre con la nueva matriz) queda pendiente del usuario.
+
+---
+
+### Siguiente paso — Sesiones 19–23 = mejoras de PDF + revisión/rechazo + asignación de tareas
+
+> Plan multisesión acordado el 2026-05-24. **7 mejoras de uso real agrupadas en 5 sesiones independientes.** Cada sesión es autocontenida: se implementa, verifica y commitea sola.
+>
+> **Antes de arrancar una sesión, leer en orden:**
+> 1. **Spec (qué/por qué):** [`docs/superpowers/specs/2026-05-24-pdf-fixes-revision-y-asignacion-design.md`](docs/superpowers/specs/2026-05-24-pdf-fixes-revision-y-asignacion-design.md)
+> 2. **Plan (paso a paso):** [`docs/superpowers/plans/2026-05-24-pdf-fixes-revision-y-asignacion.md`](docs/superpowers/plans/2026-05-24-pdf-fixes-revision-y-asignacion.md) — ir directo a la **Sesión N** correspondiente.
+> 3. Este `CLAUDE.md` (contexto del proyecto).
+>
+> Ejecutar con la skill `superpowers:executing-plans` (o `subagent-driven-development`).
+
+| Sesión del plan | Puntos | Tema | Riesgo |
+|---|---|---|---|
+| **Sesión 1** | 1, 2 | PDF: centrado en círculos/pills + autoajuste de texto largo (`pdf/ui.js`) | Bajo |
+| **Sesión 2** | 3, 4 | PDF: continuidad fila+evidencia entre páginas + elimina páginas en blanco | Medio (depurar con PDFs reales) |
+| **Sesión 3** | 5 | Frontend: descarga de PDF con/sin fotos en órdenes cerradas (Dashboard + Inspección) | Bajo |
+| **Sesión 4** | 6 | Schema+back+front: rechazo (gerente) + revisión de puntos que **bloquea el cierre** + tabla `RevisionPunto` | Alto (migración) |
+| **Sesión 5** | 7 | Schema+back+front: asignación por punto + firma de tarea como **gate de cierre** | Alto (migración) |
+
+**Decisiones clave (del brainstorming):** "Rechazar" devuelve toda la orden a `en_proceso` e invalida firmas; "Mandar a revisión" marca puntos sin tumbar la orden; un involucrado puede pedir revisión de un punto y eso bloquea el cierre; asignación de tareas **por punto**; cualquiera completa pero el asignado firma su tarea (requisito de cierre). Modelo de revisión = tabla `RevisionPunto` con historial.
+
+⚠️ **Migraciones (Sesiones 4 y 5):** respaldar con `pg_dump`, escribir SQL a mano (aditivo), aplicar con `migrate deploy`, **nunca** `migrate reset`/`db:seed` (la BD de dev tiene formatos reales). Detener el backend antes de `prisma generate`.
+
+---
+
+### Cambios en Sesión 19 — Plan PDF-fixes Sesión 3: descarga de PDF con/sin fotos en órdenes cerradas
+**Fecha:** 2026-05-25 | **Rama:** `development` | **Estado:** completa y verificada (build verde) · commiteada
+
+> Ejecutada con `subagent-driven-development` (un implementador + revisión de spec + revisión de calidad). Corresponde a la **Sesión 3** del plan [`docs/superpowers/plans/2026-05-24-pdf-fixes-revision-y-asignacion.md`](docs/superpowers/plans/2026-05-24-pdf-fixes-revision-y-asignacion.md) (punto 5). Solo frontend; backend y `ordenesService.js` intactos (el API service ya soportaba `descargarPDF(id, conFotos)` con `?fotos=false`).
+
+- **`DashboardPage.jsx`**: handler `descargarPDF(e, id, numeroOt, conFotos = true)` — nombre de archivo `OT-<n>.pdf` / `OT-<n>-sin-fotos.pdf`. `OrdenCard` recibe nueva prop `onPDFSinFotos` y, solo en órdenes `cerrada`, muestra dos `BtnSm`: "PDF" (`variant="surface"`) y "PDF sin fotos" (`variant="ghost"`).
+- **`InspeccionPage.jsx`**: handler `descargarPDF(conFotos = true)` (cierra sobre `orden`); dos `Btn` en la barra de acciones de cabecera solo si `orden.estado === 'cerrada'`: "📥 Descargar PDF" (`variant="primary"`) y "Descargar sin fotos" (`variant="ghost"`).
+- **Verificación:** `npm run build` verde (120 módulos). Revisión spec = SPEC COMPLIANT; revisión calidad = APROBADO (nota menor no bloqueante: el handler `descargarPDF` queda duplicado entre las dos páginas — preexistente; extraer helper compartido si aparece una 3ª copia).
+
+#### Siguiente paso
+- **Sesión 4 del plan** (rechazo + revisión de puntos): incluye migración Prisma. Leer las "Notas de proceso" del plan **antes** de tocar el schema (respaldo `pg_dump`, SQL a mano, `migrate deploy`, nunca `migrate reset`/`db:seed`; detener backend antes de `prisma generate`).

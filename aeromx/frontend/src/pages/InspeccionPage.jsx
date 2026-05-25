@@ -149,6 +149,24 @@ export default function InspeccionPage() {
     }
   }
 
+  const descargarPDF = async (conFotos = true) => {
+    try {
+      const response = await ordenesService.descargarPDF(orden.id, conFotos)
+      const blob = new Blob([response.data], { type: 'application/pdf' })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `OT-${orden.numeroOt}${conFotos ? '' : '-sin-fotos'}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error(err)
+      alert('Error descargando el PDF')
+    }
+  }
+
   const toggleSection = (key) =>
     setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }))
 
@@ -532,6 +550,12 @@ export default function InspeccionPage() {
           justifyContent: 'center', flexWrap: 'wrap',
         }}>
           <Btn variant="ghost" label="Volver" onClick={() => navigate('/dashboard')} />
+          {orden.estado === 'cerrada' && (
+            <>
+              <Btn variant="primary" label="📥 Descargar PDF" onClick={() => descargarPDF(true)} />
+              <Btn variant="ghost" label="Descargar sin fotos" onClick={() => descargarPDF(false)} />
+            </>
+          )}
           {orden.estado === 'pendiente_firma' && (
             <Btn
               variant="primary"

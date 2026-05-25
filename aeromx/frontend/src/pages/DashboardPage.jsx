@@ -145,15 +145,15 @@ export default function DashboardPage() {
     cerradas:        ordenesVisibles.filter(o => o.estado === 'cerrada').length,
   }), [ordenesVisibles])
 
-  const descargarPDF = async (e, id, numeroOt) => {
+  const descargarPDF = async (e, id, numeroOt, conFotos = true) => {
     e.stopPropagation()
     try {
-      const response = await ordenesService.descargarPDF(id)
+      const response = await ordenesService.descargarPDF(id, conFotos)
       const blob = new Blob([response.data], { type: 'application/pdf' })
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `OT-${numeroOt}.pdf`
+      link.download = `OT-${numeroOt}${conFotos ? '' : '-sin-fotos'}.pdf`
       document.body.appendChild(link)
       link.click()
       link.remove()
@@ -334,7 +334,8 @@ export default function DashboardPage() {
                 onArchivar={(e) => archivarOrden(e, orden)}
                 onEliminar={(e) => eliminarOrden(e, orden)}
                 onReabrir={(e) => abrirReapertura(e, orden)}
-                onPDF={(e) => descargarPDF(e, orden.id, orden.numeroOt)}
+                onPDF={(e) => descargarPDF(e, orden.id, orden.numeroOt, true)}
+                onPDFSinFotos={(e) => descargarPDF(e, orden.id, orden.numeroOt, false)}
               />
             ))}
           </div>
@@ -412,7 +413,7 @@ function StatChip({ label, value, c, bg }) {
 }
 
 // ── Card de O/T ────────────────────────────────────────────────
-function OrdenCard({ orden, esGerente, onClick, onArchivar, onEliminar, onReabrir, onPDF }) {
+function OrdenCard({ orden, esGerente, onClick, onArchivar, onEliminar, onReabrir, onPDF, onPDFSinFotos }) {
   const st = STATUS[orden.estado] || { label: orden.estado, c: T.sub, bg: T.s2 }
   const totalPuntos = orden._count?.resultados || 0
   const completos = orden.resultados?.filter((r) => r.completado).length || 0
@@ -515,18 +516,25 @@ function OrdenCard({ orden, esGerente, onClick, onArchivar, onEliminar, onReabri
         marginTop: 12, display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end',
       }}>
         {esCerrada && (
-          <BtnSm
-            variant="surface"
-            onClick={onPDF}
-            label={
-              <>
-                <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                  <path d="M3 12v2h10v-2M8 3v8M5 8l3 3 3-3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                <span>PDF</span>
-              </>
-            }
-          />
+          <>
+            <BtnSm
+              variant="surface"
+              onClick={onPDF}
+              label={
+                <>
+                  <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
+                    <path d="M3 12v2h10v-2M8 3v8M5 8l3 3 3-3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  <span>PDF</span>
+                </>
+              }
+            />
+            <BtnSm
+              variant="ghost"
+              onClick={onPDFSinFotos}
+              label="PDF sin fotos"
+            />
+          </>
         )}
         {esGerente && (
           <>
