@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { Header } from '../components/Header'
 import { fallasService } from '../api/fallasService'
 import { categoriasFallaService } from '../api/categoriasFallaService'
-import { useAuthStore } from '../store/authStore'
 import {
   T, SEVERIDAD, SEVERIDADES, ESTADO_FALLA, ORIGENES_FALLA, TIPO_PRODUCTO,
 } from '../tokens/design'
@@ -20,9 +19,6 @@ const ESTADO_FALLA_LABELS = {
 
 export default function FallasPage() {
   const navigate = useNavigate()
-  const user = useAuthStore((s) => s.user)
-  const esGerente = user?.superusuario === true || user?.rol === 'gerente_soporte'
-  const puedeCrear = esGerente || user?.rol === 'ingeniero_soporte'
 
   const [fallas, setFallas] = useState([])
   const [categorias, setCategorias] = useState([])
@@ -135,12 +131,10 @@ export default function FallasPage() {
               Fallas detectadas, en proceso y resueltas de todos los productos
             </p>
           </div>
-          {puedeCrear && (
-            <Btn
-              label="+ Nueva falla"
-              onClick={() => navigate('/fallas/nueva')}
-            />
-          )}
+          <Btn
+            label="+ Nueva falla"
+            onClick={() => navigate('/fallas/nueva')}
+          />
         </div>
 
         {/* Tarjetas de resumen */}
@@ -299,9 +293,7 @@ export default function FallasPage() {
               {hayFiltrosActivos && (
                 <Btn label="Limpiar filtros" variant="ghost" onClick={limpiarFiltros} />
               )}
-              {puedeCrear && (
-                <Btn label="+ Nueva falla" onClick={() => navigate('/fallas/nueva')} />
-              )}
+              <Btn label="+ Nueva falla" onClick={() => navigate('/fallas/nueva')} />
             </div>
           </Card>
         ) : (
