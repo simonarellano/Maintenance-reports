@@ -2,11 +2,17 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Header } from '../components/Header'
 import { formatosService } from '../api/formatosService'
+import { categoriasFallaService } from '../api/categoriasFallaService'
 import { useAuthStore } from '../store/authStore'
 import { T, TIPO_PRODUCTO, TIPOS_PRODUCTO } from '../tokens/design'
 import {
   Btn, BtnSm, Card, ErrorBanner, Field, FieldTextarea, Hdr, Modal, Pill, Spinner,
 } from '../components/ui'
+
+const TIPOS_FORMATO = [
+  { value: 'mantenimiento', label: 'Mantenimiento' },
+  { value: 'falla',         label: 'Falla' },
+]
 
 export default function FormatosPage() {
   const navigate = useNavigate()
@@ -34,12 +40,20 @@ export default function FormatosPage() {
   const meta = TIPO_PRODUCTO[tipo]
   const cambiarTipo = (t) => setSearchParams(t === 'aeronave' ? {} : { tipo: t })
 
+  const [tipoFormato, setTipoFormato] = useState('mantenimiento')
+  const cambiarTipoFormato = (tf) => {
+    setTipoFormato(tf)
+    setModoAlta(false)
+    setEditando(null)
+    setExpandido(null)
+  }
+
   useEffect(() => {
     setModoAlta(false)
     setEditando(null)
     setExpandido(null)
     cargar()
-  }, [tipo])
+  }, [tipo, tipoFormato])
 
   // El spinner solo se muestra en la primera carga. Los refetches posteriores
   // (tras crear/editar/borrar/reordenar) reemplazan la lista en silencio para
@@ -47,7 +61,7 @@ export default function FormatosPage() {
   const cargar = async ({ silencioso = false } = {}) => {
     if (!silencioso) setLoading(true)
     try {
-      const { data } = await formatosService.listar({ tipoProducto: tipo })
+      const { data } = await formatosService.listar({ tipoProducto: tipo, tipoFormato })
       setFormatos(data || [])
       setError('')
     } catch (e) {
@@ -63,7 +77,7 @@ export default function FormatosPage() {
       if (editando) {
         await formatosService.actualizar(editando.id, datos)
       } else {
-        await formatosService.crear({ tipoProducto: tipo, ...datos })
+        await formatosService.crear({ tipoProducto: tipo, tipoFormato, ...datos })
       }
       setModoAlta(false)
       setEditando(null)
@@ -180,7 +194,7 @@ export default function FormatosPage() {
           display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
           gap: 16, flexWrap: 'wrap',
         }}>
-          <Hdr title="Formatos de Mantenimiento" sub="Plantillas de inspección" back={() => navigate('/dashboard')} />
+          <Hdr title="Formatos" sub="Plantillas de inspección y falla" back={() => navigate('/dashboard')} />
           {esSupervisor && (
             <div style={{ paddingTop: 6 }}>
               <Btn
@@ -191,11 +205,11 @@ export default function FormatosPage() {
           )}
         </div>
         <p style={{ color: T.sub, fontSize: 13, marginTop: -8, marginBottom: 16 }}>
-          Gestión de plantillas de órdenes de trabajo
+          Gestión de plantillas de órdenes de trabajo y reportes de falla
         </p>
 
-        {/* Pestañas de tipo */}
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 20 }}>
+        {/* Pestañas de tipo de producto */}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
           {TIPOS_PRODUCTO.map((t) => {
             const m = TIPO_PRODUCTO[t]
             const active = tipo === t
@@ -218,11 +232,40 @@ export default function FormatosPage() {
           })}
         </div>
 
+        {/* Toggle tipo de formato: Mantenimiento / Falla */}
+        <div style={{
+          display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 20,
+          background: T.s2, border: `1px solid ${T.border}`,
+          borderRadius: 999, padding: 4, width: 'fit-content',
+        }}>
+          {TIPOS_FORMATO.map(({ value, label }) => {
+            const active = tipoFormato === value
+            return (
+              <button
+                key={value}
+                onClick={() => cambiarTipoFormato(value)}
+                style={{
+                  padding: '5px 16px', borderRadius: 999,
+                  background: active ? (value === 'falla' ? T.rD : T.cD) : 'transparent',
+                  color: active ? (value === 'falla' ? T.red : T.cyan) : T.sub,
+                  border: 'none',
+                  fontSize: 12, fontWeight: 600, cursor: 'pointer',
+                  fontFamily: T.font,
+                  transition: 'background .12s, color .12s',
+                }}
+              >
+                {value === 'falla' ? '⚠️ ' : '🔧 '}{label}
+              </button>
+            )
+          })}
+        </div>
+
         <ErrorBanner onClose={() => setError('')}>{error}</ErrorBanner>
 
         {(modoAlta || editando) && esSupervisor && (
           <FormularioFormato
             inicial={editando}
+            tipoFormato={tipoFormato}
             onCancelar={() => { setModoAlta(false); setEditando(null) }}
             onGuardar={guardar}
           />
@@ -248,6 +291,7 @@ export default function FormatosPage() {
                   isOpen={isOpen}
                   totalPuntos={totalPuntos}
                   esSupervisor={esSupervisor}
+                  tipoFormato={tipoFormato}
                   onToggle={() => toggleExpandido(f.id)}
                   onEditar={() => { setEditando(f); setModoAlta(false) }}
                   onEliminar={() => eliminar(f)}
@@ -303,7 +347,7 @@ export default function FormatosPage() {
 
 // ── FormatoCard ─────────────────────────────────────────────────────────────
 function FormatoCard({
-  formato: f, isOpen, totalPuntos, esSupervisor,
+  formato: f, isOpen, totalPuntos, esSupervisor, tipoFormato,
   onToggle, onEditar, onEliminar,
   onCrearSeccion, onEditarSeccion, onBorrarSeccion,
   onCrearPunto, onEditarPunto, onBorrarPunto,
@@ -338,6 +382,14 @@ function FormatoCard({
               {f.nombre}
             </span>
             <Pill small label={`v${f.version}`} color={T.cyan} bg={T.cD} />
+            {tipoFormato === 'falla' && f.categoriaFalla && (
+              <Pill
+                small
+                label={f.categoriaFalla.nombre}
+                color={f.categoriaFalla.color || T.red}
+                bg={`${f.categoriaFalla.color || T.red}22`}
+              />
+            )}
           </div>
           <div style={{
             fontSize: 11, color: T.sub, marginTop: 6, fontFamily: T.mono,
@@ -811,42 +863,79 @@ function SeccionBloque({
 }
 
 // ── FormularioFormato ───────────────────────────────────────────────────────
-// Solo metadatos básicos: nombre y versión. El contenido textual del documento
-// (alcance, descripciones, instrucciones, etc.) se gestiona como bloques de
-// texto markdown desde la vista expandida del formato.
-function FormularioFormato({ inicial, onCancelar, onGuardar }) {
+// Solo metadatos básicos: nombre y versión. Para formatos de falla también
+// requiere categoriaFallaId. El contenido textual del documento se gestiona
+// como bloques de texto markdown desde la vista expandida del formato.
+function FormularioFormato({ inicial, tipoFormato, onCancelar, onGuardar }) {
   const [datos, setDatos] = useState(
     inicial || {
       nombre: '',
       version: '1.0',
+      categoriaFallaId: '',
     }
   )
   const [guardando, setGuardando] = useState(false)
+  const [categorias, setCategorias] = useState([])
+  const [cargandoCategorias, setCargandoCategorias] = useState(false)
+
+  // Cargar categorías de falla cuando tipoFormato es 'falla' y se está creando
+  useEffect(() => {
+    if (tipoFormato !== 'falla' || inicial) return
+    setCargandoCategorias(true)
+    categoriasFallaService.listar({ activo: true })
+      .then(({ data }) => setCategorias(data || []))
+      .catch(() => setCategorias([]))
+      .finally(() => setCargandoCategorias(false))
+  }, [tipoFormato, inicial])
 
   const setCampo = (k) => (v) => setDatos((prev) => ({ ...prev, [k]: v }))
 
   const manejarEnvio = async (e) => {
     e.preventDefault()
     if (!datos.nombre?.trim()) return alert('El nombre es requerido')
+    if (tipoFormato === 'falla' && !inicial && !datos.categoriaFallaId) {
+      return alert('La categoría de falla es requerida para formatos de tipo Falla')
+    }
 
     setGuardando(true)
     try {
       // Solo enviamos los campos del formulario; campos legacy quedan tal cual
       // estén en BD (no se tocan al editar).
-      await onGuardar({
+      const payload = {
         nombre:  datos.nombre,
         version: datos.version,
-      })
+      }
+      // Incluir categoriaFallaId solo en creación de formatos de falla
+      if (tipoFormato === 'falla' && !inicial && datos.categoriaFallaId) {
+        payload.categoriaFallaId = datos.categoriaFallaId
+      }
+      await onGuardar(payload)
     } finally {
       setGuardando(false)
     }
   }
 
+  const esFalla = tipoFormato === 'falla'
+
   return (
-    <Card padding={20} style={{ marginBottom: 18, borderLeft: `3px solid ${T.cyan}` }}>
+    <Card
+      padding={20}
+      style={{
+        marginBottom: 18,
+        borderLeft: `3px solid ${esFalla ? T.red : T.cyan}`,
+      }}
+    >
       <form onSubmit={manejarEnvio} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: T.text }}>
-          {inicial ? 'Editar formato' : 'Nuevo formato'}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 16, fontWeight: 700, color: T.text }}>
+            {inicial ? 'Editar formato' : 'Nuevo formato'}
+          </span>
+          <Pill
+            small
+            label={esFalla ? '⚠️ Falla' : '🔧 Mantenimiento'}
+            color={esFalla ? T.red : T.cyan}
+            bg={esFalla ? T.rD : T.cD}
+          />
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
@@ -855,7 +944,7 @@ function FormularioFormato({ inicial, onCancelar, onGuardar }) {
             required
             value={datos.nombre}
             onChange={setCampo('nombre')}
-            placeholder="Ej. Mantenimiento Mayor"
+            placeholder={esFalla ? 'Ej. Falla Eléctrica' : 'Ej. Mantenimiento Mayor'}
           />
           <Field
             label="Versión"
@@ -866,23 +955,67 @@ function FormularioFormato({ inicial, onCancelar, onGuardar }) {
           />
         </div>
 
+        {/* Selector de categoría de falla — solo en creación de formato de falla */}
+        {esFalla && !inicial && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: T.sub }}>
+              Categoría de falla <span style={{ color: T.red }}>*</span>
+            </label>
+            {cargandoCategorias ? (
+              <p style={{ fontSize: 12, color: T.dim }}>Cargando categorías…</p>
+            ) : categorias.length === 0 ? (
+              <p style={{ fontSize: 12, color: T.red }}>
+                No hay categorías activas. Crea al menos una en el catálogo de categorías de falla antes de agregar un formato de falla.
+              </p>
+            ) : (
+              <select
+                required
+                value={datos.categoriaFallaId}
+                onChange={(e) => setCampo('categoriaFallaId')(e.target.value)}
+                style={{
+                  padding: '9px 12px', borderRadius: 10,
+                  background: T.s2, color: T.text,
+                  border: `1px solid ${datos.categoriaFallaId ? T.border : T.red}`,
+                  fontSize: 13, fontFamily: T.font, cursor: 'pointer',
+                  appearance: 'none', WebkitAppearance: 'none',
+                }}
+              >
+                <option value="">— Selecciona una categoría —</option>
+                {categorias.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nombre}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
           <Btn variant="ghost" label="Cancelar" onClick={onCancelar} style={{ flex: 1 }} />
           <Btn
             type="submit"
             label={guardando ? 'Guardando…' : 'Guardar'}
-            disabled={guardando}
+            disabled={guardando || (esFalla && !inicial && !datos.categoriaFallaId)}
             style={{ flex: 1 }}
           />
         </div>
 
         <div style={{
           marginTop: 4,
-          background: T.cD, border: `1px solid ${T.cyan}30`,
+          background: esFalla ? T.rD : T.cD,
+          border: `1px solid ${esFalla ? T.red : T.cyan}30`,
           borderRadius: 10, padding: '10px 12px',
-          fontSize: 12, color: T.cyan, lineHeight: 1.5,
+          fontSize: 12, color: esFalla ? T.red : T.cyan, lineHeight: 1.5,
         }}>
-          💡 <strong>Próximo paso:</strong> después de guardar, expande el formato (▶) y agrega <strong>bloques de texto</strong> (alcance, objetivos, descripciones — soportan Markdown) y <strong>secciones de inspección</strong>.
+          {esFalla
+            ? '⚠️ Los formatos de falla se usan para reportar y gestionar fallas de productos. Requieren una categoría.'
+            : '💡 '}
+          {!esFalla && (
+            <>
+              <strong>Próximo paso:</strong> después de guardar, expande el formato (▶) y agrega <strong>bloques de texto</strong> (alcance, objetivos, descripciones — soportan Markdown) y <strong>secciones de inspección</strong>.
+            </>
+          )}
         </div>
       </form>
     </Card>
