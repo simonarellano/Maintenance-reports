@@ -80,3 +80,29 @@ export const TIPO_PRODUCTO = {
 }
 
 export const TIPOS_PRODUCTO = Object.keys(TIPO_PRODUCTO)
+
+// Severidad de falla
+export const SEVERIDAD = {
+  baja:    { label: 'Baja',    color: '#22c55e' },
+  media:   { label: 'Media',   color: '#eab308' },
+  alta:    { label: 'Alta',    color: '#f97316' },
+  critica: { label: 'Crítica', color: '#ef4444' },
+}
+
+// Estado de reporte de falla
+export const ESTADO_FALLA = {
+  detectada:  { label: 'Detectada',  color: '#3b82f6' },
+  en_proceso: { label: 'En proceso', color: '#eab308' },
+  resuelta:   { label: 'Resuelta',   color: '#22c55e' },
+}
+
+// Origen de falla
+export const ORIGEN_FALLA = {
+  mantenimiento: { label: 'Mantenimiento' },
+  prevuelo:      { label: 'Prevuelo' },
+  operacion:     { label: 'Operación' },
+}
+
+// Listas para selectores
+export const SEVERIDADES = Object.entries(SEVERIDAD).map(([value, v]) => ({ value, ...v }))
+export const ORIGENES_FALLA = Object.entries(ORIGEN_FALLA).map(([value, v]) => ({ value, ...v }))
