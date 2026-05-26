@@ -296,9 +296,11 @@ export default function CrearFallaPage() {
               />
               <FieldTextarea
                 label="Descripción detallada"
+                required
                 placeholder="Describe la falla: síntomas observados, condiciones en que se detectó, impacto operativo…"
                 rows={4}
-                register={register('descripcion')}
+                register={register('descripcion', { required: 'Ingresa una descripción' })}
+                error={errors.descripcion?.message}
               />
             </div>
           </Card>
