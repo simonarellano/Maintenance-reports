@@ -1116,3 +1116,31 @@ cd ../frontend && npm run dev             # UI :5173 — login dev@aeromx.com / 
 
 #### Siguiente paso
 - El plan pdf-fixes está cerrado. Queda el **Frente 1 (pre-despliegue/hardening)** descrito tras la Sesión 17: auth en `GET /uploads/:key`, secretos de producción, HTTPS/CORS, backups, limpieza de datos de prueba, y (opcional) confirmar el toggle "¿Se encontró defecto?". Y el **Frente 2 (roadmap Fase 2+)**: dashboard de flota, alertas, inventario, offline.
+
+---
+
+### Feature en diseño (no implementada) — Registro de Fallas
+**Fecha de diseño:** 2026-05-25 | **Rama:** `development` | **Estado:** spec + plan de Fase 1 escritos, **nada de código aún**
+
+> Brainstorming completado. Sistema para reportar, clasificar, resolver y analizar **fallas** de los productos. Construido **encima** de la arquitectura multiproducto estable. NO toca el flujo de O/T (solo le agrega disparar fallas + auto-llenar `refDocCorrectivo`).
+
+**Decisiones cerradas:**
+- Entidad ligera `ReporteFalla` (NO reusa el flujo de O/T) que usa un **formato-de-falla** como plantilla y se renderiza con el **mismo PDF estético HYDRA**.
+- `Formato` gana `tipoFormato (mantenimiento|falla)` + `categoriaFallaId`. Catálogo `CategoriaFalla` configurable.
+- Clasificación: categoría + severidad + componente. Estados `detectada → en_proceso → resuelta`. Personas: reportado por + responsable (gerente asigna) + resuelto por (firma).
+- **3 fases:** (1) Fundación CRUD manual · (2) disparo automático desde puntos defectuosos de mantenimiento + auto-llenado de `refDocCorrectivo` · (3) dashboard analítico (recharts) + export Excel (exceljs) + PDF resumen con gráficas.
+
+**Para retomar:** leer la spec [`docs/superpowers/specs/2026-05-25-registro-de-fallas-design.md`](docs/superpowers/specs/2026-05-25-registro-de-fallas-design.md) y el plan de Fase 1 [`docs/superpowers/plans/2026-05-25-registro-de-fallas-fase1.md`](docs/superpowers/plans/2026-05-25-registro-de-fallas-fase1.md) (15 tareas). Ejecutar con `subagent-driven-development` o `executing-plans`. ⚠️ Migración a mano + `pg_dump` + `migrate deploy`, **nunca** `reset`/`db:seed`. Las Fases 2 y 3 tendrán su propio plan al iniciarlas.
+
+**Plan de sesiones recomendado (5–6, una por fila — modo subagente para arrancar fresco cada vez):**
+
+| Sesión | Alcance | Entregable / corte |
+|---|---|---|
+| 1 | Fase 1 — **backend** (plan Tareas 1–7) | migración + categorías + formato + `fallasService` + controllers/rutas + fotos + PDF. Corte: API probada con curl, `%PDF-` OK |
+| 2 | Fase 1 — **frontend** (plan Tareas 8–15) | tokens + services + páginas + Header. Corte: `npm run build` verde + flujo manual e2e |
+| 3 | Fase 2 — disparo automático | escribir su plan + implementar (botón en `InspeccionPage`, copia de fotos del punto, auto-llenado `refDocCorrectivo`) |
+| 4 | Fase 3 — **backend** analítica | escribir su plan + endpoints `/estadisticas` + export `.xlsx` (exceljs) + PDF resumen con gráficas |
+| 5 | Fase 3 — **frontend** dashboard | dashboard con recharts + histórico por producto/modelo en Flota. Corte: build verde + revisión visual |
+| 6 (opcional) | QA visual final | revisar los 4 tipos en navegador (estilo Sesión 14) |
+
+> Regla de corte: terminar sesión tras un **commit** de bloque coherente, idealmente en una frontera de capa (back→front) o de fase. Cada tarea del plan ya cierra con commit, así que cualquiera es punto seguro para reanudar.
