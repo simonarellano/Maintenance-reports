@@ -56,7 +56,6 @@ export function Header() {
     { to: '/productos',  label: 'Productos',  show: puedeCatalogos },
     { to: '/modelos',    label: 'Modelos',    show: puedeCatalogos },
     { to: '/formatos',   label: 'Formatos',   show: puedeCatalogos },
-    { to: '/categorias-falla', label: 'Categorías de falla', show: puedeCatalogos },
     { to: '/usuarios',   label: 'Usuarios',   show: puedeUsuarios },
   ].filter((l) => l.show)
 

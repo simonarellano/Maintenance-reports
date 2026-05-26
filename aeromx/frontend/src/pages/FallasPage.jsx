@@ -7,6 +7,7 @@ import {
   T, SEVERIDAD, SEVERIDADES, ESTADO_FALLA, ORIGENES_FALLA, TIPO_PRODUCTO,
 } from '../tokens/design'
 import { Btn, Card, ErrorBanner, Pill, Spinner } from '../components/ui'
+import { useAuthStore } from '../store/authStore'
 
 const ESTADO_FALLA_FILTROS = ['todas', ...Object.keys(ESTADO_FALLA)]
 
@@ -19,6 +20,9 @@ const ESTADO_FALLA_LABELS = {
 
 export default function FallasPage() {
   const navigate = useNavigate()
+  const user = useAuthStore((s) => s.user)
+  const puedeCategorias = user?.superusuario === true ||
+    user?.rol === 'gerente_soporte' || user?.rol === 'ingeniero_soporte'
 
   const [fallas, setFallas] = useState([])
   const [categorias, setCategorias] = useState([])
@@ -131,10 +135,19 @@ export default function FallasPage() {
               Fallas detectadas, en proceso y resueltas de todos los productos
             </p>
           </div>
-          <Btn
-            label="+ Nueva falla"
-            onClick={() => navigate('/fallas/nueva')}
-          />
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {puedeCategorias && (
+              <Btn
+                variant="ghost"
+                label="⚙ Categorías"
+                onClick={() => navigate('/categorias-falla')}
+              />
+            )}
+            <Btn
+              label="+ Nueva falla"
+              onClick={() => navigate('/fallas/nueva')}
+            />
+          </div>
         </div>
 
         {/* Tarjetas de resumen */}

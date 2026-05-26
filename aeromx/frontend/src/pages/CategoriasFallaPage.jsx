@@ -75,7 +75,7 @@ export default function CategoriasFallaPage() {
           <Hdr
             title="Categorías de falla"
             sub="Catálogo de fallas"
-            back={() => navigate('/dashboard')}
+            back={() => navigate('/fallas')}
           />
           {puedeEditar && (
             <div style={{ paddingTop: 6 }}>
