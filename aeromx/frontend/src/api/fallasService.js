@@ -27,5 +27,6 @@ export const fallasService = {
   eliminarFoto: (id, fotoId) =>
     client.delete(`/fallas/${id}/fotos/${fotoId}`),
 
-  urlPDF: (id) => `/api/fallas/${id}/pdf`,
+  descargarPDF: (id) =>
+    client.get(`/fallas/${id}/pdf`, { responseType: 'blob' }),
 }

@@ -5,7 +5,6 @@ import { fallasService } from '../api/fallasService'
 import { usuariosService } from '../api/usuariosService'
 import { ordenesService } from '../api/ordenesService'
 import { useAuthStore } from '../store/authStore'
-import client from '../api/client'
 import {
   T, ESTADO_FALLA, SEVERIDAD, TIPO_PRODUCTO, ROL_LABELS,
 } from '../tokens/design'
@@ -164,8 +163,7 @@ export default function FallaDetallePage() {
   // ── Descarga de PDF (con Bearer token — igual que DashboardPage) ──
   const descargarPDF = async () => {
     try {
-      const url = fallasService.urlPDF(id)        // '/api/fallas/:id/pdf'
-      const response = await client.get(url, { responseType: 'blob' })
+      const response = await fallasService.descargarPDF(id)
       const blob = new Blob([response.data], { type: 'application/pdf' })
       const objectUrl = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
