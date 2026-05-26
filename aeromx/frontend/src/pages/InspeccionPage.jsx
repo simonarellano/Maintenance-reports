@@ -45,6 +45,7 @@ export default function InspeccionPage() {
   const [revisionPara, setRevisionPara] = useState(null)
   const [comentarioRevision, setComentarioRevision] = useState('')
   const [revisionLoading, setRevisionLoading] = useState(false)
+  const [soloMisTareas, setSoloMisTareas] = useState(false)
 
   useEffect(() => { cargarOrden() }, [id])
 
@@ -127,6 +128,26 @@ export default function InspeccionPage() {
     } catch (e) {
       console.error(e)
       setError(e.response?.data?.error || 'Error firmando')
+    }
+  }
+
+  const asignarPunto = async (resultadoId, asignadoId) => {
+    try {
+      await ordenesService.asignarPunto(id, resultadoId, asignadoId || null)
+      await cargarOrden()
+    } catch (e) {
+      console.error(e)
+      setError(e.response?.data?.error || 'Error asignando responsable')
+    }
+  }
+
+  const firmarTarea = async (resultadoId) => {
+    try {
+      await ordenesService.firmarTarea(id, resultadoId)
+      await cargarOrden()
+    } catch (e) {
+      console.error(e)
+      setError(e.response?.data?.error || 'Error firmando la tarea')
     }
   }
 
@@ -268,6 +289,15 @@ export default function InspeccionPage() {
     orden.soporte, orden.ingenieroAuxiliar, orden.mecanico, orden.gerente, orden.operador,
   ].some((u) => u?.id === uid)
   const puedeEditar = asignado && orden.estado !== 'cerrada'
+
+  // Personal involucrado (para el selector de responsable de cada punto).
+  const involucrados = []
+  const vistos = new Set()
+  for (const u of [orden.soporte, orden.ingenieroAuxiliar, orden.mecanico, orden.gerente, orden.piloto, orden.operador]) {
+    if (u && !vistos.has(u.id)) { vistos.add(u.id); involucrados.push(u) }
+  }
+  const puedeAsignar = esGerente && orden.estado !== 'cerrada'
+  const misTareas = (orden.resultados || []).filter((r) => r.asignado?.id === uid).length
 
   const tieneRecepcion = Boolean(orden.fechaRecepcion)
   const tieneInicio = Boolean(orden.fechaInicio)
@@ -537,6 +567,18 @@ export default function InspeccionPage() {
             </span>
           </div>
           <ProgressBar value={progreso} color={progreso === 1 ? T.green : T.cyan} height={4} />
+          {misTareas > 0 && (
+            <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12, color: T.amber, fontWeight: 600 }}>
+                🛠 Tienes {misTareas} tarea{misTareas === 1 ? '' : 's'} asignada{misTareas === 1 ? '' : 's'}
+              </span>
+              <BtnSm
+                variant={soloMisTareas ? 'primary' : 'ghost'}
+                onClick={() => setSoloMisTareas((v) => !v)}
+                label={soloMisTareas ? 'Ver todos los puntos' : 'Ver solo mis tareas'}
+              />
+            </div>
+          )}
         </div>
 
         <ErrorBanner onClose={() => setError('')}>{error}</ErrorBanner>
@@ -544,6 +586,10 @@ export default function InspeccionPage() {
         {/* Secciones */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {secciones.map((sec, idx) => {
+            const visibles = soloMisTareas
+              ? sec.resultados.filter((r) => r.asignado?.id === uid)
+              : sec.resultados
+            if (visibles.length === 0) return null
             const isCollapsed = collapsed[sec.id] === true
             const secTotal = sec.resultados.length
             const secHechos = sec.resultados.filter((r) => r.completado).length
@@ -604,7 +650,7 @@ export default function InspeccionPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {sec.resultados.map((r, i) => (
+                        {visibles.map((r, i) => (
                           <FilaPunto
                             key={r.id}
                             index={i + 1}
@@ -617,6 +663,11 @@ export default function InspeccionPage() {
                             puedeRevisar={puedeEditar && !inspeccionBloqueada}
                             onPedirRevision={pedirRevision}
                             onResolverRevision={resolverRevision}
+                            puedeAsignar={puedeAsignar}
+                            involucrados={involucrados}
+                            currentUserId={uid}
+                            onAsignar={asignarPunto}
+                            onFirmarTarea={firmarTarea}
                           />
                         ))}
                       </tbody>
@@ -1058,8 +1109,80 @@ function ModalAsignacionContent({ orden, usuarios, onClose, onGuardar }) {
   )
 }
 
+// ── Bloque de responsable + firma de tarea por punto ─────────
+function TareaBloque({ resultado, puedeAsignar, involucrados, currentUserId, soloLectura, onAsignar, onFirmarTarea }) {
+  const asignado = resultado.asignado
+  const tareaFirmada = Boolean(resultado.firmaTareaPorId)
+  const soyAsignado = asignado?.id && asignado.id === currentUserId
+  const puedoFirmar = soyAsignado && resultado.completado && !tareaFirmada && !soloLectura
+
+  // Sin nada que mostrar: ni puede asignar, ni hay responsable.
+  if (!puedeAsignar && !asignado) return null
+
+  return (
+    <div style={{
+      marginTop: 8, paddingTop: 8, borderTop: `1px dashed ${T.border}`,
+    }}>
+      <div style={{
+        fontSize: 9, color: T.sub, fontWeight: 600,
+        letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4,
+      }}>
+        Responsable de la tarea
+      </div>
+
+      {puedeAsignar ? (
+        <select
+          value={asignado?.id || ''}
+          onChange={(e) => onAsignar(resultado.id, e.target.value || null)}
+          style={{
+            width: '100%', background: T.s2, border: `1px solid ${T.border}`,
+            borderRadius: 8, padding: '6px 8px', color: T.text,
+            fontSize: 12, fontFamily: T.font, outline: 'none', cursor: 'pointer',
+          }}
+        >
+          <option value="">— Sin responsable —</option>
+          {involucrados.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.nombre} · {ROL_LABELS[u.rol] || u.rol}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <div style={{ fontSize: 12, color: T.text, fontWeight: 600 }}>
+          {asignado.nombre}
+          <span style={{ color: T.sub, fontWeight: 400 }}> · {ROL_LABELS[asignado.rol] || asignado.rol}</span>
+        </div>
+      )}
+
+      {/* Estado de la firma de tarea */}
+      {asignado && (
+        tareaFirmada ? (
+          <div style={{ fontSize: 11, color: T.green, fontWeight: 600, marginTop: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <svg width="11" height="9" viewBox="0 0 12 10"><path d="M1 5l4 4 7-8" stroke={T.green} strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            Tarea firmada
+            {resultado.firmaTareaPor?.nombre && <span style={{ color: T.text, fontWeight: 400 }}>· {resultado.firmaTareaPor.nombre}</span>}
+          </div>
+        ) : puedoFirmar ? (
+          <BtnSm
+            variant="primary"
+            onClick={() => onFirmarTarea(resultado.id)}
+            label="✍ Firmar mi tarea"
+            style={{ marginTop: 6 }}
+          />
+        ) : (
+          <div style={{ fontSize: 11, color: T.sub, marginTop: 6, fontStyle: 'italic' }}>
+            {resultado.completado
+              ? `Pendiente de firma de ${asignado.nombre}`
+              : 'Completa el punto para habilitar la firma de tarea'}
+          </div>
+        )
+      )}
+    </div>
+  )
+}
+
 // ── Fila de la tabla ─────────────────────────────────────────
-function FilaPunto({ index, resultado, soloLectura, onCambiar, onFirmar, onSubirFoto, onEliminarFoto, puedeRevisar, onPedirRevision, onResolverRevision }) {
+function FilaPunto({ index, resultado, soloLectura, onCambiar, onFirmar, onSubirFoto, onEliminarFoto, puedeRevisar, onPedirRevision, onResolverRevision, puedeAsignar, involucrados, currentUserId, onAsignar, onFirmarTarea }) {
   const punto = resultado.punto
   const [obs, setObs] = useState(resultado.observacion || '')
   const fileInputRef = useRef(null)
@@ -1233,6 +1356,17 @@ function FilaPunto({ index, resultado, soloLectura, onCambiar, onFirmar, onSubir
           />
           Completado
         </label>
+
+        {/* Responsable / firma de tarea */}
+        <TareaBloque
+          resultado={resultado}
+          puedeAsignar={puedeAsignar}
+          involucrados={involucrados}
+          currentUserId={currentUserId}
+          soloLectura={soloLectura}
+          onAsignar={onAsignar}
+          onFirmarTarea={onFirmarTarea}
+        />
       </td>
 
       {/* Descripción */}

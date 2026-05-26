@@ -201,6 +201,9 @@ export default function CierreOTPage() {
   const identificador = orden?.producto?.identificador
   const modeloNombre = orden?.producto?.modelo?.nombre
 
+  // Tareas con responsable asignado que aún no han firmado — bloquean el cierre.
+  const tareasPendientes = (orden?.resultados || []).filter((r) => r.asignado && !r.firmaTareaPorId)
+
   return (
     <div style={{ minHeight: '100vh', background: T.bg }}>
       <Header />
@@ -270,6 +273,32 @@ export default function CierreOTPage() {
                 </div>
               </div>
             </Card>
+
+            {tareasPendientes.length > 0 && (
+              <Card
+                padding={16}
+                style={{
+                  background: T.aD,
+                  borderColor: `${T.amber}40`,
+                  borderLeft: `3px solid ${T.amber}`,
+                }}
+              >
+                <div style={{ fontSize: 14, fontWeight: 700, color: T.amber, marginBottom: 8 }}>
+                  Faltan {tareasPendientes.length} firma{tareasPendientes.length === 1 ? '' : 's'} de tarea asignada
+                </div>
+                <p style={{ fontSize: 12, color: T.sub, lineHeight: 1.55, marginBottom: 10 }}>
+                  El responsable de cada tarea asignada debe firmarla antes de cerrar la orden.
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {tareasPendientes.map((r) => (
+                    <div key={r.id} style={{ fontSize: 12, color: T.text, lineHeight: 1.45 }}>
+                      • <strong>{r.punto?.nombreComponente || 'Punto'}</strong>
+                      <span style={{ color: T.sub }}> — {r.asignado?.nombre}</span>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
 
             <Card padding={20}>
               <form onSubmit={handleSubmit(onSubmitCierre)} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>

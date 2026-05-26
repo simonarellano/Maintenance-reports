@@ -57,3 +57,36 @@ export async function firmar(req, res, next) {
     res.json(firmado)
   } catch (e) { next(e) }
 }
+
+export async function asignar(req, res, next) {
+  try {
+    const { id: ordenId, resultadoId } = req.params
+    const perm = await verificarPermisoEdicion(ordenId, req.user)
+    if (!perm.ok) return res.status(perm.status).json({ error: perm.error })
+    // Solo el gerente asignado o un superusuario asignan responsables.
+    if (req.user?.superusuario !== true && perm.orden.gerenteId !== req.user.sub) {
+      return res.status(403).json({ error: 'Solo el gerente asignado puede asignar responsables' })
+    }
+    const out = await svc.asignarPuntoAUsuario(ordenId, resultadoId, req.body?.asignadoId ?? null)
+    res.json(out)
+  } catch (e) {
+    if (e.code === 'BAD_INPUT') return res.status(400).json({ error: e.message })
+    if (e.code === 'NOT_FOUND') return res.status(404).json({ error: e.message })
+    next(e)
+  }
+}
+
+export async function firmarTarea(req, res, next) {
+  try {
+    const { id: ordenId, resultadoId } = req.params
+    const perm = await verificarPermisoEdicion(ordenId, req.user)
+    if (!perm.ok) return res.status(perm.status).json({ error: perm.error })
+    const out = await svc.firmarTarea(ordenId, resultadoId, req.user)
+    res.json(out)
+  } catch (e) {
+    if (e.code === 'BAD_STATE') return res.status(400).json({ error: e.message })
+    if (e.code === 'FORBIDDEN') return res.status(403).json({ error: e.message })
+    if (e.code === 'NOT_FOUND') return res.status(404).json({ error: e.message })
+    next(e)
+  }
+}

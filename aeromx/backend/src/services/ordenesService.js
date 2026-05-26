@@ -162,7 +162,7 @@ export async function listarOrdenes(filtros = {}) {
       gerente:           INCLUDE_USUARIO_BASICO,
       piloto:            INCLUDE_USUARIO_BASICO,
       operador:          INCLUDE_USUARIO_BASICO,
-      resultados: { select: { id: true, completado: true } },
+      resultados: { select: { id: true, completado: true, asignadoId: true, firmaTareaPorId: true } },
       _count: { select: { resultados: true } },
       // Último evento de estado — el frontend lo usa para detectar un rechazo reciente
       // (estado en_proceso + motivo "Rechazo: …") y mostrarlo en la tarjeta.
@@ -202,6 +202,8 @@ export function obtenerOrden(id) {
         include: {
           punto: { include: { seccion: true } },
           firmante: { select: { id: true, nombre: true } },
+          asignado:      { select: { id: true, nombre: true, rol: true } },
+          firmaTareaPor: { select: { id: true, nombre: true } },
           fotos: true,
           revisiones: {
             orderBy: { createdAt: 'desc' },
@@ -718,6 +720,15 @@ export async function firmarCierre(ordenId, usuarioId) {
     )
   }
 
+  // Todo punto con responsable asignado debe tener firma de tarea antes de cerrar.
+  const tareas = await verificarTareasFirmadas(ordenId)
+  if (!tareas.completo) {
+    throw Object.assign(
+      new Error(`Faltan ${tareas.faltan} de ${tareas.total} firmas de tareas asignadas`),
+      { code: 'BAD_STATE' },
+    )
+  }
+
   const usuario = await prisma.usuario.findUnique({
     where: { id: usuarioId },
     select: { id: true, rol: true, superusuario: true },
@@ -898,4 +909,58 @@ export async function verificarRevisionesResueltas(ordenId) {
     where: { estado: 'abierta', resultado: { ordenId } },
   })
   return { abiertas, completo: abiertas === 0 }
+}
+
+// ─── Asignación de tareas por punto ───────────────────────────────────────────
+
+// Asigna la responsabilidad de un punto a un usuario involucrado en la orden.
+export async function asignarPuntoAUsuario(ordenId, resultadoId, asignadoId) {
+  const orden = await prisma.ordenTrabajo.findUnique({
+    where: { id: ordenId },
+    select: { soporteId: true, ingenieroAuxiliarId: true, mecanicoId: true, gerenteId: true, pilotoId: true, operadorId: true },
+  })
+  if (!orden) throw Object.assign(new Error('Orden no encontrada'), { code: 'NOT_FOUND' })
+  if (asignadoId) {
+    const involucrados = [orden.soporteId, orden.ingenieroAuxiliarId, orden.mecanicoId, orden.gerenteId, orden.pilotoId, orden.operadorId]
+    if (!involucrados.includes(asignadoId)) {
+      throw Object.assign(new Error('El asignado debe ser un usuario involucrado en la orden'), { code: 'BAD_INPUT' })
+    }
+  }
+  const resultado = await prisma.resultadoPunto.findFirst({ where: { id: resultadoId, ordenId } })
+  if (!resultado) throw Object.assign(new Error('Resultado no encontrado'), { code: 'NOT_FOUND' })
+  return prisma.resultadoPunto.update({
+    where: { id: resultadoId },
+    data: { asignadoId: asignadoId || null },
+    include: { asignado: { select: { id: true, nombre: true, rol: true } } },
+  })
+}
+
+// Firma de tarea: solo el responsable asignado (o superusuario); el punto debe estar completado.
+export async function firmarTarea(ordenId, resultadoId, usuario) {
+  const resultado = await prisma.resultadoPunto.findFirst({ where: { id: resultadoId, ordenId } })
+  if (!resultado) throw Object.assign(new Error('Resultado no encontrado'), { code: 'NOT_FOUND' })
+  if (!resultado.asignadoId) {
+    throw Object.assign(new Error('Este punto no tiene un responsable asignado'), { code: 'BAD_STATE' })
+  }
+  const esSuper = usuario.superusuario === true
+  if (!esSuper && resultado.asignadoId !== usuario.sub) {
+    throw Object.assign(new Error('Solo el responsable asignado puede firmar esta tarea'), { code: 'FORBIDDEN' })
+  }
+  if (!resultado.completado) {
+    throw Object.assign(new Error('El punto debe estar completado antes de firmar la tarea'), { code: 'BAD_STATE' })
+  }
+  return prisma.resultadoPunto.update({
+    where: { id: resultadoId },
+    data: { firmaTareaPorId: usuario.sub, fechaFirmaTarea: new Date() },
+    include: { firmaTareaPor: { select: { id: true, nombre: true } } },
+  })
+}
+
+// Todo punto con responsable asignado debe tener firma de tarea antes de cerrar.
+export async function verificarTareasFirmadas(ordenId) {
+  const [total, firmadas] = await Promise.all([
+    prisma.resultadoPunto.count({ where: { ordenId, asignadoId: { not: null } } }),
+    prisma.resultadoPunto.count({ where: { ordenId, asignadoId: { not: null }, firmaTareaPorId: { not: null } } }),
+  ])
+  return { total, firmadas, faltan: total - firmadas, completo: total === firmadas }
 }

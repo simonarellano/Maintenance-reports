@@ -80,4 +80,12 @@ export const ordenesService = {
   // Marca una revisión como resuelta (cualquier involucrado).
   resolverRevision: (id, revisionId) =>
     client.post(`/ordenes/${id}/revisiones/${revisionId}/resolver`),
+
+  // Asigna (o desasigna con asignadoId=null) el responsable de un punto (solo gerente/super).
+  asignarPunto: (id, resultadoId, asignadoId) =>
+    client.patch(`/ordenes/${id}/puntos/${resultadoId}/asignacion`, { asignadoId }),
+
+  // Firma de tarea del punto — solo el responsable asignado; el backend valida el slot.
+  firmarTarea: (id, resultadoId) =>
+    client.post(`/ordenes/${id}/puntos/${resultadoId}/firmar-tarea`),
 }

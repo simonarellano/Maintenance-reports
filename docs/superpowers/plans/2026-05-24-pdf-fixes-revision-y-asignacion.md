@@ -794,7 +794,9 @@ git commit -m "feat: rechazo de orden (gerente) + revisión de puntos que bloque
 
 ---
 
-# SESIÓN 5 — Asignación de tareas por punto + firma de tarea (punto 7)
+# SESIÓN 5 — Asignación de tareas por punto + firma de tarea (punto 7) ✅ COMPLETADA
+
+> **✅ Completada el 2026-05-25** — verificada con API real (`:3001`) + `npm run build` (verde). Ejecutada con `executing-plans` (implementación directa; la parte de BD se manejó manualmente por ser sensible). Migración aditiva `20260525120000_asignacion_tarea_punto` (3 `ADD COLUMN` + 2 FK `SET NULL`) aplicada con `migrate deploy` tras `pg_dump` (`backups/aeromx_backup_20260525_163529.sql`). Cambios: schema (`ResultadoPunto` + relaciones en `Usuario`), `ordenesService` (`asignarPuntoAUsuario`/`firmarTarea`/`verificarTareasFirmadas` + gate en `firmarCierre` + includes en `obtenerOrden`/`listarOrdenes`), `resultadosController` (`asignar`/`firmarTarea`), `cierreController` (gate), rutas, y frontend (`ordenesService`, `InspeccionPage` con bloque "Responsable" + filtro "Mis tareas", `CierreOTPage` con lista de tareas pendientes, `DashboardPage` con badge "🛠 N tareas"). **Verificación:** cierre con tarea sin firmar → 400; firma por no-asignado → 403; por asignado completado → 200. Con esto el **plan pdf-fixes queda completo**.
 
 **Archivos:**
 - Modificar: `aeromx/backend/prisma/schema.prisma` (campos en `ResultadoPunto` + relaciones en `Usuario`)

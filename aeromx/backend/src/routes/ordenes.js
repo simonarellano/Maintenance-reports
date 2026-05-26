@@ -37,6 +37,8 @@ router.post('/:id/puntos/:resultadoId/fotos',    upload.single('foto'), fotos.su
 router.delete('/:id/puntos/:resultadoId/fotos/:fotoId', fotos.eliminar)
 router.post('/:id/puntos/:resultadoId/revision',     workflow.pedirRevision)
 router.post('/:id/revisiones/:revisionId/resolver',  workflow.resolverRevision)
+router.patch('/:id/puntos/:resultadoId/asignacion',  resultados.asignar)
+router.post('/:id/puntos/:resultadoId/firmar-tarea', resultados.firmarTarea)
 
 // ── Cierre / PDF ────────────────────────────────────────────────────────────
 router.post('/:id/cierre',        cierre.gestionar)

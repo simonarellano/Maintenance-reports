@@ -30,6 +30,13 @@ export async function gestionar(req, res, next) {
       })
     }
 
+    const tareas = await svc.verificarTareasFirmadas(ordenId)
+    if (!tareas.completo) {
+      return res.status(400).json({
+        error: `No se puede cerrar: faltan ${tareas.faltan} de ${tareas.total} firmas de tareas asignadas`,
+      })
+    }
+
     if (seEncontroDefecto && !refDocCorrectivo?.trim()) {
       return res.status(400).json({ error: 'refDocCorrectivo es requerido cuando se encontró defecto' })
     }

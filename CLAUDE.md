@@ -1086,3 +1086,33 @@ cd ../frontend && npm run dev             # UI :5173 — login dev@aeromx.com / 
 
 #### Siguiente paso
 - **Sesión 5 del plan** (asignación de tareas por punto + firma de tarea como gate de cierre): incluye migración Prisma (campos `asignadoId`/`firmaTareaPorId`/`fechaFirmaTarea` en `resultados_puntos`). Mismas precauciones: respaldo `pg_dump`, SQL a mano, `migrate deploy`, nunca `migrate reset`/`db:seed`, detener backend antes de `prisma generate`.
+
+---
+
+### Cambios en Sesión 21 — Plan PDF-fixes Sesión 5: asignación de tareas por punto + firma de tarea (gate de cierre) · PLAN PDF-FIXES COMPLETO
+**Fecha:** 2026-05-25 | **Rama:** `development` | **Estado:** completa y verificada (API real + build verde) · commiteada
+
+> Ejecutada con `executing-plans` (implementación directa; la parte de BD se manejó a mano por ser sensible). Corresponde a la **Sesión 5** del plan [`docs/superpowers/plans/2026-05-24-pdf-fixes-revision-y-asignacion.md`](docs/superpowers/plans/2026-05-24-pdf-fixes-revision-y-asignacion.md) (punto 7). Con esto el **plan pdf-fixes queda 100% completo** (las 5 sesiones).
+
+#### Modelo de datos
+- `ResultadoPunto` gana `asignadoId`, `firmaTareaPorId`, `fechaFirmaTarea` + relaciones `asignado` (`TareaAsignada`) y `firmaTareaPor` (`TareaFirmada`). `Usuario` gana las inversas `tareasAsignadas`/`tareasFirmadas`.
+- Migración aditiva a mano `prisma/migrations/20260525120000_asignacion_tarea_punto/migration.sql` (3 `ADD COLUMN` + 2 FK `ON DELETE SET NULL`), aplicada con `migrate deploy` (sin reset/seed). Respaldo previo: `backups/aeromx_backup_20260525_163529.sql`. ⚠️ Recordatorio: `prisma/migrations/` está en `.gitignore` → la migración no se versiona con el commit.
+
+#### Backend
+- `ordenesService.js`: `asignarPuntoAUsuario` (valida que el asignado sea uno de los 6 involucrados de la orden), `firmarTarea` (solo el asignado o superusuario; el punto debe estar `completado`), `verificarTareasFirmadas` (gate: todo punto con `asignadoId` debe tener `firmaTareaPorId`). Gate aplicado en `firmarCierre` (defensa en profundidad, tras el de revisiones). Includes `asignado`/`firmaTareaPor` en `obtenerOrden`; `asignadoId`/`firmaTareaPorId` añadidos al select de `resultados` en `listarOrdenes` (para el badge del dashboard, peso despreciable).
+- `resultadosController.js`: `asignar` (permiso edición + solo gerente asignado/super) y `firmarTarea`. `cierreController.gestionar`: gate de tareas tras el de revisiones. Rutas: `PATCH /:id/puntos/:resultadoId/asignacion` y `POST /:id/puntos/:resultadoId/firmar-tarea`.
+
+#### Frontend
+- `api/ordenesService.js`: `asignarPunto`, `firmarTarea`.
+- `InspeccionPage.jsx`: bloque "Responsable de la tarea" por punto (`TareaBloque`) — selector de involucrados (solo gerente/super), estado de la firma de tarea, botón "✍ Firmar mi tarea" para el asignado cuando el punto está completado; toggle/filtro **"Ver solo mis tareas"** + indicador "🛠 Tienes N tareas".
+- `CierreOTPage.jsx`: tarjeta que lista las tareas asignadas sin firmar (el error 400 del gate ya se muestra en el `ErrorBanner`).
+- `DashboardPage.jsx`: badge "🛠 N tareas" en la tarjeta de cada orden no cerrada para el usuario asignado (calculado de `resultados[].asignadoId`/`firmaTareaPorId`).
+
+#### Verificación (API real `:3001` + build)
+- Asignar punto (gerente/super) → 200. Cierre con tarea asignada sin firmar → **400** "faltan 1 de 1 firmas de tareas asignadas". Firma por involucrado NO asignado → **403** "Solo el responsable asignado…"; por usuario NO involucrado → **403** permiso; por el asignado con punto completado → **200**. `npm run build` verde (120 módulos). `GET /ordenes` 200 con los campos nuevos. Datos de prueba restaurados (orden GCS de QA quedó de vuelta en `en_proceso`, sin asignados).
+
+#### Gates de cierre acumulados (estado FINAL tras Sesión 21)
+1. Puntos completados · 2. Críticos firmados · 3. Sin revisiones `abierta` · **4. (nuevo) Sin tareas asignadas sin firmar** · + firmas de slot por tipo (soporte+gerente, +piloto si aeronave, +operador si gcs).
+
+#### Siguiente paso
+- El plan pdf-fixes está cerrado. Queda el **Frente 1 (pre-despliegue/hardening)** descrito tras la Sesión 17: auth en `GET /uploads/:key`, secretos de producción, HTTPS/CORS, backups, limpieza de datos de prueba, y (opcional) confirmar el toggle "¿Se encontró defecto?". Y el **Frente 2 (roadmap Fase 2+)**: dashboard de flota, alertas, inventario, offline.

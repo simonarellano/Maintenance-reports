@@ -330,6 +330,7 @@ export default function DashboardPage() {
                 key={orden.id}
                 orden={orden}
                 esGerente={esGerente}
+                userId={user?.id}
                 onClick={() => navigate(`/ordenes/${orden.id}/inspeccion`)}
                 onArchivar={(e) => archivarOrden(e, orden)}
                 onEliminar={(e) => eliminarOrden(e, orden)}
@@ -413,12 +414,16 @@ function StatChip({ label, value, c, bg }) {
 }
 
 // ── Card de O/T ────────────────────────────────────────────────
-function OrdenCard({ orden, esGerente, onClick, onArchivar, onEliminar, onReabrir, onPDF, onPDFSinFotos }) {
+function OrdenCard({ orden, esGerente, userId, onClick, onArchivar, onEliminar, onReabrir, onPDF, onPDFSinFotos }) {
   const st = STATUS[orden.estado] || { label: orden.estado, c: T.sub, bg: T.s2 }
   const totalPuntos = orden._count?.resultados || 0
   const completos = orden.resultados?.filter((r) => r.completado).length || 0
   const progreso = totalPuntos > 0 ? completos / totalPuntos : 0
   const esCerrada = orden.estado === 'cerrada'
+  // Tareas asignadas al usuario actual pendientes de firmar en esta orden.
+  const misTareas = !esCerrada
+    ? (orden.resultados || []).filter((r) => r.asignadoId === userId && !r.firmaTareaPorId).length
+    : 0
   const esBorrador = orden.estado === 'borrador'
   const tipoMeta = TIPO_PRODUCTO[orden.producto?.tipoProducto] || { label: 'Producto', icon: '📦', c: T.sub, bg: T.s2 }
   // Rechazo reciente: orden devuelta a en_proceso cuyo último evento de estado es un rechazo.
@@ -461,6 +466,9 @@ function OrdenCard({ orden, esGerente, onClick, onArchivar, onEliminar, onReabri
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
           <Pill label={`${tipoMeta.icon} ${tipoMeta.label}`} color={tipoMeta.c} bg={tipoMeta.bg} small />
           <Pill label={st.label} color={st.c} bg={st.bg} small />
+          {misTareas > 0 && (
+            <Pill label={`🛠 ${misTareas} tarea${misTareas === 1 ? '' : 's'}`} color={T.amber} bg={T.aD} small />
+          )}
           {orden.archivada && (
             <Pill label="Archivada" color={T.sub} bg={T.s2} small />
           )}

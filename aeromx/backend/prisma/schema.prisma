@@ -81,6 +81,8 @@ model Usuario {
   historialEstados             HistorialEstadoOT[]
   revisionesSolicitadas        RevisionPunto[]     @relation("RevisionSolicitante")
   revisionesResueltas          RevisionPunto[]     @relation("RevisionResuelta")
+  tareasAsignadas              ResultadoPunto[]    @relation("TareaAsignada")
+  tareasFirmadas               ResultadoPunto[]    @relation("TareaFirmada")
 
   @@map("usuarios")
 }
@@ -331,13 +333,18 @@ model ResultadoPunto {
   observacion     String?
   firmadoPor      String?         @map("firmado_por")
   fechaFirma      DateTime?       @map("fecha_firma")
+  asignadoId      String?         @map("asignado_id")
+  firmaTareaPorId String?         @map("firma_tarea_por_id")
+  fechaFirmaTarea DateTime?       @map("fecha_firma_tarea")
   completado      Boolean         @default(false)
   createdAt       DateTime        @default(now()) @map("created_at")
   updatedAt       DateTime        @updatedAt @map("updated_at")
 
   orden      OrdenTrabajo    @relation(fields: [ordenId], references: [id])
   punto      PuntoInspeccion @relation(fields: [puntoId], references: [id])
-  firmante   Usuario?        @relation("FirmaPaso", fields: [firmadoPor], references: [id])
+  firmante      Usuario?        @relation("FirmaPaso", fields: [firmadoPor], references: [id])
+  asignado      Usuario?        @relation("TareaAsignada", fields: [asignadoId], references: [id])
+  firmaTareaPor Usuario?        @relation("TareaFirmada", fields: [firmaTareaPorId], references: [id])
   fotos      FotoInspeccion[]
   revisiones RevisionPunto[]
 
