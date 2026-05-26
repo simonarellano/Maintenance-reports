@@ -46,6 +46,30 @@ enum EstadoRevision {
   resuelta
 }
 
+enum TipoFormato {
+  mantenimiento
+  falla
+}
+
+enum SeveridadFalla {
+  baja
+  media
+  alta
+  critica
+}
+
+enum EstadoFalla {
+  detectada
+  en_proceso
+  resuelta
+}
+
+enum OrigenFalla {
+  mantenimiento
+  prevuelo
+  operacion
+}
+
 // ─────────────────────────────────────────────
 // USUARIOS
 // ─────────────────────────────────────────────
@@ -83,6 +107,10 @@ model Usuario {
   revisionesResueltas          RevisionPunto[]     @relation("RevisionResuelta")
   tareasAsignadas              ResultadoPunto[]    @relation("TareaAsignada")
   tareasFirmadas               ResultadoPunto[]    @relation("TareaFirmada")
+  fallasReportadas             ReporteFalla[]      @relation("FallaReportadoPor")
+  fallasComoResponsable        ReporteFalla[]      @relation("FallaResponsable")
+  fallasResueltas              ReporteFalla[]      @relation("FallaResueltoPor")
+  fotosFallaSubidas            FotoFalla[]         @relation("FotoFallaSubida")
 
   @@map("usuarios")
 }
@@ -123,6 +151,7 @@ model Producto {
 
   modelo  Modelo         @relation(fields: [modeloId], references: [id])
   ordenes OrdenTrabajo[]
+  reportesFalla ReporteFalla[]
 
   // Detalles 1:1 — solo uno estará poblado según tipoProducto
   // El nombre de cada relación coincide con el valor del enum TipoProducto
@@ -198,14 +227,18 @@ model Formato {
   instrucciones String?
   definiciones  String?
   activo        Boolean      @default(true)
+  tipoFormato      TipoFormato @default(mantenimiento) @map("tipo_formato")
+  categoriaFallaId String?     @map("categoria_falla_id")
   // Secuencia ordenada de elementos del documento — ver detalle en CLAUDE.md
   secuenciaDocumento Json?   @map("secuencia_documento")
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
 
-  secciones    SeccionFormato[]
-  bloquesTexto BloqueTextoFormato[]
-  ordenes      OrdenTrabajo[]
+  secciones      SeccionFormato[]
+  bloquesTexto   BloqueTextoFormato[]
+  ordenes        OrdenTrabajo[]
+  categoriaFalla CategoriaFalla? @relation(fields: [categoriaFallaId], references: [id])
+  reportesFalla  ReporteFalla[]
 
   @@map("formatos")
 }
@@ -320,6 +353,8 @@ model OrdenTrabajo {
   resultados        ResultadoPunto[]
   cierre            CierreOT?
   historial         HistorialEstadoOT[]
+  fallasOrigen      ReporteFalla[]      @relation("FallaOrdenOrigen")
+  fallasCorrectiva  ReporteFalla[]      @relation("FallaOrdenCorrectiva")
 
   @@map("ordenes_trabajo")
 }
@@ -345,8 +380,9 @@ model ResultadoPunto {
   firmante      Usuario?        @relation("FirmaPaso", fields: [firmadoPor], references: [id])
   asignado      Usuario?        @relation("TareaAsignada", fields: [asignadoId], references: [id])
   firmaTareaPor Usuario?        @relation("TareaFirmada", fields: [firmaTareaPorId], references: [id])
-  fotos      FotoInspeccion[]
-  revisiones RevisionPunto[]
+  fotos         FotoInspeccion[]
+  revisiones    RevisionPunto[]
+  reportesFalla ReporteFalla[]
 
   @@unique([ordenId, puntoId])
   @@map("resultados_puntos")
@@ -439,4 +475,84 @@ model HistorialEstadoOT {
 
   @@index([ordenId])
   @@map("historial_estados_ot")
+}
+
+// ─────────────────────────────────────────────
+// REGISTRO DE FALLAS
+// ─────────────────────────────────────────────
+
+model CategoriaFalla {
+  id          String   @id @default(uuid())
+  nombre      String   @unique
+  descripcion String?
+  color       String?
+  activo      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  formatos Formato[]
+  fallas   ReporteFalla[]
+
+  @@map("categorias_falla")
+}
+
+model ReporteFalla {
+  id          String         @id @default(uuid())
+  numeroFalla String         @unique @map("numero_falla")
+  productoId  String         @map("producto_id")
+  formatoId   String         @map("formato_id")
+  categoriaId String         @map("categoria_id")
+  severidad   SeveridadFalla
+  origen      OrigenFalla
+  componente  String?
+  titulo      String
+  descripcion String
+  estado      EstadoFalla    @default(detectada)
+
+  ordenOrigenId     String? @map("orden_origen_id")
+  resultadoOrigenId String? @map("resultado_origen_id")
+
+  reportadoPorId String  @map("reportado_por_id")
+  responsableId  String? @map("responsable_id")
+
+  accionCorrectiva  String?   @map("accion_correctiva")
+  fechaResolucion   DateTime? @map("fecha_resolucion")
+  resueltoPorId     String?   @map("resuelto_por_id")
+  ordenCorrectivaId String?   @map("orden_correctiva_id")
+
+  fechaDeteccion DateTime @default(now()) @map("fecha_deteccion")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  producto        Producto        @relation(fields: [productoId], references: [id])
+  formato         Formato         @relation(fields: [formatoId], references: [id])
+  categoria       CategoriaFalla  @relation(fields: [categoriaId], references: [id])
+  ordenOrigen     OrdenTrabajo?   @relation("FallaOrdenOrigen", fields: [ordenOrigenId], references: [id])
+  resultadoOrigen ResultadoPunto? @relation(fields: [resultadoOrigenId], references: [id])
+  ordenCorrectiva OrdenTrabajo?   @relation("FallaOrdenCorrectiva", fields: [ordenCorrectivaId], references: [id])
+  reportadoPor    Usuario         @relation("FallaReportadoPor", fields: [reportadoPorId], references: [id])
+  responsable     Usuario?        @relation("FallaResponsable", fields: [responsableId], references: [id])
+  resueltoPor     Usuario?        @relation("FallaResueltoPor", fields: [resueltoPorId], references: [id])
+  fotos           FotoFalla[]
+
+  @@index([productoId])
+  @@index([categoriaId])
+  @@index([estado])
+  @@map("reportes_falla")
+}
+
+model FotoFalla {
+  id             String    @id @default(uuid())
+  reporteFallaId String    @map("reporte_falla_id")
+  urlArchivo     String    @map("url_archivo")
+  nombreArchivo  String    @map("nombre_archivo")
+  tamanoBytes    Int?      @map("tamano_bytes")
+  subidaPor      String    @map("subida_por")
+  fechaCaptura   DateTime? @map("fecha_captura")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  reporte ReporteFalla @relation(fields: [reporteFallaId], references: [id], onDelete: Cascade)
+  usuario Usuario      @relation("FotoFallaSubida", fields: [subidaPor], references: [id])
+
+  @@index([reporteFallaId])
+  @@map("fotos_falla")
 }
