@@ -1,49 +1,49 @@
-# Registro de Fallas — Fase 1 (Fundación) — Implementation Plan
+﻿# Registro de Fallas â€” Fase 1 (FundaciÃ³n) â€” Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Permitir crear, clasificar, asignar, resolver y descargar en PDF reportes de falla de forma manual, sobre la arquitectura multiproducto existente.
 
-**Architecture:** Entidad ligera `ReporteFalla` con catálogo `CategoriaFalla`, fotos propias (`FotoFalla`) reusando la capa de storage, y un discriminador `tipoFormato` en `Formato`. El PDF del reporte reusa `pdf/theme.js` + `pdf/ui.js` (estética HYDRA). Backend Express + Prisma; frontend React + Vite.
+**Architecture:** Entidad ligera `ReporteFalla` con catÃ¡logo `CategoriaFalla`, fotos propias (`FotoFalla`) reusando la capa de storage, y un discriminador `tipoFormato` en `Formato`. El PDF del reporte reusa `pdf/theme.js` + `pdf/ui.js` (estÃ©tica HYDRA). Backend Express + Prisma; frontend React + Vite.
 
 **Tech Stack:** Node.js, Express, Prisma, PostgreSQL, React, Vite, Tailwind, pdfkit. Sin dependencias nuevas en Fase 1 (recharts/exceljs son de Fase 3).
 
-> **Spec:** [`docs/superpowers/specs/2026-05-25-registro-de-fallas-design.md`](../specs/2026-05-25-registro-de-fallas-design.md). Leer §3 (modelo), §4 (reglas) y §6 (API) antes de empezar.
+> **Spec:** [`docs/superpowers/specs/2026-05-25-registro-de-fallas-design.md`](../specs/2026-05-25-registro-de-fallas-design.md). Leer Â§3 (modelo), Â§4 (reglas) y Â§6 (API) antes de empezar.
 
-> **Verificación (sin test runner):** cada tarea se verifica con `npm run build` (frontend), arranque del backend, query a Postgres y/o `curl` contra `:3001`. Login de prueba superusuario: `dev@aeromx.com / aeromx123`.
+> **VerificaciÃ³n (sin test runner):** cada tarea se verifica con `npm run build` (frontend), arranque del backend, query a Postgres y/o `curl` contra `:3001`. Login de prueba superusuario: `dev@aeromx.com / aeromx123`.
 
 > **Setup:** `cd aeromx && docker compose up -d` (Postgres :5433 + MinIO). Backend `cd backend && npm run dev` (:3001). Frontend `cd frontend && npm run dev` (:5173).
 
 ---
 
-## ⚠️ Reglas de base de datos (LEER — la BD de dev tiene datos reales)
+## âš ï¸ Reglas de base de datos (LEER â€” la BD de dev tiene datos reales)
 
 - **NUNCA** `prisma migrate reset` ni `npm run db:seed`. La BD de dev tiene formatos reales (181 puntos).
 - Respaldar con `pg_dump` antes de migrar (Tarea 1).
-- Migración **a mano** (no `migrate diff`, que recrearía enums). Aplicar con `prisma migrate deploy`.
-- **Detener el backend** antes de `npx prisma generate` (EPERM si la DLL está bloqueada en Windows).
-- `prisma/migrations/` está en `.gitignore`: la migración no se versiona con el commit (confirmar con el usuario si versionarla).
+- MigraciÃ³n **a mano** (no `migrate diff`, que recrearÃ­a enums). Aplicar con `prisma migrate deploy`.
+- **Detener el backend** antes de `npx prisma generate` (EPERM si la DLL estÃ¡ bloqueada en Windows).
+- `prisma/migrations/` estÃ¡ en `.gitignore`: la migraciÃ³n no se versiona con el commit (confirmar con el usuario si versionarla).
 
 ---
 
 ## File Structure
 
 **Backend (crear):**
-- `aeromx/backend/prisma/migrations/20260525130000_registro_fallas/migration.sql` — migración a mano.
-- `aeromx/backend/src/services/categoriasFallaService.js` — CRUD catálogo.
+- `aeromx/backend/prisma/migrations/20260525130000_registro_fallas/migration.sql` â€” migraciÃ³n a mano.
+- `aeromx/backend/src/services/categoriasFallaService.js` â€” CRUD catÃ¡logo.
 - `aeromx/backend/src/controllers/categoriasFallaController.js`
 - `aeromx/backend/src/routes/categoriasFalla.js`
-- `aeromx/backend/src/services/fallasService.js` — lógica de `ReporteFalla` + `numeroFalla`.
-- `aeromx/backend/src/controllers/fallas/fallasController.js` — listar, obtener, crear.
-- `aeromx/backend/src/controllers/fallas/workflowController.js` — asignarResponsable, resolver.
-- `aeromx/backend/src/controllers/fallas/fotosController.js` — subir, eliminar.
-- `aeromx/backend/src/controllers/fallas/pdfController.js` — generar PDF.
-- `aeromx/backend/src/routes/fallas.js` — router índice.
+- `aeromx/backend/src/services/fallasService.js` â€” lÃ³gica de `ReporteFalla` + `numeroFalla`.
+- `aeromx/backend/src/controllers/fallas/fallasController.js` â€” listar, obtener, crear.
+- `aeromx/backend/src/controllers/fallas/workflowController.js` â€” asignarResponsable, resolver.
+- `aeromx/backend/src/controllers/fallas/fotosController.js` â€” subir, eliminar.
+- `aeromx/backend/src/controllers/fallas/pdfController.js` â€” generar PDF.
+- `aeromx/backend/src/routes/fallas.js` â€” router Ã­ndice.
 
 **Backend (modificar):**
-- `aeromx/backend/prisma/schema.prisma` — enums + modelos + relaciones inversas.
-- `aeromx/backend/src/index.js` — registrar routers `/api/fallas` y `/api/categorias-falla`.
-- `aeromx/backend/src/services/formatosService.js` — filtro `tipoFormato` + validación `categoriaFallaId`.
+- `aeromx/backend/prisma/schema.prisma` â€” enums + modelos + relaciones inversas.
+- `aeromx/backend/src/index.js` â€” registrar routers `/api/fallas` y `/api/categorias-falla`.
+- `aeromx/backend/src/services/formatosService.js` â€” filtro `tipoFormato` + validaciÃ³n `categoriaFallaId`.
 
 **Frontend (crear):**
 - `aeromx/frontend/src/api/categoriasFallaService.js`
@@ -54,20 +54,20 @@
 - `aeromx/frontend/src/pages/FallaDetallePage.jsx`
 
 **Frontend (modificar):**
-- `aeromx/frontend/src/tokens/design.js` — labels/colores de severidad, estado, origen.
-- `aeromx/frontend/src/pages/FormatosPage.jsx` — distinguir tipo de formato + selector categoría.
-- `aeromx/frontend/src/components/Header.jsx` — ítem "Fallas".
-- `aeromx/frontend/src/App.jsx` — rutas nuevas.
+- `aeromx/frontend/src/tokens/design.js` â€” labels/colores de severidad, estado, origen.
+- `aeromx/frontend/src/pages/FormatosPage.jsx` â€” distinguir tipo de formato + selector categorÃ­a.
+- `aeromx/frontend/src/components/Header.jsx` â€” Ã­tem "Fallas".
+- `aeromx/frontend/src/App.jsx` â€” rutas nuevas.
 
 ---
 
-## Task 1: Migración del schema (enums + tablas + columnas)
+## Task 1: MigraciÃ³n del schema (enums + tablas + columnas)
 
 **Files:**
 - Modify: `aeromx/backend/prisma/schema.prisma`
 - Create: `aeromx/backend/prisma/migrations/20260525130000_registro_fallas/migration.sql`
 
-- [ ] **Step 1: Respaldar la BD**
+- [x] **Step 1: Respaldar la BD**
 
 Run (desde `aeromx/backend`):
 ```bash
@@ -75,11 +75,11 @@ node -e "console.log(process.env.DATABASE_URL)" # confirmar URL
 mkdir -p backups
 pg_dump "$DATABASE_URL" > "backups/aeromx_backup_$(date +%Y%m%d_%H%M%S).sql"
 ```
-Expected: archivo `.sql` creado en `backups/` con tamaño > 0.
+Expected: archivo `.sql` creado en `backups/` con tamaÃ±o > 0.
 
-- [ ] **Step 2: Editar `schema.prisma` — agregar enums**
+- [x] **Step 2: Editar `schema.prisma` â€” agregar enums**
 
-Agregar después del enum `EstadoRevision` (línea ~47):
+Agregar despuÃ©s del enum `EstadoRevision` (lÃ­nea ~47):
 ```prisma
 enum TipoFormato {
   mantenimiento
@@ -106,9 +106,9 @@ enum OrigenFalla {
 }
 ```
 
-- [ ] **Step 3: Editar `schema.prisma` — `Formato` gana tipoFormato + categoría**
+- [x] **Step 3: Editar `schema.prisma` â€” `Formato` gana tipoFormato + categorÃ­a**
 
-En `model Formato`, agregar campos (después de `activo`):
+En `model Formato`, agregar campos (despuÃ©s de `activo`):
 ```prisma
   tipoFormato      TipoFormato @default(mantenimiento) @map("tipo_formato")
   categoriaFallaId String?     @map("categoria_falla_id")
@@ -119,7 +119,7 @@ Y en las relaciones del mismo modelo:
   reportesFalla  ReporteFalla[]
 ```
 
-- [ ] **Step 4: Editar `schema.prisma` — modelos nuevos**
+- [x] **Step 4: Editar `schema.prisma` â€” modelos nuevos**
 
 Agregar al final del archivo:
 ```prisma
@@ -200,7 +200,7 @@ model FotoFalla {
 }
 ```
 
-- [ ] **Step 5: Editar `schema.prisma` — relaciones inversas**
+- [x] **Step 5: Editar `schema.prisma` â€” relaciones inversas**
 
 En `model Usuario` agregar:
 ```prisma
@@ -217,7 +217,7 @@ En `model OrdenTrabajo` agregar:
   fallasCorrectiva ReporteFalla[] @relation("FallaOrdenCorrectiva")
 ```
 
-- [ ] **Step 6: Escribir la migración SQL a mano**
+- [x] **Step 6: Escribir la migraciÃ³n SQL a mano**
 
 Crear `prisma/migrations/20260525130000_registro_fallas/migration.sql`:
 ```sql
@@ -227,12 +227,12 @@ CREATE TYPE "SeveridadFalla" AS ENUM ('baja', 'media', 'alta', 'critica');
 CREATE TYPE "EstadoFalla" AS ENUM ('detectada', 'en_proceso', 'resuelta');
 CREATE TYPE "OrigenFalla" AS ENUM ('mantenimiento', 'prevuelo', 'operacion');
 
--- Formato: discriminador + categoría
+-- Formato: discriminador + categorÃ­a
 ALTER TABLE "formatos"
   ADD COLUMN "tipo_formato" "TipoFormato" NOT NULL DEFAULT 'mantenimiento',
   ADD COLUMN "categoria_falla_id" TEXT;
 
--- Catálogo de categorías
+-- CatÃ¡logo de categorÃ­as
 CREATE TABLE "categorias_falla" (
   "id" TEXT PRIMARY KEY,
   "nombre" TEXT NOT NULL UNIQUE,
@@ -311,7 +311,7 @@ ALTER TABLE "fotos_falla" ADD CONSTRAINT "fotos_falla_subida_por_fkey"
   FOREIGN KEY ("subida_por") REFERENCES "usuarios"("id") ON UPDATE CASCADE;
 ```
 
-- [ ] **Step 7: Aplicar la migración y regenerar el cliente**
+- [x] **Step 7: Aplicar la migraciÃ³n y regenerar el cliente**
 
 Detener el backend primero (Ctrl+C en la terminal de `npm run dev`). Luego desde `aeromx/backend`:
 ```bash
@@ -320,7 +320,7 @@ npx prisma generate
 ```
 Expected: `migrate deploy` aplica `20260525130000_registro_fallas`; `generate` termina sin EPERM.
 
-- [ ] **Step 8: Verificar las tablas en Postgres**
+- [x] **Step 8: Verificar las tablas en Postgres**
 
 Run:
 ```bash
@@ -328,17 +328,17 @@ psql "$DATABASE_URL" -c "\dt categorias_falla" -c "\dt reportes_falla" -c "\dt f
 ```
 Expected: las 3 tablas existen y `formatos` tiene la columna `tipo_formato`.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add aeromx/backend/prisma/schema.prisma
 git commit -m "feat(fallas): schema de registro de fallas (enums + CategoriaFalla + ReporteFalla + FotoFalla)"
 ```
-> Nota: la carpeta `migrations/` está en `.gitignore`; preguntar al usuario si versionar `migration.sql`.
+> Nota: la carpeta `migrations/` estÃ¡ en `.gitignore`; preguntar al usuario si versionar `migration.sql`.
 
 ---
 
-## Task 2: Catálogo CategoriaFalla (servicio + controller + rutas)
+## Task 2: CatÃ¡logo CategoriaFalla (servicio + controller + rutas)
 
 **Files:**
 - Create: `aeromx/backend/src/services/categoriasFallaService.js`
@@ -346,7 +346,7 @@ git commit -m "feat(fallas): schema de registro de fallas (enums + CategoriaFall
 - Create: `aeromx/backend/src/routes/categoriasFalla.js`
 - Modify: `aeromx/backend/src/index.js`
 
-- [ ] **Step 1: Servicio**
+- [x] **Step 1: Servicio**
 
 Crear `categoriasFallaService.js`:
 ```js
@@ -376,16 +376,16 @@ export async function eliminar(id) {
     where: { id },
     include: { _count: { select: { fallas: true, formatos: true } } },
   })
-  if (!cat) { const e = new Error('Categoría no encontrada'); e.status = 404; throw e }
+  if (!cat) { const e = new Error('CategorÃ­a no encontrada'); e.status = 404; throw e }
   if (cat._count.fallas > 0 || cat._count.formatos > 0) {
-    const e = new Error('No se puede eliminar: la categoría tiene fallas o formatos asociados')
+    const e = new Error('No se puede eliminar: la categorÃ­a tiene fallas o formatos asociados')
     e.status = 409; throw e
   }
   return prisma.categoriaFalla.delete({ where: { id } })
 }
 ```
 
-- [ ] **Step 2: Controller**
+- [x] **Step 2: Controller**
 
 Crear `categoriasFallaController.js`:
 ```js
@@ -408,7 +408,7 @@ export async function eliminar(req, res, next) {
 }
 ```
 
-- [ ] **Step 3: Rutas**
+- [x] **Step 3: Rutas**
 
 Crear `routes/categoriasFalla.js`:
 ```js
@@ -428,7 +428,7 @@ router.delete('/:id', ESCRITURA, ctrl.eliminar)
 export default router
 ```
 
-- [ ] **Step 4: Registrar en `index.js`**
+- [x] **Step 4: Registrar en `index.js`**
 
 En `aeromx/backend/src/index.js`, junto a los otros `app.use('/api/...')`:
 ```js
@@ -436,37 +436,37 @@ import categoriasFallaRouter from './routes/categoriasFalla.js'
 app.use('/api/categorias-falla', categoriasFallaRouter)
 ```
 
-- [ ] **Step 5: Verificar vía API**
+- [x] **Step 5: Verificar vÃ­a API**
 
 Arrancar backend (`npm run dev`). Login y crear/listar:
 ```bash
 TOKEN=$(curl -s localhost:3001/api/auth/login -H 'Content-Type: application/json' \
   -d '{"email":"dev@aeromx.com","password":"aeromx123"}' | python -c "import sys,json;print(json.load(sys.stdin)['token'])")
 curl -s -X POST localhost:3001/api/categorias-falla -H "Authorization: Bearer $TOKEN" \
-  -H 'Content-Type: application/json' -d '{"nombre":"Eléctrica","color":"#f59e0b"}'
+  -H 'Content-Type: application/json' -d '{"nombre":"ElÃ©ctrica","color":"#f59e0b"}'
 curl -s localhost:3001/api/categorias-falla -H "Authorization: Bearer $TOKEN"
 ```
-Expected: POST → 201 con la categoría; GET → array con "Eléctrica".
+Expected: POST â†’ 201 con la categorÃ­a; GET â†’ array con "ElÃ©ctrica".
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add aeromx/backend/src/services/categoriasFallaService.js aeromx/backend/src/controllers/categoriasFallaController.js aeromx/backend/src/routes/categoriasFalla.js aeromx/backend/src/index.js
-git commit -m "feat(fallas): CRUD de catálogo de categorías de falla"
+git commit -m "feat(fallas): CRUD de catÃ¡logo de categorÃ­as de falla"
 ```
 
 ---
 
-## Task 3: Formato — filtro tipoFormato + validación de categoría
+## Task 3: Formato â€” filtro tipoFormato + validaciÃ³n de categorÃ­a
 
 **Files:**
 - Modify: `aeromx/backend/src/services/formatosService.js`
 
-- [ ] **Step 1: Leer el servicio actual**
+- [x] **Step 1: Leer el servicio actual**
 
 Run: abrir `aeromx/backend/src/services/formatosService.js` y localizar `listarFormatos` y `crearFormato`.
 
-- [ ] **Step 2: Agregar filtro `tipoFormato` en `listarFormatos`**
+- [x] **Step 2: Agregar filtro `tipoFormato` en `listarFormatos`**
 
 En `listarFormatos({ tipoProducto, soloActivos })`, agregar `tipoFormato` al destructuring y al `where`:
 ```js
@@ -484,7 +484,7 @@ export async function listarFormatos({ tipoProducto, tipoFormato, soloActivos } 
 ```
 > Ajustar `include`/`orderBy` a lo que ya tenga el archivo; lo clave es agregar `tipoFormato` al `where` y `categoriaFalla` al include.
 
-- [ ] **Step 3: Validar coherencia en `crearFormato`**
+- [x] **Step 3: Validar coherencia en `crearFormato`**
 
 En `crearFormato(data)`, antes del `prisma.formato.create`, agregar:
 ```js
@@ -498,33 +498,33 @@ if (tipoFormato === 'mantenimiento' && data.categoriaFallaId) {
 ```
 Y asegurarse de pasar `tipoFormato` y `categoriaFallaId` al `data` del create.
 
-- [ ] **Step 4: Verificar vía API**
+- [x] **Step 4: Verificar vÃ­a API**
 
 ```bash
-# falla sin categoría → 400
+# falla sin categorÃ­a â†’ 400
 curl -s -X POST localhost:3001/api/formatos -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
-  -d '{"tipoProducto":"aeronave","tipoFormato":"falla","nombre":"Falla eléctrica","version":"1.0","fechaVersion":"2026-05-25"}'
+  -d '{"tipoProducto":"aeronave","tipoFormato":"falla","nombre":"Falla elÃ©ctrica","version":"1.0","fechaVersion":"2026-05-25"}'
 # listar solo formatos de falla
 curl -s "localhost:3001/api/formatos?tipoFormato=falla" -H "Authorization: Bearer $TOKEN"
 ```
-Expected: el primero → 400 con mensaje de categoría; el GET filtra por tipo.
+Expected: el primero â†’ 400 con mensaje de categorÃ­a; el GET filtra por tipo.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add aeromx/backend/src/services/formatosService.js
-git commit -m "feat(fallas): Formato distingue tipoFormato y valida categoría de falla"
+git commit -m "feat(fallas): Formato distingue tipoFormato y valida categorÃ­a de falla"
 ```
 
 ---
 
-## Task 4: fallasService — numeroFalla + crear/listar/obtener
+## Task 4: fallasService â€” numeroFalla + crear/listar/obtener
 
 **Files:**
 - Create: `aeromx/backend/src/services/fallasService.js`
 
-- [ ] **Step 1: Generador de numeroFalla + crear**
+- [x] **Step 1: Generador de numeroFalla + crear**
 
 Crear `fallasService.js`:
 ```js
@@ -560,7 +560,7 @@ export async function crearFalla(data, usuarioActual) {
   }
 
   const categoriaFinal = categoriaId || formato.categoriaFallaId
-  if (!categoriaFinal) { const e = new Error('Falta categoría'); e.status = 400; throw e }
+  if (!categoriaFinal) { const e = new Error('Falta categorÃ­a'); e.status = 400; throw e }
   if (!severidad) { const e = new Error('Falta severidad'); e.status = 400; throw e }
   if (!origen) { const e = new Error('Falta origen'); e.status = 400; throw e }
 
@@ -579,7 +579,7 @@ export async function crearFalla(data, usuarioActual) {
         ...(resultadoOrigenId ? { resultadoOrigen: { connect: { id: resultadoOrigenId } } } : {}),
       },
     })
-    // Auto-llenado de refDocCorrectivo si viene de mantenimiento (Fase 2 también lo usa)
+    // Auto-llenado de refDocCorrectivo si viene de mantenimiento (Fase 2 tambiÃ©n lo usa)
     if (ordenOrigenId) {
       const cierre = await tx.cierreOT.findUnique({ where: { ordenId: ordenOrigenId } })
       const refPrev = cierre?.refDocCorrectivo?.trim()
@@ -597,7 +597,7 @@ export async function crearFalla(data, usuarioActual) {
 export { generarNumeroFalla, ROLES_RESPONSABLE }
 ```
 
-- [ ] **Step 2: listar + obtener (mismo archivo)**
+- [x] **Step 2: listar + obtener (mismo archivo)**
 
 Agregar:
 ```js
@@ -639,12 +639,12 @@ export async function obtenerFalla(id) {
 export { INCLUDE_FALLA }
 ```
 
-- [ ] **Step 3: Verificar (sintaxis, sin endpoint todavía)**
+- [x] **Step 3: Verificar (sintaxis, sin endpoint todavÃ­a)**
 
 Run: `cd aeromx/backend && node --check src/services/fallasService.js`
 Expected: sin salida (sintaxis OK).
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add aeromx/backend/src/services/fallasService.js
@@ -662,15 +662,15 @@ git commit -m "feat(fallas): servicio de reportes (numeroFalla, crear, listar, o
 - Modify: `aeromx/backend/src/services/fallasService.js` (asignar + resolver)
 - Modify: `aeromx/backend/src/index.js`
 
-- [ ] **Step 1: asignarResponsable + resolver en el servicio**
+- [x] **Step 1: asignarResponsable + resolver en el servicio**
 
 Agregar a `fallasService.js`:
 ```js
 export async function asignarResponsable(id, responsableId) {
   const usuario = await prisma.usuario.findUnique({ where: { id: responsableId } })
-  if (!usuario || !usuario.activo) { const e = new Error('Responsable inválido'); e.status = 400; throw e }
+  if (!usuario || !usuario.activo) { const e = new Error('Responsable invÃ¡lido'); e.status = 400; throw e }
   if (!ROLES_RESPONSABLE.includes(usuario.rol)) {
-    const e = new Error('El responsable debe ser soporte, mecánico o gerente'); e.status = 400; throw e
+    const e = new Error('El responsable debe ser soporte, mecÃ¡nico o gerente'); e.status = 400; throw e
   }
   return prisma.reporteFalla.update({
     where: { id },
@@ -681,7 +681,7 @@ export async function asignarResponsable(id, responsableId) {
 
 export async function resolverFalla(id, { accionCorrectiva, ordenCorrectivaId }, usuarioActual) {
   if (!accionCorrectiva || !accionCorrectiva.trim()) {
-    const e = new Error('La acción correctiva es obligatoria'); e.status = 400; throw e
+    const e = new Error('La acciÃ³n correctiva es obligatoria'); e.status = 400; throw e
   }
   return prisma.reporteFalla.update({
     where: { id },
@@ -697,7 +697,7 @@ export async function resolverFalla(id, { accionCorrectiva, ordenCorrectivaId },
 }
 ```
 
-- [ ] **Step 2: fallasController**
+- [x] **Step 2: fallasController**
 
 Crear `controllers/fallas/fallasController.js`:
 ```js
@@ -714,7 +714,7 @@ export async function crear(req, res, next) {
 }
 ```
 
-- [ ] **Step 3: workflowController**
+- [x] **Step 3: workflowController**
 
 Crear `controllers/fallas/workflowController.js`:
 ```js
@@ -738,7 +738,7 @@ export async function resolver(req, res, next) {
 }
 ```
 
-- [ ] **Step 4: Router índice (incluye fotos y pdf que se crean en Tareas 6 y 7)**
+- [x] **Step 4: Router Ã­ndice (incluye fotos y pdf que se crean en Tareas 6 y 7)**
 
 Crear `routes/fallas.js`:
 ```js
@@ -766,28 +766,28 @@ export default router
 ```
 > Las Tareas 6 y 7 crean `fotosController.js` y `pdfController.js`. Para que el backend arranque ahora, crear stubs temporales o implementar Tareas 6 y 7 antes de registrar el router. **Recomendado:** implementar 6 y 7 y registrar el router en `index.js` al final de la Tarea 7. En esta tarea, dejar `routes/fallas.js` escrito pero comentar los imports de fotos/pdf y sus rutas hasta la Tarea 7.
 
-- [ ] **Step 5: Verificar crear/listar/asignar/resolver vía API**
+- [x] **Step 5: Verificar crear/listar/asignar/resolver vÃ­a API**
 
 Con `routes/fallas.js` registrado (imports de fotos/pdf comentados temporalmente) en `index.js`:
 ```js
 import fallasRouter from './routes/fallas.js'
 app.use('/api/fallas', fallasRouter)
 ```
-Necesitas una categoría (Tarea 2) y un formato de falla. Crea el formato de falla:
+Necesitas una categorÃ­a (Tarea 2) y un formato de falla. Crea el formato de falla:
 ```bash
 CAT=$(curl -s localhost:3001/api/categorias-falla -H "Authorization: Bearer $TOKEN" | python -c "import sys,json;print(json.load(sys.stdin)[0]['id'])")
 curl -s -X POST localhost:3001/api/formatos -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
-  -d "{\"tipoProducto\":\"aeronave\",\"tipoFormato\":\"falla\",\"categoriaFallaId\":\"$CAT\",\"nombre\":\"Reporte de falla eléctrica\",\"version\":\"1.0\",\"fechaVersion\":\"2026-05-25\"}"
+  -d "{\"tipoProducto\":\"aeronave\",\"tipoFormato\":\"falla\",\"categoriaFallaId\":\"$CAT\",\"nombre\":\"Reporte de falla elÃ©ctrica\",\"version\":\"1.0\",\"fechaVersion\":\"2026-05-25\"}"
 ```
-Obtén un `productoId` (aeronave) y un `formatoId` falla, luego:
+ObtÃ©n un `productoId` (aeronave) y un `formatoId` falla, luego:
 ```bash
 curl -s -X POST localhost:3001/api/fallas -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d "{\"productoId\":\"<PROD>\",\"formatoId\":\"<FMT>\",\"categoriaId\":\"$CAT\",\"severidad\":\"alta\",\"origen\":\"prevuelo\",\"titulo\":\"Luz de nav intermitente\",\"descripcion\":\"...\"}"
 curl -s localhost:3001/api/fallas -H "Authorization: Bearer $TOKEN"
 ```
-Expected: POST → 201 con `numeroFalla` `RF-YYYYMMDD-0001`; GET lista la falla. Probar `PATCH /:id/responsable` (con un usuario mecánico) → `estado: en_proceso`; `POST /:id/resolver` con `accionCorrectiva` → `estado: resuelta`.
+Expected: POST â†’ 201 con `numeroFalla` `RF-YYYYMMDD-0001`; GET lista la falla. Probar `PATCH /:id/responsable` (con un usuario mecÃ¡nico) â†’ `estado: en_proceso`; `POST /:id/resolver` con `accionCorrectiva` â†’ `estado: resuelta`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add aeromx/backend/src/controllers/fallas/ aeromx/backend/src/routes/fallas.js aeromx/backend/src/services/fallasService.js aeromx/backend/src/index.js
@@ -801,13 +801,13 @@ git commit -m "feat(fallas): endpoints crear/listar/obtener/asignar/resolver"
 **Files:**
 - Create: `aeromx/backend/src/controllers/fallas/fotosController.js`
 
-- [ ] **Step 1: Leer el patrón existente**
+- [x] **Step 1: Leer el patrÃ³n existente**
 
-Run: abrir `aeromx/backend/src/controllers/ordenes/fotosController.js` para copiar el patrón de `storage.put`/`storage.delete` y `keyDesdeUrl`.
+Run: abrir `aeromx/backend/src/controllers/ordenes/fotosController.js` para copiar el patrÃ³n de `storage.put`/`storage.delete` y `keyDesdeUrl`.
 
-- [ ] **Step 2: fotosController de fallas**
+- [x] **Step 2: fotosController de fallas**
 
-Crear `controllers/fallas/fotosController.js` (espejo del de órdenes, con `reporteFallaId`):
+Crear `controllers/fallas/fotosController.js` (espejo del de Ã³rdenes, con `reporteFallaId`):
 ```js
 import prisma from '../../lib/prisma.js'
 import * as storage from '../../lib/storage/index.js'
@@ -816,7 +816,7 @@ import { keyDesdeUrl } from '../../lib/storage/helpers.js'
 export async function subir(req, res, next) {
   try {
     const { id } = req.params
-    if (!req.file) { return res.status(400).json({ error: 'No se recibió archivo' }) }
+    if (!req.file) { return res.status(400).json({ error: 'No se recibiÃ³ archivo' }) }
     const falla = await prisma.reporteFalla.findUnique({ where: { id } })
     if (!falla) { return res.status(404).json({ error: 'Falla no encontrada' }) }
     const { key } = await storage.put({
@@ -847,9 +847,9 @@ export async function eliminar(req, res, next) {
   } catch (e) { next(e) }
 }
 ```
-> Nota: la key puede estar compartida con una `FotoInspeccion` (foto heredada de un punto en Fase 2). El `try/catch` alrededor de `storage.delete` evita romper si la key ya no existe; documentado como deuda en la spec §8.
+> Nota: la key puede estar compartida con una `FotoInspeccion` (foto heredada de un punto en Fase 2). El `try/catch` alrededor de `storage.delete` evita romper si la key ya no existe; documentado como deuda en la spec Â§8.
 
-- [ ] **Step 3: Verificar subida/listado vía API**
+- [x] **Step 3: Verificar subida/listado vÃ­a API**
 
 Descomentar imports/rutas de fotos en `routes/fallas.js`. Reiniciar backend.
 ```bash
@@ -857,9 +857,9 @@ curl -s -X POST localhost:3001/api/fallas/<FALLA_ID>/fotos -H "Authorization: Be
 curl -s localhost:3001/api/fallas/<FALLA_ID> -H "Authorization: Bearer $TOKEN" | grep urlArchivo
 curl -s -o /dev/null -w "%{http_code} %{content_type}\n" "localhost:3001/uploads/<KEY>" # 200 image/png
 ```
-Expected: POST → 201; el GET de la falla trae la foto; `/uploads/:key` sirve la imagen.
+Expected: POST â†’ 201; el GET de la falla trae la foto; `/uploads/:key` sirve la imagen.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add aeromx/backend/src/controllers/fallas/fotosController.js aeromx/backend/src/routes/fallas.js
@@ -868,19 +868,19 @@ git commit -m "feat(fallas): subida y borrado de fotos de falla (reusa storage)"
 
 ---
 
-## Task 7: PDF del reporte de falla (estética HYDRA)
+## Task 7: PDF del reporte de falla (estÃ©tica HYDRA)
 
 **Files:**
 - Create: `aeromx/backend/src/controllers/fallas/pdfController.js`
 - Modify: `aeromx/backend/src/index.js` (registrar router con pdf activo)
 
-- [ ] **Step 1: Estudiar el PDF de O/T**
+- [x] **Step 1: Estudiar el PDF de O/T**
 
 Run: abrir `aeromx/backend/src/controllers/ordenes/pdfController.js` y `aeromx/backend/src/pdf/ui.js`. Identificar: `registerFonts`, `COLOR`/`font`, `sectionHead`, `kvGrid`, `personCard`, `statusPill`, `signatureCard`, `roundedPanel`, `evidenceGallery`, `precargarFotos`, y el bloque por tipo de producto (`filasDatosProducto`).
 
-- [ ] **Step 2: pdfController de fallas**
+- [x] **Step 2: pdfController de fallas**
 
-Crear `controllers/fallas/pdfController.js` reusando las primitivas. Estructura: cabecera (logo + meta), título + `numeroFalla` mono + status pill por estado; §01 datos del producto (reusar el bloque por tipo, o un `kvGrid` con identificador/modelo/serie); §02 clasificación (categoría, severidad, origen, componente); §03 descripción; §04 person cards (Reportado por / Responsable / Resuelto por); §05 acción correctiva + enlace O/T correctiva; §06 galería de fotos; §07 signature card de resolución. Footer "Página N de M".
+Crear `controllers/fallas/pdfController.js` reusando las primitivas. Estructura: cabecera (logo + meta), tÃ­tulo + `numeroFalla` mono + status pill por estado; Â§01 datos del producto (reusar el bloque por tipo, o un `kvGrid` con identificador/modelo/serie); Â§02 clasificaciÃ³n (categorÃ­a, severidad, origen, componente); Â§03 descripciÃ³n; Â§04 person cards (Reportado por / Responsable / Resuelto por); Â§05 acciÃ³n correctiva + enlace O/T correctiva; Â§06 galerÃ­a de fotos; Â§07 signature card de resoluciÃ³n. Footer "PÃ¡gina N de M".
 ```js
 import PDFDocument from 'pdfkit'
 import prisma from '../../lib/prisma.js'
@@ -889,9 +889,9 @@ import { registerFonts, font, COLOR, fmtFecha, fmtFechaHora } from '../../pdf/th
 import { sectionHead, kvGrid, personCard, statusPill, signatureCard, evidenceGallery } from '../../pdf/ui.js'
 import { INCLUDE_FALLA } from '../../services/fallasService.js'
 
-const SEVERIDAD_LABEL = { baja: 'Baja', media: 'Media', alta: 'Alta', critica: 'Crítica' }
+const SEVERIDAD_LABEL = { baja: 'Baja', media: 'Media', alta: 'Alta', critica: 'CrÃ­tica' }
 const ESTADO_LABEL = { detectada: 'Detectada', en_proceso: 'En proceso', resuelta: 'Resuelta' }
-const ORIGEN_LABEL = { mantenimiento: 'Mantenimiento', prevuelo: 'Prevuelo', operacion: 'Operación' }
+const ORIGEN_LABEL = { mantenimiento: 'Mantenimiento', prevuelo: 'Prevuelo', operacion: 'OperaciÃ³n' }
 
 async function precargarFotos(fotos) {
   const map = new Map()
@@ -916,41 +916,41 @@ export async function generar(req, res, next) {
     res.setHeader('Content-Disposition', `inline; filename="${falla.numeroFalla}.pdf"`)
     doc.pipe(res)
 
-    // Cabecera + título + status pill (reusar helpers del PDF de O/T como referencia)
-    // §01 Datos del producto, §02 Clasificación, §03 Descripción, §04 Personas,
-    // §05 Resolución, §06 Fotos (evidenceGallery con buffers), §07 firma de resolución.
+    // Cabecera + tÃ­tulo + status pill (reusar helpers del PDF de O/T como referencia)
+    // Â§01 Datos del producto, Â§02 ClasificaciÃ³n, Â§03 DescripciÃ³n, Â§04 Personas,
+    // Â§05 ResoluciÃ³n, Â§06 Fotos (evidenceGallery con buffers), Â§07 firma de resoluciÃ³n.
     // Usar sectionHead/kvGrid/personCard/statusPill/signatureCard de pdf/ui.js.
 
     doc.end()
   } catch (e) { next(e) }
 }
 ```
-> El cuerpo (dibujo sección por sección) debe replicar el orden y las primitivas del PDF de O/T para que la estética sea idéntica. Reutilizar exactamente `sectionHead`, `kvGrid`, `personCard`, `statusPill`, `signatureCard`, `evidenceGallery` y los colores de `theme.COLOR`. No forkear estilos.
+> El cuerpo (dibujo secciÃ³n por secciÃ³n) debe replicar el orden y las primitivas del PDF de O/T para que la estÃ©tica sea idÃ©ntica. Reutilizar exactamente `sectionHead`, `kvGrid`, `personCard`, `statusPill`, `signatureCard`, `evidenceGallery` y los colores de `theme.COLOR`. No forkear estilos.
 
-- [ ] **Step 3: Activar router pdf y verificar**
+- [x] **Step 3: Activar router pdf y verificar**
 
 En `routes/fallas.js` descomentar el import/ruta de `pdf`. Reiniciar backend.
 ```bash
 curl -s -o /tmp/falla.pdf -w "%{content_type}\n" "localhost:3001/api/fallas/<FALLA_ID>/pdf" -H "Authorization: Bearer $TOKEN"
 head -c 5 /tmp/falla.pdf   # debe imprimir %PDF-
 ```
-Expected: `application/pdf`, archivo empieza con `%PDF-`. Abrir el PDF y verificar que la estética coincide con la del PDF de O/T.
+Expected: `application/pdf`, archivo empieza con `%PDF-`. Abrir el PDF y verificar que la estÃ©tica coincide con la del PDF de O/T.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add aeromx/backend/src/controllers/fallas/pdfController.js aeromx/backend/src/routes/fallas.js
-git commit -m "feat(fallas): PDF del reporte de falla con estética HYDRA"
+git commit -m "feat(fallas): PDF del reporte de falla con estÃ©tica HYDRA"
 ```
 
 ---
 
-## Task 8: Frontend — tokens de severidad/estado/origen
+## Task 8: Frontend â€” tokens de severidad/estado/origen
 
 **Files:**
 - Modify: `aeromx/frontend/src/tokens/design.js`
 
-- [ ] **Step 1: Agregar labels y colores**
+- [x] **Step 1: Agregar labels y colores**
 
 Agregar al final de `design.js`:
 ```js
@@ -958,7 +958,7 @@ export const SEVERIDAD = {
   baja:    { label: 'Baja',    color: '#22c55e' },
   media:   { label: 'Media',   color: '#eab308' },
   alta:    { label: 'Alta',    color: '#f97316' },
-  critica: { label: 'Crítica', color: '#ef4444' },
+  critica: { label: 'CrÃ­tica', color: '#ef4444' },
 }
 export const ESTADO_FALLA = {
   detectada:  { label: 'Detectada',  color: '#3b82f6' },
@@ -968,18 +968,18 @@ export const ESTADO_FALLA = {
 export const ORIGEN_FALLA = {
   mantenimiento: { label: 'Mantenimiento' },
   prevuelo:      { label: 'Prevuelo' },
-  operacion:     { label: 'Operación' },
+  operacion:     { label: 'OperaciÃ³n' },
 }
 export const SEVERIDADES = Object.entries(SEVERIDAD).map(([value, v]) => ({ value, ...v }))
 export const ORIGENES_FALLA = Object.entries(ORIGEN_FALLA).map(([value, v]) => ({ value, ...v }))
 ```
 
-- [ ] **Step 2: Verificar build**
+- [x] **Step 2: Verificar build**
 
 Run: `cd aeromx/frontend && npm run build`
 Expected: build verde (sin errores de import).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add aeromx/frontend/src/tokens/design.js
@@ -988,19 +988,19 @@ git commit -m "feat(fallas): tokens de severidad, estado y origen"
 
 ---
 
-## Task 9: Frontend — API services (categorías + fallas)
+## Task 9: Frontend â€” API services (categorÃ­as + fallas)
 
 **Files:**
 - Create: `aeromx/frontend/src/api/categoriasFallaService.js`
 - Create: `aeromx/frontend/src/api/fallasService.js`
 
-- [ ] **Step 1: Leer un service existente para el patrón**
+- [x] **Step 1: Leer un service existente para el patrÃ³n**
 
-Run: abrir `aeromx/frontend/src/api/productosService.js`. **Patrón real (confirmado):** import default `client` desde `./client`; se exporta un **objeto nombrado** (ej. `export const productosService = {...}`); cada método **devuelve la respuesta axios completa** (`client.get(...)`), **sin** `.then(r => r.data)`. Los componentes hacen `const { data } = await productosService.listar()`.
+Run: abrir `aeromx/frontend/src/api/productosService.js`. **PatrÃ³n real (confirmado):** import default `client` desde `./client`; se exporta un **objeto nombrado** (ej. `export const productosService = {...}`); cada mÃ©todo **devuelve la respuesta axios completa** (`client.get(...)`), **sin** `.then(r => r.data)`. Los componentes hacen `const { data } = await productosService.listar()`.
 
-- [ ] **Step 2: categoriasFallaService**
+- [x] **Step 2: categoriasFallaService**
 
-Crear `api/categoriasFallaService.js` (mismo patrón que `productosService`):
+Crear `api/categoriasFallaService.js` (mismo patrÃ³n que `productosService`):
 ```js
 import client from './client'
 
@@ -1012,7 +1012,7 @@ export const categoriasFallaService = {
 }
 ```
 
-- [ ] **Step 3: fallasService**
+- [x] **Step 3: fallasService**
 
 Crear `api/fallasService.js`:
 ```js
@@ -1032,125 +1032,125 @@ export const fallasService = {
   urlPDF: (id) => `/api/fallas/${id}/pdf`,
 }
 ```
-> Los componentes consumen la respuesta como `const { data } = await fallasService.listar(params)`. Mantener este patrón en las Tareas 10–14.
+> Los componentes consumen la respuesta como `const { data } = await fallasService.listar(params)`. Mantener este patrÃ³n en las Tareas 10â€“14.
 
-- [ ] **Step 4: Verificar build**
+- [x] **Step 4: Verificar build**
 
 Run: `cd aeromx/frontend && npm run build`
 Expected: build verde.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add aeromx/frontend/src/api/categoriasFallaService.js aeromx/frontend/src/api/fallasService.js
-git commit -m "feat(fallas): servicios API frontend (categorías + fallas)"
+git commit -m "feat(fallas): servicios API frontend (categorÃ­as + fallas)"
 ```
 
 ---
 
-## Task 10: Frontend — Catálogo de categorías de falla
+## Task 10: Frontend â€” CatÃ¡logo de categorÃ­as de falla
 
 **Files:**
 - Create: `aeromx/frontend/src/pages/CategoriasFallaPage.jsx`
 - Modify: `aeromx/frontend/src/App.jsx` (ruta `/categorias-falla`)
 
-- [ ] **Step 1: Leer una página CRUD existente**
+- [x] **Step 1: Leer una pÃ¡gina CRUD existente**
 
-Run: abrir `aeromx/frontend/src/pages/ModelosPage.jsx` para reusar el patrón de tabla + formulario + permisos (`esSupervisor`/gerente-ingeniero-super).
+Run: abrir `aeromx/frontend/src/pages/ModelosPage.jsx` para reusar el patrÃ³n de tabla + formulario + permisos (`esSupervisor`/gerente-ingeniero-super).
 
-- [ ] **Step 2: CategoriasFallaPage**
+- [x] **Step 2: CategoriasFallaPage**
 
-Crear `pages/CategoriasFallaPage.jsx` con: tabla (nombre, descripción, color, # fallas, # formatos, activo), formulario de alta/edición (nombre, descripción, color picker), botón eliminar (deshabilitado si tiene asociadas → maneja 409). Permiso de edición: `rol ∈ {gerente_soporte, ingeniero_soporte}` o `superusuario`. Usa `categoriasFallaService`.
+Crear `pages/CategoriasFallaPage.jsx` con: tabla (nombre, descripciÃ³n, color, # fallas, # formatos, activo), formulario de alta/ediciÃ³n (nombre, descripciÃ³n, color picker), botÃ³n eliminar (deshabilitado si tiene asociadas â†’ maneja 409). Permiso de ediciÃ³n: `rol âˆˆ {gerente_soporte, ingeniero_soporte}` o `superusuario`. Usa `categoriasFallaService`.
 
-- [ ] **Step 3: Ruta en App.jsx**
+- [x] **Step 3: Ruta en App.jsx**
 
 Agregar `<Route path="/categorias-falla" element={<CategoriasFallaPage />} />` junto a las otras rutas.
 
-- [ ] **Step 4: Verificar build + manual**
+- [x] **Step 4: Verificar build + manual**
 
-Run: `cd aeromx/frontend && npm run build` (verde). Manual: abrir `/categorias-falla`, crear una categoría, verla en la tabla.
+Run: `cd aeromx/frontend && npm run build` (verde). Manual: abrir `/categorias-falla`, crear una categorÃ­a, verla en la tabla.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add aeromx/frontend/src/pages/CategoriasFallaPage.jsx aeromx/frontend/src/App.jsx
-git commit -m "feat(fallas): página de catálogo de categorías de falla"
+git commit -m "feat(fallas): pÃ¡gina de catÃ¡logo de categorÃ­as de falla"
 ```
 
 ---
 
-## Task 11: Frontend — FormatosPage distingue tipo de formato
+## Task 11: Frontend â€” FormatosPage distingue tipo de formato
 
 **Files:**
 - Modify: `aeromx/frontend/src/pages/FormatosPage.jsx`
 
-- [ ] **Step 1: Leer FormatosPage actual**
+- [x] **Step 1: Leer FormatosPage actual**
 
-Run: abrir `aeromx/frontend/src/pages/FormatosPage.jsx`. Localizar tabs por tipo de producto, listado (`formatosService.listar`) y formulario de creación.
+Run: abrir `aeromx/frontend/src/pages/FormatosPage.jsx`. Localizar tabs por tipo de producto, listado (`formatosService.listar`) y formulario de creaciÃ³n.
 
-- [ ] **Step 2: Selector de tipo de formato + categoría**
+- [x] **Step 2: Selector de tipo de formato + categorÃ­a**
 
-Agregar un toggle "Tipo de formato" (Mantenimiento / Falla) que filtra el listado (`listar({ tipoProducto, tipoFormato })`). En el formulario de creación, cuando `tipoFormato === 'falla'`, mostrar un selector de **categoría** (de `categoriasFallaService.listar({ activo: true })`) obligatorio, y enviar `tipoFormato` + `categoriaFallaId` en el create. Mostrar la categoría como columna/badge en el listado de formatos falla.
+Agregar un toggle "Tipo de formato" (Mantenimiento / Falla) que filtra el listado (`listar({ tipoProducto, tipoFormato })`). En el formulario de creaciÃ³n, cuando `tipoFormato === 'falla'`, mostrar un selector de **categorÃ­a** (de `categoriasFallaService.listar({ activo: true })`) obligatorio, y enviar `tipoFormato` + `categoriaFallaId` en el create. Mostrar la categorÃ­a como columna/badge en el listado de formatos falla.
 
-- [ ] **Step 3: Verificar build + manual**
+- [x] **Step 3: Verificar build + manual**
 
-Run: `npm run build` (verde). Manual: crear un formato de falla con categoría; aparece bajo el toggle "Falla"; intentar sin categoría → error visible.
+Run: `npm run build` (verde). Manual: crear un formato de falla con categorÃ­a; aparece bajo el toggle "Falla"; intentar sin categorÃ­a â†’ error visible.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add aeromx/frontend/src/pages/FormatosPage.jsx
-git commit -m "feat(fallas): FormatosPage distingue mantenimiento vs falla + categoría"
+git commit -m "feat(fallas): FormatosPage distingue mantenimiento vs falla + categorÃ­a"
 ```
 
 ---
 
-## Task 12: Frontend — CrearFallaPage (manual)
+## Task 12: Frontend â€” CrearFallaPage (manual)
 
 **Files:**
 - Create: `aeromx/frontend/src/pages/CrearFallaPage.jsx`
 - Modify: `aeromx/frontend/src/App.jsx`
 
-- [ ] **Step 1: Leer CrearOTPage para el patrón**
+- [x] **Step 1: Leer CrearOTPage para el patrÃ³n**
 
 Run: abrir `aeromx/frontend/src/pages/CrearOTPage.jsx` (react-hook-form, selector de tipo de producto, carga de productos/formatos por tipo).
 
-- [ ] **Step 2: CrearFallaPage**
+- [x] **Step 2: CrearFallaPage**
 
-Crear `pages/CrearFallaPage.jsx`: selector de tipo de producto → carga productos (`productosService.listar({ tipoProducto })`) y formatos falla (`formatosService.listar({ tipoProducto, tipoFormato: 'falla' })`). Campos: producto, formato-falla, categoría (default del formato, editable), severidad (`SEVERIDADES`), origen (`ORIGENES_FALLA`, sin `mantenimiento` en el manual → solo prevuelo/operación), componente (texto), título, descripción, fotos (subida tras crear). Submit → `fallasService.crear`, luego permite subir fotos a la falla creada y redirige a `/fallas/:id`. Guard: cualquier usuario autenticado.
+Crear `pages/CrearFallaPage.jsx`: selector de tipo de producto â†’ carga productos (`productosService.listar({ tipoProducto })`) y formatos falla (`formatosService.listar({ tipoProducto, tipoFormato: 'falla' })`). Campos: producto, formato-falla, categorÃ­a (default del formato, editable), severidad (`SEVERIDADES`), origen (`ORIGENES_FALLA`, sin `mantenimiento` en el manual â†’ solo prevuelo/operaciÃ³n), componente (texto), tÃ­tulo, descripciÃ³n, fotos (subida tras crear). Submit â†’ `fallasService.crear`, luego permite subir fotos a la falla creada y redirige a `/fallas/:id`. Guard: cualquier usuario autenticado.
 
-- [ ] **Step 3: Ruta + verificar**
+- [x] **Step 3: Ruta + verificar**
 
 Agregar `<Route path="/fallas/nueva" element={<CrearFallaPage />} />`. Run `npm run build` (verde). Manual: crear una falla manual de aeronave; redirige al detalle.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add aeromx/frontend/src/pages/CrearFallaPage.jsx aeromx/frontend/src/App.jsx
-git commit -m "feat(fallas): página de creación manual de reporte de falla"
+git commit -m "feat(fallas): pÃ¡gina de creaciÃ³n manual de reporte de falla"
 ```
 
 ---
 
-## Task 13: Frontend — FallasPage (lista con filtros)
+## Task 13: Frontend â€” FallasPage (lista con filtros)
 
 **Files:**
 - Create: `aeromx/frontend/src/pages/FallasPage.jsx`
 - Modify: `aeromx/frontend/src/App.jsx`
 
-- [ ] **Step 1: Leer DashboardPage para el patrón de lista + filtros**
+- [x] **Step 1: Leer DashboardPage para el patrÃ³n de lista + filtros**
 
-Run: abrir `aeromx/frontend/src/pages/DashboardPage.jsx` (filtros, tarjetas, useMemo de búsqueda).
+Run: abrir `aeromx/frontend/src/pages/DashboardPage.jsx` (filtros, tarjetas, useMemo de bÃºsqueda).
 
-- [ ] **Step 2: FallasPage**
+- [x] **Step 2: FallasPage**
 
-Crear `pages/FallasPage.jsx`: filtros (tipo de producto, categoría, severidad, estado, origen, búsqueda por número/título). Tarjetas o tabla con: `numeroFalla`, producto (`identificador`) + modelo, categoría (badge color), severidad (badge `SEVERIDAD`), estado (badge `ESTADO_FALLA`), fecha de detección, responsable. Botón "+ Nueva falla" → `/fallas/nueva`. Click en una fila → `/fallas/:id`. Usa `fallasService.listar`.
+Crear `pages/FallasPage.jsx`: filtros (tipo de producto, categorÃ­a, severidad, estado, origen, bÃºsqueda por nÃºmero/tÃ­tulo). Tarjetas o tabla con: `numeroFalla`, producto (`identificador`) + modelo, categorÃ­a (badge color), severidad (badge `SEVERIDAD`), estado (badge `ESTADO_FALLA`), fecha de detecciÃ³n, responsable. BotÃ³n "+ Nueva falla" â†’ `/fallas/nueva`. Click en una fila â†’ `/fallas/:id`. Usa `fallasService.listar`.
 
-- [ ] **Step 3: Ruta + verificar**
+- [x] **Step 3: Ruta + verificar**
 
 Agregar `<Route path="/fallas" element={<FallasPage />} />`. Run `npm run build` (verde). Manual: la falla creada aparece; los filtros funcionan.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add aeromx/frontend/src/pages/FallasPage.jsx aeromx/frontend/src/App.jsx
@@ -1159,28 +1159,28 @@ git commit -m "feat(fallas): listado de fallas con filtros"
 
 ---
 
-## Task 14: Frontend — FallaDetallePage (ver, asignar, resolver, PDF)
+## Task 14: Frontend â€” FallaDetallePage (ver, asignar, resolver, PDF)
 
 **Files:**
 - Create: `aeromx/frontend/src/pages/FallaDetallePage.jsx`
 - Modify: `aeromx/frontend/src/App.jsx`
 
-- [ ] **Step 1: Leer InspeccionPage / CierreOTPage para el patrón**
+- [x] **Step 1: Leer InspeccionPage / CierreOTPage para el patrÃ³n**
 
-Run: abrir `aeromx/frontend/src/pages/CierreOTPage.jsx` (firma/resolución, modales) e `InspeccionPage.jsx` (galería de fotos, reasignación con modal).
+Run: abrir `aeromx/frontend/src/pages/CierreOTPage.jsx` (firma/resoluciÃ³n, modales) e `InspeccionPage.jsx` (galerÃ­a de fotos, reasignaciÃ³n con modal).
 
-- [ ] **Step 2: FallaDetallePage**
+- [x] **Step 2: FallaDetallePage**
 
-Crear `pages/FallaDetallePage.jsx` (ruta `/fallas/:id`): muestra todos los campos, timeline de estado, galería de fotos (subir/eliminar). Acciones según permiso:
-- **Asignar responsable** (solo gerente/super): selector de usuario (roles soporte/mecánico/gerente) → `fallasService.asignarResponsable`.
-- **Resolver** (responsable/soporte/gerente/super, si `estado !== 'resuelta'`): modal con `accionCorrectiva` (obligatoria) + selector opcional de O/T correctiva → `fallasService.resolver`.
+Crear `pages/FallaDetallePage.jsx` (ruta `/fallas/:id`): muestra todos los campos, timeline de estado, galerÃ­a de fotos (subir/eliminar). Acciones segÃºn permiso:
+- **Asignar responsable** (solo gerente/super): selector de usuario (roles soporte/mecÃ¡nico/gerente) â†’ `fallasService.asignarResponsable`.
+- **Resolver** (responsable/soporte/gerente/super, si `estado !== 'resuelta'`): modal con `accionCorrectiva` (obligatoria) + selector opcional de O/T correctiva â†’ `fallasService.resolver`.
 - **Descargar PDF**: link a `fallasService.urlPDF(id)` con el token (igual que descarga de PDF de O/T en DashboardPage).
 
-- [ ] **Step 3: Ruta + verificar**
+- [x] **Step 3: Ruta + verificar**
 
-Agregar `<Route path="/fallas/:id" element={<FallaDetallePage />} />`. Run `npm run build` (verde). Manual: abrir una falla, asignar responsable (estado → en proceso), resolver (estado → resuelta), descargar PDF.
+Agregar `<Route path="/fallas/:id" element={<FallaDetallePage />} />`. Run `npm run build` (verde). Manual: abrir una falla, asignar responsable (estado â†’ en proceso), resolver (estado â†’ resuelta), descargar PDF.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add aeromx/frontend/src/pages/FallaDetallePage.jsx aeromx/frontend/src/App.jsx
@@ -1189,51 +1189,51 @@ git commit -m "feat(fallas): detalle de falla (asignar, resolver, fotos, PDF)"
 
 ---
 
-## Task 15: Frontend — Header "Fallas" + verificación e2e
+## Task 15: Frontend â€” Header "Fallas" + verificaciÃ³n e2e
 
 **Files:**
 - Modify: `aeromx/frontend/src/components/Header.jsx`
 
-- [ ] **Step 1: Agregar ítem "Fallas" al Header**
+- [x] **Step 1: Agregar Ã­tem "Fallas" al Header**
 
-Run: abrir `aeromx/frontend/src/components/Header.jsx`. Agregar link "Fallas" → `/fallas` (visible a todos los roles autenticados, igual que "Órdenes"/"Flota"). Si el catálogo de categorías va en el menú, mostrar "Categorías de falla" solo a gerente/ingeniero/super.
+Run: abrir `aeromx/frontend/src/components/Header.jsx`. Agregar link "Fallas" â†’ `/fallas` (visible a todos los roles autenticados, igual que "Ã“rdenes"/"Flota"). Si el catÃ¡logo de categorÃ­as va en el menÃº, mostrar "CategorÃ­as de falla" solo a gerente/ingeniero/super.
 
-- [ ] **Step 2: Verificar build**
+- [x] **Step 2: Verificar build**
 
 Run: `cd aeromx/frontend && npm run build`
-Expected: build verde (120+ módulos, sin errores).
+Expected: build verde (120+ mÃ³dulos, sin errores).
 
-- [ ] **Step 3: Smoke e2e manual completo**
+- [x] **Step 3: Smoke e2e manual completo**
 
 Con backend + frontend arriba, login `dev@aeromx.com`:
-1. Crear categoría de falla.
-2. Crear formato de falla (aeronave) con esa categoría.
+1. Crear categorÃ­a de falla.
+2. Crear formato de falla (aeronave) con esa categorÃ­a.
 3. Crear falla manual (origen prevuelo) en `XB-ABC`, subir 1 foto.
-4. Asignar responsable (mecánico) → estado "En proceso".
-5. Resolver con acción correctiva → estado "Resuelta".
-6. Descargar PDF → abre con estética HYDRA, foto embebida.
-7. Verificar que aparece en `/fallas` y que los filtros (categoría/severidad/estado) funcionan.
+4. Asignar responsable (mecÃ¡nico) â†’ estado "En proceso".
+5. Resolver con acciÃ³n correctiva â†’ estado "Resuelta".
+6. Descargar PDF â†’ abre con estÃ©tica HYDRA, foto embebida.
+7. Verificar que aparece en `/fallas` y que los filtros (categorÃ­a/severidad/estado) funcionan.
 
 Expected: los 7 pasos pasan sin error en consola del navegador ni del backend.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add aeromx/frontend/src/components/Header.jsx
-git commit -m "feat(fallas): navegación a Fallas en el Header + cierre de Fase 1"
+git commit -m "feat(fallas): navegaciÃ³n a Fallas en el Header + cierre de Fase 1"
 ```
 
 ---
 
 ## Self-Review (cobertura de la spec)
 
-- §3.1 enums → Tarea 1 ✓ · §3.2 Formato.tipoFormato/categoría → Tareas 1, 3, 11 ✓
-- §3.3 CategoriaFalla → Tareas 1, 2, 10 ✓ · ReporteFalla → Tareas 1, 4, 5 ✓ · FotoFalla → Tareas 1, 6 ✓
-- §3.4 fotos (storage, copia por referencia) → Tarea 6 (la copia desde punto es Fase 2) ✓
-- §3.5 migración a mano + pg_dump + deploy → Tarea 1 ✓
-- §4 reglas (coherencia tipo, categoría, severidad/origen, estados, permisos, refDocCorrectivo, numeroFalla) → Tareas 4, 5 ✓
-- §5 Fase 1 backend + frontend → Tareas 2–15 ✓
-- §6 endpoints de Fase 1 → Tareas 2, 5, 6, 7 ✓ (estadísticas/export son Fase 3, no aquí)
-- §7 dependencias: ninguna nueva en Fase 1 ✓ (recharts/exceljs son Fase 3)
+- Â§3.1 enums â†’ Tarea 1 âœ“ Â· Â§3.2 Formato.tipoFormato/categorÃ­a â†’ Tareas 1, 3, 11 âœ“
+- Â§3.3 CategoriaFalla â†’ Tareas 1, 2, 10 âœ“ Â· ReporteFalla â†’ Tareas 1, 4, 5 âœ“ Â· FotoFalla â†’ Tareas 1, 6 âœ“
+- Â§3.4 fotos (storage, copia por referencia) â†’ Tarea 6 (la copia desde punto es Fase 2) âœ“
+- Â§3.5 migraciÃ³n a mano + pg_dump + deploy â†’ Tarea 1 âœ“
+- Â§4 reglas (coherencia tipo, categorÃ­a, severidad/origen, estados, permisos, refDocCorrectivo, numeroFalla) â†’ Tareas 4, 5 âœ“
+- Â§5 Fase 1 backend + frontend â†’ Tareas 2â€“15 âœ“
+- Â§6 endpoints de Fase 1 â†’ Tareas 2, 5, 6, 7 âœ“ (estadÃ­sticas/export son Fase 3, no aquÃ­)
+- Â§7 dependencias: ninguna nueva en Fase 1 âœ“ (recharts/exceljs son Fase 3)
 
 **Nota de scope:** el auto-llenado de `refDocCorrectivo` (Tarea 4, paso 1) ya queda implementado en el servicio porque es trivial incluirlo, aunque el disparo desde la UI de mantenimiento (con copia de fotos del punto) es Fase 2.

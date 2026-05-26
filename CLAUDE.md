@@ -1119,8 +1119,8 @@ cd ../frontend && npm run dev             # UI :5173 — login dev@aeromx.com / 
 
 ---
 
-### Feature en diseño (no implementada) — Registro de Fallas
-**Fecha de diseño:** 2026-05-25 | **Rama:** `development` | **Estado:** spec + plan de Fase 1 escritos, **nada de código aún**
+### Feature — Registro de Fallas (Fase 1 COMPLETA · Fases 2–3 pendientes)
+**Fecha de diseño:** 2026-05-25 | **Rama:** `development` | **Estado:** **Fase 1 implementada y verificada (backend Tareas 1–7 + frontend Tareas 8–15)** · Fases 2 y 3 sin empezar. Ver "Cambios en Sesión 22" abajo.
 
 > Brainstorming completado. Sistema para reportar, clasificar, resolver y analizar **fallas** de los productos. Construido **encima** de la arquitectura multiproducto estable. NO toca el flujo de O/T (solo le agrega disparar fallas + auto-llenar `refDocCorrectivo`).
 
@@ -1136,11 +1136,49 @@ cd ../frontend && npm run dev             # UI :5173 — login dev@aeromx.com / 
 
 | Sesión | Alcance | Entregable / corte |
 |---|---|---|
-| 1 | Fase 1 — **backend** (plan Tareas 1–7) | migración + categorías + formato + `fallasService` + controllers/rutas + fotos + PDF. Corte: API probada con curl, `%PDF-` OK |
-| 2 | Fase 1 — **frontend** (plan Tareas 8–15) | tokens + services + páginas + Header. Corte: `npm run build` verde + flujo manual e2e |
+| 1 ✅ | Fase 1 — **backend** (plan Tareas 1–7) | migración + categorías + formato + `fallasService` + controllers/rutas + fotos + PDF. Corte: API probada con curl, `%PDF-` OK |
+| 2 ✅ | Fase 1 — **frontend** (plan Tareas 8–15) | tokens + services + páginas + Header. Corte: `npm run build` verde + flujo manual e2e |
 | 3 | Fase 2 — disparo automático | escribir su plan + implementar (botón en `InspeccionPage`, copia de fotos del punto, auto-llenado `refDocCorrectivo`) |
 | 4 | Fase 3 — **backend** analítica | escribir su plan + endpoints `/estadisticas` + export `.xlsx` (exceljs) + PDF resumen con gráficas |
 | 5 | Fase 3 — **frontend** dashboard | dashboard con recharts + histórico por producto/modelo en Flota. Corte: build verde + revisión visual |
 | 6 (opcional) | QA visual final | revisar los 4 tipos en navegador (estilo Sesión 14) |
 
 > Regla de corte: terminar sesión tras un **commit** de bloque coherente, idealmente en una frontera de capa (back→front) o de fase. Cada tarea del plan ya cierra con commit, así que cualquiera es punto seguro para reanudar.
+
+---
+
+### Cambios en Sesión 22 — Registro de Fallas Fase 1: frontend (Tareas 8–15) + compactación de nav
+**Fecha:** 2026-05-26 | **Rama:** `development` | **Estado:** Fase 1 del registro de fallas COMPLETA (backend ya estaba en `development`; este bloque cerró el frontend). Build verde + smoke e2e por API PASS. Commiteado.
+
+> Ejecutado con `subagent-driven-development`: un implementador por tarea (haiku para triviales, sonnet para páginas) + revisión por subagente en las páginas. El backend (Tareas 1–7) ya estaba commiteado de un bloque previo (`010ed62`…). Todos los checkboxes del plan [`docs/superpowers/plans/2026-05-25-registro-de-fallas-fase1.md`](docs/superpowers/plans/2026-05-25-registro-de-fallas-fase1.md) quedan en `[x]`.
+
+#### Frontend implementado (Tareas 8–15)
+- **`tokens/design.js`**: `SEVERIDAD`/`ESTADO_FALLA`/`ORIGEN_FALLA` (objetos label+color) + `SEVERIDADES`/`ORIGENES_FALLA` (arrays para selects).
+- **`api/categoriasFallaService.js`** y **`api/fallasService.js`**: patrón `productosService` (devuelven respuesta axios completa → `const { data } = await …`). `fallasService.descargarPDF(id)` = `client.get('/fallas/:id/pdf', { responseType:'blob' })`.
+- **`pages/CategoriasFallaPage.jsx`**: CRUD de categorías (tabla + form + color picker), edición gated a gerente/ingeniero/super, maneja 409 al borrar con asociadas.
+- **`pages/FallasPage.jsx`**: lista con filtros client-side (tipo/categoría/severidad/estado/origen + búsqueda), tarjetas con badges de tokens, botón "+ Nueva falla" (cualquier autenticado).
+- **`pages/CrearFallaPage.jsx`**: selector de tipo → carga productos + formatos-falla del tipo; categoría prellenada del formato (editable); origen sin `mantenimiento` en el alta manual; fotos best-effort tras crear; redirige a `/fallas/:id`. Guard: cualquier autenticado.
+- **`pages/FallaDetallePage.jsx`**: vista + timeline + galería de fotos (subir/eliminar); asignar responsable (gerente/super, modal); resolver (responsable/soporte/gerente/super, modal con acción correctiva obligatoria + O/T correctiva opcional); descarga de PDF con token.
+- **`pages/FormatosPage.jsx`**: toggle Mantenimiento/Falla que filtra el listado; en crear-falla, selector de categoría obligatorio + envía `categoriaFallaId` solo para falla (nunca para mantenimiento); badge de categoría en la lista.
+- **`components/Header.jsx`** + **`App.jsx`**: rutas `/fallas`, `/fallas/nueva`, `/fallas/:id`, `/categorias-falla`; link "Fallas" (todos los roles).
+
+#### Bugs cazados en revisión/smoke (3 fixes commiteados)
+- **PDF doble prefijo** (`cd0a06a`): `urlPDF` devolvía `/api/fallas/:id/pdf` y se pasaba a `client.get` (baseURL ya `/api`) → `/api/api/…` = **404 en runtime**. El build no lo detecta. Reemplazado por `descargarPDF` con path relativo. (Lección: build verde ≠ requests correctos; el smoke e2e por API lo confirmó.)
+- **Botón Nueva falla gateado por rol** (`6af0733`): contradecía la creación abierta a cualquier autenticado (Tarea 12). Gate removido.
+- **Descripción no obligatoria en cliente** (`989012d`): backend la exige (400); se agregó regla `required` en RHF.
+
+#### Compactación de nav (refactor `f070670`, pedido por el usuario)
+- El header tenía 8 links (saturado). Se quitó "Categorías de falla" del header; ahora se accede vía botón **"⚙ Categorías"** en `FallasPage` (visible solo gerente/ingeniero/super). `CategoriasFallaPage` back → `/fallas`. La ruta `/categorias-falla` se conserva. Header final: `Órdenes · Flota · Fallas · Productos · Modelos · Formatos · Usuarios`.
+
+#### Permisos confirmados (sin cambio — ya correctos)
+- Categorías de falla: crear/editar/eliminar = `gerente_soporte` + `ingeniero_soporte` (+ superusuario). Backend `routes/categoriasFalla.js` y UI coinciden.
+
+#### Verificación
+- `npm run build` (Vite) verde tras cada tarea (126 módulos).
+- **Smoke e2e por API** (`:3001`, login `dev@aeromx.com`): categoría → formato-falla → crear falla → asignar (mecánico → `en_proceso`) → resolver (→ `resuelta`) → PDF `%PDF-` → listar. Negativos: formato mantenimiento+categoría → 400, resolver sin acción → 400. **PASS**.
+
+#### Pendientes / notas
+- ⚠️ **Datos scratch en BD dev** (sin endpoint DELETE para fallas, no se limpiaron): categoría `SMOKE-Eléctrica`, formato `SMOKE Reporte falla`, falla `RF-20260526-0002`. Borrar por BD si estorban.
+- **QA visual en navegador** de los 4 tipos (alta/asignar/resolver/PDF de falla) queda pendiente del usuario (estilo Sesión 14).
+- `prisma/migrations/` está en `.gitignore`: la migración `20260525130000_registro_fallas` no se versiona con el commit (igual que las anteriores).
+- **Siguiente**: Fase 2 (disparo automático de falla desde puntos defectuosos de mantenimiento + auto-llenado de `refDocCorrectivo` — el servicio ya lo soporta, falta la UI en `InspeccionPage`) y luego Fase 3 (analítica).
