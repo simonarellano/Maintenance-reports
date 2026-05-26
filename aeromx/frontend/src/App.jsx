@@ -13,6 +13,7 @@ import ProductosPage from './pages/ProductosPage'
 import UsuariosPage from './pages/UsuariosPage'
 import FlotaPage from './pages/FlotaPage'
 import FormatosPage from './pages/FormatosPage'
+import CategoriasFallaPage from './pages/CategoriasFallaPage'
 
 function App() {
   const hydrate = useAuthStore((state) => state.hydrate)
@@ -94,6 +95,14 @@ function App() {
           element={
             <ProtectedRoute>
               <FlotaPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/categorias-falla"
+          element={
+            <ProtectedRoute>
+              <CategoriasFallaPage />
             </ProtectedRoute>
           }
         />
