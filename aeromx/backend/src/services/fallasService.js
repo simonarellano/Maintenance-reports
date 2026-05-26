@@ -101,7 +101,7 @@ export async function crearFalla(data, usuarioActual) {
         componente,
         titulo,
         descripcion,
-        reportadoPor: { connect: { id: usuarioActual.id } },
+        reportadoPor: { connect: { id: usuarioActual.sub } },
         ...(ordenOrigenId     ? { ordenOrigen:     { connect: { id: ordenOrigenId } } }     : {}),
         ...(resultadoOrigenId ? { resultadoOrigen: { connect: { id: resultadoOrigenId } } } : {}),
       },
@@ -157,6 +157,42 @@ export async function obtenerFalla(id) {
     const e = new Error('Falla no encontrada'); e.status = 404; throw e
   }
   return falla
+}
+
+// ─── asignarResponsable ───────────────────────────────────────────────────────
+
+export async function asignarResponsable(id, responsableId) {
+  const usuario = await prisma.usuario.findUnique({ where: { id: responsableId } })
+  if (!usuario || !usuario.activo) {
+    const e = new Error('Responsable inválido'); e.status = 400; throw e
+  }
+  if (!ROLES_RESPONSABLE.includes(usuario.rol)) {
+    const e = new Error('El responsable debe ser soporte, mecánico o gerente'); e.status = 400; throw e
+  }
+  return prisma.reporteFalla.update({
+    where: { id },
+    data: { responsable: { connect: { id: responsableId } }, estado: 'en_proceso' },
+    include: INCLUDE_FALLA,
+  })
+}
+
+// ─── resolverFalla ────────────────────────────────────────────────────────────
+
+export async function resolverFalla(id, { accionCorrectiva, ordenCorrectivaId }, usuarioActual) {
+  if (!accionCorrectiva || !accionCorrectiva.trim()) {
+    const e = new Error('La acción correctiva es obligatoria'); e.status = 400; throw e
+  }
+  return prisma.reporteFalla.update({
+    where: { id },
+    data: {
+      estado: 'resuelta',
+      accionCorrectiva,
+      fechaResolucion: new Date(),
+      resueltoPor: { connect: { id: usuarioActual.sub } },
+      ...(ordenCorrectivaId ? { ordenCorrectiva: { connect: { id: ordenCorrectivaId } } } : {}),
+    },
+    include: INCLUDE_FALLA,
+  })
 }
 
 // ─── Exports nombrados adicionales ───────────────────────────────────────────

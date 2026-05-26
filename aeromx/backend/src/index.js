@@ -8,6 +8,7 @@ import productosRoutes from './routes/productos.js'
 import formatosRoutes from './routes/formatos.js'
 import ordenesRoutes from './routes/ordenes.js'
 import categoriasFallaRoutes from './routes/categoriasFalla.js'
+import fallasRoutes from './routes/fallas.js'
 import { storage } from './lib/storage/index.js'
 
 dotenv.config()
@@ -40,6 +41,7 @@ app.use('/api/productos', productosRoutes)
 app.use('/api/formatos', formatosRoutes)
 app.use('/api/ordenes', ordenesRoutes)
 app.use('/api/categorias-falla', categoriasFallaRoutes)
+app.use('/api/fallas', fallasRoutes)
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, ts: new Date().toISOString() })
