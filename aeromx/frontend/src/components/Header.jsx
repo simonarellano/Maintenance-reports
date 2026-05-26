@@ -52,9 +52,11 @@ export function Header() {
   const links = [
     { to: '/dashboard',  label: 'Órdenes',    show: true },
     { to: '/flota',      label: 'Flota',      show: true },
+    { to: '/fallas',     label: 'Fallas',     show: true },
     { to: '/productos',  label: 'Productos',  show: puedeCatalogos },
     { to: '/modelos',    label: 'Modelos',    show: puedeCatalogos },
     { to: '/formatos',   label: 'Formatos',   show: puedeCatalogos },
+    { to: '/categorias-falla', label: 'Categorías de falla', show: puedeCatalogos },
     { to: '/usuarios',   label: 'Usuarios',   show: puedeUsuarios },
   ].filter((l) => l.show)
 
