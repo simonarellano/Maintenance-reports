@@ -16,6 +16,7 @@ import FormatosPage from './pages/FormatosPage'
 import CategoriasFallaPage from './pages/CategoriasFallaPage'
 import CrearFallaPage from './pages/CrearFallaPage'
 import FallasPage from './pages/FallasPage'
+import FallaDetallePage from './pages/FallaDetallePage'
 
 function App() {
   const hydrate = useAuthStore((state) => state.hydrate)
@@ -121,6 +122,14 @@ function App() {
           element={
             <ProtectedRoute>
               <FallasPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/fallas/:id"
+          element={
+            <ProtectedRoute>
+              <FallaDetallePage />
             </ProtectedRoute>
           }
         />
