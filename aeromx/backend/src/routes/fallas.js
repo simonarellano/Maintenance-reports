@@ -4,7 +4,7 @@ import { upload } from '../middleware/upload.js'
 import * as fallas from '../controllers/fallas/fallasController.js'
 import * as workflow from '../controllers/fallas/workflowController.js'
 import * as fotos from '../controllers/fallas/fotosController.js'
-// import * as pdf from '../controllers/fallas/pdfController.js'         // Tarea 7
+import * as pdf from '../controllers/fallas/pdfController.js'
 
 const router = Router()
 router.use(verifyToken)
@@ -16,6 +16,6 @@ router.patch('/:id/responsable', requireRole(['gerente_soporte']), workflow.asig
 router.post('/:id/resolver', workflow.resolver)
 router.post('/:id/fotos', upload.single('foto'), fotos.subir)
 router.delete('/:id/fotos/:fotoId', fotos.eliminar)
-// router.get('/:id/pdf', pdf.generar)                                   // Tarea 7
+router.get('/:id/pdf', pdf.generar)
 
 export default router
