@@ -5,8 +5,8 @@ import * as svc from '../services/formatosService.js'
 export async function listar(req, res, next) {
   try {
     const soloActivos = req.query.todos !== 'true'
-    const { tipoProducto } = req.query
-    const formatos = await svc.listarFormatos({ soloActivos, tipoProducto })
+    const { tipoProducto, tipoFormato } = req.query
+    const formatos = await svc.listarFormatos({ soloActivos, tipoProducto, tipoFormato })
     res.json(formatos)
   } catch (e) { next(e) }
 }
@@ -21,19 +21,22 @@ export async function obtener(req, res, next) {
 
 export async function crear(req, res, next) {
   try {
-    const { tipoProducto, nombre, version, fechaVersion, objetivo, instrucciones, definiciones } = req.body
+    const { tipoProducto, tipoFormato, categoriaFallaId, nombre, version, fechaVersion, objetivo, instrucciones, definiciones } = req.body
     if (!tipoProducto) return res.status(400).json({ error: 'tipoProducto es requerido' })
     if (!nombre || !version) {
       return res.status(400).json({ error: 'nombre y version son requeridos' })
     }
-    const formato = await svc.crearFormato({
+    const data = {
       tipoProducto, nombre, version,
       fechaVersion: fechaVersion ? new Date(fechaVersion) : new Date(),
       objetivo, instrucciones, definiciones,
-    })
+    }
+    if (tipoFormato) data.tipoFormato = tipoFormato
+    if (categoriaFallaId) data.categoriaFallaId = categoriaFallaId
+    const formato = await svc.crearFormato(data)
     res.status(201).json(formato)
   } catch (e) {
-    if (e.code === 'BAD_INPUT') return res.status(400).json({ error: e.message })
+    if (e.code === 'BAD_INPUT' || e.status === 400) return res.status(400).json({ error: e.message })
     next(e)
   }
 }

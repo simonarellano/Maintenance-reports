@@ -76,10 +76,11 @@ export async function actualizarSecuencia(formatoId, secuencia) {
 
 const TIPOS_VALIDOS = ['aeronave', 'gcs', 'planta', 'sensor_inteligencia']
 
-export function listarFormatos({ soloActivos = true, tipoProducto } = {}) {
+export function listarFormatos({ soloActivos = true, tipoProducto, tipoFormato } = {}) {
   const where = {}
   if (soloActivos) where.activo = true
   if (tipoProducto) where.tipoProducto = tipoProducto
+  if (tipoFormato) where.tipoFormato = tipoFormato
 
   return prisma.formato.findMany({
     where,
@@ -91,6 +92,7 @@ export function listarFormatos({ soloActivos = true, tipoProducto } = {}) {
       },
       bloquesTexto: { orderBy: { orden: 'asc' } },
       _count: { select: { ordenes: true } },
+      categoriaFalla: true,
     },
   })
 }
@@ -116,6 +118,13 @@ export function crearFormato(data) {
       new Error(`tipoProducto inválido. Debe ser uno de: ${TIPOS_VALIDOS.join(', ')}`),
       { code: 'BAD_INPUT' },
     )
+  }
+  const tipoFormato = data.tipoFormato || 'mantenimiento'
+  if (tipoFormato === 'falla' && !data.categoriaFallaId) {
+    const e = new Error('Un formato de falla requiere categoriaFallaId'); e.status = 400; throw e
+  }
+  if (tipoFormato === 'mantenimiento' && data.categoriaFallaId) {
+    const e = new Error('Un formato de mantenimiento no lleva categoriaFallaId'); e.status = 400; throw e
   }
   return prisma.formato.create({ data })
 }
