@@ -1119,8 +1119,8 @@ cd ../frontend && npm run dev             # UI :5173 — login dev@aeromx.com / 
 
 ---
 
-### Feature — Registro de Fallas (Fase 1 COMPLETA · Fases 2–3 pendientes)
-**Fecha de diseño:** 2026-05-25 | **Rama:** `development` | **Estado:** **Fase 1 implementada y verificada (backend Tareas 1–7 + frontend Tareas 8–15)** · Fases 2 y 3 sin empezar. Ver "Cambios en Sesión 22" abajo.
+### Feature — Registro de Fallas (Fases 1 y 2 COMPLETAS · Fase 3 pendiente)
+**Fecha de diseño:** 2026-05-25 | **Rama:** `development` | **Estado:** **Fase 1 (CRUD manual) y Fase 2 (disparo automático desde mantenimiento) implementadas y verificadas** · Fase 3 (analítica) sin empezar. Ver "Cambios en Sesión 22" (Fase 1) y "Cambios en Sesión 23" (Fase 2) abajo.
 
 > Brainstorming completado. Sistema para reportar, clasificar, resolver y analizar **fallas** de los productos. Construido **encima** de la arquitectura multiproducto estable. NO toca el flujo de O/T (solo le agrega disparar fallas + auto-llenar `refDocCorrectivo`).
 
@@ -1138,7 +1138,7 @@ cd ../frontend && npm run dev             # UI :5173 — login dev@aeromx.com / 
 |---|---|---|
 | 1 ✅ | Fase 1 — **backend** (plan Tareas 1–7) | migración + categorías + formato + `fallasService` + controllers/rutas + fotos + PDF. Corte: API probada con curl, `%PDF-` OK |
 | 2 ✅ | Fase 1 — **frontend** (plan Tareas 8–15) | tokens + services + páginas + Header. Corte: `npm run build` verde + flujo manual e2e |
-| 3 | Fase 2 — disparo automático | escribir su plan + implementar (botón en `InspeccionPage`, copia de fotos del punto, auto-llenado `refDocCorrectivo`) |
+| 3 ✅ | Fase 2 — disparo automático | botón/modal en `InspeccionPage` + copia de fotos del punto + auto-llenado `refDocCorrectivo` + badge. Corte: build verde + smoke e2e por API PASS |
 | 4 | Fase 3 — **backend** analítica | escribir su plan + endpoints `/estadisticas` + export `.xlsx` (exceljs) + PDF resumen con gráficas |
 | 5 | Fase 3 — **frontend** dashboard | dashboard con recharts + histórico por producto/modelo en Flota. Corte: build verde + revisión visual |
 | 6 (opcional) | QA visual final | revisar los 4 tipos en navegador (estilo Sesión 14) |
@@ -1182,3 +1182,39 @@ cd ../frontend && npm run dev             # UI :5173 — login dev@aeromx.com / 
 - **QA visual en navegador** de los 4 tipos (alta/asignar/resolver/PDF de falla) queda pendiente del usuario (estilo Sesión 14).
 - `prisma/migrations/` está en `.gitignore`: la migración `20260525130000_registro_fallas` no se versiona con el commit (igual que las anteriores).
 - **Siguiente**: Fase 2 (disparo automático de falla desde puntos defectuosos de mantenimiento + auto-llenado de `refDocCorrectivo` — el servicio ya lo soporta, falta la UI en `InspeccionPage`) y luego Fase 3 (analítica).
+
+---
+
+### Cambios en Sesión 23 — Registro de Fallas Fase 2: disparo automático desde mantenimiento · FASE 2 COMPLETA
+**Fecha:** 2026-05-26 | **Rama:** `development` | **Estado:** Fase 2 implementada y verificada (build verde + smoke e2e por API PASS). Commiteada.
+
+> Ejecutada con `subagent-driven-development` (implementador + revisión spec + revisión calidad por tarea). Plan: [`docs/superpowers/plans/2026-05-26-registro-de-fallas-fase2.md`](docs/superpowers/plans/2026-05-26-registro-de-fallas-fase2.md). **Sin migración** — el modelo de datos completo (incl. `ReporteFalla.resultadoOrigen` ↔ `ResultadoPunto.reportesFalla` y `FotoFalla`) ya se creó en Fase 1.
+
+#### Backend
+- **`fallasService.crearFalla`**: cuando la falla nace de un punto (`resultadoOrigenId`), dentro de la transacción copia las `FotoInspeccion` del punto a `FotoFalla` con `createMany`, **compartiendo la misma key de storage** (no se duplica el binario). El auto-llenado de `refDocCorrectivo` (cuando hay `ordenOrigenId`) ya existía de Fase 1, intacto.
+- **`ordenesService.obtenerOrden`**: el include de `resultados` ahora trae `reportesFalla: { select: { id, numeroFalla, estado, severidad } }` para el badge por punto.
+
+#### Frontend (`InspeccionPage.jsx`, único archivo tocado)
+- En `FilaPunto`: badge `⚠ RF-…` por cada falla asociada al punto (color por severidad, abre `/fallas/:id` en pestaña nueva con `noopener,noreferrer`) y botón **"⚠ Crear reporte de falla"** visible solo en puntos en defecto (`requiere_atencion`/`correcto_con_danos`) mientras la inspección esté iniciada.
+- Nuevo componente `CrearFallaDesdePunto` (modal): pre-llena componente/título/descripción desde el punto; el usuario elige formato-falla (cargado por tipo de producto, `tipoFormato=falla`) + categoría (hereda del formato) + severidad; arma el payload con `origen:'mantenimiento'`, `ordenOrigenId`, `resultadoOrigenId`. Tras crear, refresca la orden (aparece el badge).
+- Permiso del botón: alineado a spec §4 regla 6 — **cualquier usuario autenticado** puede reportar (no se gatea a quien edita); por eso `puedeCrearFalla={!inspeccionBloqueada}`, no `puedeEditar`.
+
+#### Defectos atrapados en revisión (corregidos antes del cierre)
+- **`ErrorBanner message={...}`**: el componente real usa `children` y retorna `null` sin ellos → el error del modal nunca se mostraba. Cambiado a `<ErrorBanner>{error}</ErrorBanner>` (el código venía así en el plan; bug del plan).
+- **Backdrop del modal cerraba durante el guardado** → posible falla duplicada. `onClose={guardando ? undefined : onClose}`.
+- Minor: `noopener,noreferrer` en el `window.open` del badge + `fontFamily: T.font` en el botón.
+- Revisión rechazada con justificación: el revisor pidió gatear el botón a `puedeEditar` — se rechazó por contradecir la spec (reportar es abierto a todos).
+
+#### Verificación e2e (smoke por API real `:3001`, datos de dev)
+- Login `dev@aeromx.com`. Sobre `OT-20260524-0001` (gcs, cerrada) con un punto que tenía 3 fotos: creado un formato-falla gcs **temporal**, `POST /fallas` desde el punto → **3 fotos copiadas** con `urlArchivo` idéntico (misma key) ✓; `obtenerOrden` devuelve `reportesFalla` con los campos del select ✓; `refDocCorrectivo` quedó `MTT-CR-001, RF-…` ✓.
+- **Limpieza:** borrada la falla de prueba (cascada a sus `fotos_falla`; las `fotos_inspeccion` del punto intactas — confirmado 3), borrado el formato temporal, `refDocCorrectivo` restaurado a `MTT-CR-001`. Script scratch (`tmp-smoke-fase2.py`) borrado.
+- `npm run build` (frontend) verde tras cada tarea.
+
+#### Commits de la sesión (rama `development`)
+- `bba0437` plan · `db31bb2` copia de fotos · `8823ea4` reportesFalla en obtenerOrden · `a1d2cfe` badge+botón · `2644ce5` fix noopener/fontFamily · `964b3b0` modal · `01085a5` fix ErrorBanner/backdrop.
+
+#### Pendientes / notas
+- **QA visual en navegador** del flujo (punto en defecto → botón → modal → badge → ver falla) queda pendiente del usuario.
+- `prisma/migrations/` sigue en `.gitignore` (no aplica aquí: Fase 2 no migró).
+- Datos scratch previos de Sesión 22 (`SMOKE-Eléctrica`, `SMOKE Reporte falla`, `RF-20260526-0002`) siguen en la BD si no se borraron.
+- **Siguiente**: **Fase 3** (analítica) — dashboard recharts + histórico por producto/modelo en Flota + endpoints `/estadisticas` + export `.xlsx` (exceljs) + PDF resumen con gráficas. Escribir su plan al iniciar.
