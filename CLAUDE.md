@@ -87,9 +87,9 @@ docs/historial-sesiones.md  → log histórico (archivo)
 - Rol `operador` + matriz de personal por tipo.
 - Plan "pdf-fixes": descarga PDF con/sin fotos, rechazo de orden + revisión de puntos (gate), asignación de tarea por punto + firma de tarea (gate).
 - **Registro de fallas Fase 1** (CRUD manual: `ReporteFalla`, `CategoriaFalla`, `FotoFalla`, formato `tipoFormato=falla`, PDF) y **Fase 2** (disparo automático desde un punto defectuoso de mantenimiento: copia de fotos del punto + auto-llenado de `refDocCorrectivo` + badge). Endpoints `/api/fallas`, `/api/categorias-falla`.
+- **Fallas — evidencia por etapa** (Sesión 24): enum `EtapaFotoFalla {reporte|resolucion}` + columna `etapa` en `FotoFalla` (default `reporte`, migración aditiva); `subir` acepta/valida `etapa` (400 si inválida) y las fotos heredadas del punto quedan `reporte`; `FallaDetallePage` muestra dos galerías (📸 al reportar / 🔧 al resolver) con permisos por estado (`puedeEvidenciaResolucion`); PDF separa en dos bloques omitiendo el vacío. Verificado por API + `npm run build`.
 
 **Pendiente / en curso** (backlog priorizado completo en `docs/PENDIENTES.md`):
-- **Fallas — evidencia por etapa** (reporte/resolución): spec y plan escritos (`docs/superpowers/specs|plans/2026-05-26-evidencia-falla-por-etapa*`), **sin implementar**.
 - **Fallas Fase 3** (analítica): dashboard recharts + export `.xlsx` (exceljs) + PDF resumen con gráficas.
 - **Frente 1 — pre-despliegue/hardening:** auth en `GET /uploads/:key`; secretos de producción (rotar `JWT_SECRET`, credenciales S3/IAM fuera del repo); HTTPS/CORS de prod; backups Postgres+MinIO; limpieza de datos de prueba.
 - **Roadmap Fase 2+:** dashboard de flota avanzado, alertas de vencimiento, inventario de partes, notificaciones, modo offline (PWA), reportes DGAC.
