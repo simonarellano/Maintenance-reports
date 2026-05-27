@@ -6,12 +6,14 @@ import * as workflow from '../controllers/fallas/workflowController.js'
 import * as fotos from '../controllers/fallas/fotosController.js'
 import * as pdf from '../controllers/fallas/pdfController.js'
 import * as estadisticas from '../controllers/fallas/estadisticasController.js'
+import * as resumenPdf from '../controllers/fallas/resumenPdfController.js'
 
 const router = Router()
 router.use(verifyToken)
 
 // Rutas estáticas ANTES de '/:id' (si no, '/:id' captura "estadisticas", etc.)
 router.get('/estadisticas', estadisticas.obtener)
+router.get('/reporte.pdf', resumenPdf.generar)
 
 router.get('/', fallas.listar)
 router.get('/:id', fallas.obtener)
