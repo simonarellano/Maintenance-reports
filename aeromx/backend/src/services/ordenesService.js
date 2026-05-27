@@ -205,6 +205,7 @@ export function obtenerOrden(id) {
           asignado:      { select: { id: true, nombre: true, rol: true } },
           firmaTareaPor: { select: { id: true, nombre: true } },
           fotos: true,
+          reportesFalla: { select: { id: true, numeroFalla: true, estado: true, severidad: true } },
           revisiones: {
             orderBy: { createdAt: 'desc' },
             include: { solicitante: { select: { id: true, nombre: true, rol: true } } },
