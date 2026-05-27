@@ -70,6 +70,11 @@ enum OrigenFalla {
   operacion
 }
 
+enum EtapaFotoFalla {
+  reporte
+  resolucion
+}
+
 // ─────────────────────────────────────────────
 // USUARIOS
 // ─────────────────────────────────────────────
@@ -549,6 +554,7 @@ model FotoFalla {
   subidaPor      String    @map("subida_por")
   fechaCaptura   DateTime? @map("fecha_captura")
   createdAt      DateTime  @default(now()) @map("created_at")
+  etapa          EtapaFotoFalla @default(reporte) @map("etapa")
 
   reporte ReporteFalla @relation(fields: [reporteFallaId], references: [id], onDelete: Cascade)
   usuario Usuario      @relation("FotoFallaSubida", fields: [subidaPor], references: [id])
