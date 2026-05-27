@@ -107,6 +107,24 @@ export async function crearFalla(data, usuarioActual) {
       },
     })
 
+    // Copiar fotos del punto de origen (origen = mantenimiento).
+    // Comparten la misma key de storage que la FotoInspeccion — no se duplica el binario.
+    if (resultadoOrigenId) {
+      const fotosPunto = await tx.fotoInspeccion.findMany({ where: { resultadoId: resultadoOrigenId } })
+      if (fotosPunto.length > 0) {
+        await tx.fotoFalla.createMany({
+          data: fotosPunto.map((f) => ({
+            reporteFallaId: falla.id,
+            urlArchivo:     f.urlArchivo,
+            nombreArchivo:  f.nombreArchivo,
+            tamanoBytes:    f.tamanoBytes,
+            subidaPor:      usuarioActual.sub,
+            fechaCaptura:   f.fechaCaptura,
+          })),
+        })
+      }
+    }
+
     // Auto-llenar refDocCorrectivo en el cierre de la O/T de origen (Fase 2 también lo usa)
     if (ordenOrigenId) {
       const cierre = await tx.cierreOT.findUnique({ where: { ordenId: ordenOrigenId } })
