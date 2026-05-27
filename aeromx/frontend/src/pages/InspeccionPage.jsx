@@ -1677,9 +1677,9 @@ function CrearFallaDesdePunto({ open, onClose, resultado, orden, formatos, categ
   const nFotos = (resultado?.fotos || []).length
 
   return (
-    <Modal open={open} onClose={onClose} title="⚠ Crear reporte de falla" maxWidth={520}>
+    <Modal open={open} onClose={guardando ? undefined : onClose} title="⚠ Crear reporte de falla" maxWidth={520}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {error && <ErrorBanner message={error} />}
+        {error && <ErrorBanner>{error}</ErrorBanner>}
 
         <FieldSelect
           label="Formato de falla *"
