@@ -120,6 +120,7 @@ export async function crearFalla(data, usuarioActual) {
             tamanoBytes:    f.tamanoBytes,
             subidaPor:      usuarioActual.sub,
             fechaCaptura:   f.fechaCaptura,
+            etapa:          'reporte',
           })),
         })
       }

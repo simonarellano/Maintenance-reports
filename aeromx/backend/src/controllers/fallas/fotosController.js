@@ -9,6 +9,11 @@ export async function subir(req, res, next) {
     const falla = await prisma.reporteFalla.findUnique({ where: { id } })
     if (!falla) return res.status(404).json({ error: 'Falla no encontrada' })
 
+    const etapa = req.body?.etapa || 'reporte'
+    if (etapa !== 'reporte' && etapa !== 'resolucion') {
+      return res.status(400).json({ error: 'etapa inválida (reporte | resolucion)' })
+    }
+
     const { key } = await storage.put({
       buffer: req.file.buffer,
       contentType: req.file.mimetype,
@@ -23,6 +28,7 @@ export async function subir(req, res, next) {
         tamanoBytes: req.file.size,
         usuario: { connect: { id: req.user.sub } },
         fechaCaptura: new Date(),
+        etapa,
       },
     })
     res.status(201).json(foto)
