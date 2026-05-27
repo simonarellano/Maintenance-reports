@@ -575,6 +575,19 @@ export default function InspeccionPage() {
           </div>
         </Modal>
 
+        {/* Modal crear falla desde punto */}
+        {fallaPara && (
+          <CrearFallaDesdePunto
+            open={!!fallaPara}
+            onClose={() => setFallaPara(null)}
+            resultado={fallaPara}
+            orden={orden}
+            formatos={catalogoFalla.formatos}
+            categorias={catalogoFalla.categorias}
+            onCrear={crearFallaDesdePunto}
+          />
+        )}
+
         {/* Progreso global sticky */}
         <div style={{
           position: 'sticky', top: 70, zIndex: 20,
@@ -1613,4 +1626,129 @@ const tdStyle = {
   verticalAlign: 'top',
   fontSize: 13,
   color: T.text,
+}
+
+// ─── Modal: Crear falla desde punto de mantenimiento ───────────────────────
+function CrearFallaDesdePunto({ open, onClose, resultado, orden, formatos, categorias, onCrear }) {
+  const punto = resultado?.punto
+  const [formatoId, setFormatoId] = useState('')
+  const [categoriaId, setCategoriaId] = useState('')
+  const [severidad, setSeveridad] = useState('media')
+  const [componente, setComponente] = useState(punto?.nombreComponente || '')
+  const [titulo, setTitulo] = useState(
+    punto?.nombreComponente ? `Falla en ${punto.nombreComponente}` : ''
+  )
+  const [descripcion, setDescripcion] = useState(resultado?.observacion || '')
+  const [guardando, setGuardando] = useState(false)
+  const [error, setError] = useState('')
+
+  // Al elegir formato, heredar su categoría por defecto si el usuario no eligió otra
+  const onFormato = (id) => {
+    setFormatoId(id)
+    const fmt = formatos.find((f) => f.id === id)
+    if (fmt?.categoriaFallaId && !categoriaId) setCategoriaId(fmt.categoriaFallaId)
+  }
+
+  const guardar = async () => {
+    setError('')
+    if (!formatoId) { setError('Selecciona un formato de falla'); return }
+    if (!titulo.trim()) { setError('El título es obligatorio'); return }
+    if (!descripcion.trim()) { setError('La descripción es obligatoria'); return }
+    setGuardando(true)
+    try {
+      await onCrear({
+        productoId: orden.producto.id,
+        formatoId,
+        categoriaId: categoriaId || undefined,
+        severidad,
+        origen: 'mantenimiento',
+        componente: componente.trim() || undefined,
+        titulo: titulo.trim(),
+        descripcion: descripcion.trim(),
+        ordenOrigenId: orden.id,
+        resultadoOrigenId: resultado.id,
+      })
+    } catch (e) {
+      setError(e?.response?.data?.error || 'Error al crear la falla')
+      setGuardando(false)
+    }
+  }
+
+  const nFotos = (resultado?.fotos || []).length
+
+  return (
+    <Modal open={open} onClose={onClose} title="⚠ Crear reporte de falla" maxWidth={520}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {error && <ErrorBanner message={error} />}
+
+        <FieldSelect
+          label="Formato de falla *"
+          value={formatoId}
+          onChange={onFormato}
+          placeholder="Selecciona un formato"
+          options={formatos.map((f) => ({ value: f.id, label: f.nombre }))}
+        />
+
+        <FieldSelect
+          label="Categoría"
+          value={categoriaId}
+          onChange={setCategoriaId}
+          placeholder="(hereda del formato)"
+          options={categorias.map((c) => ({ value: c.id, label: c.nombre }))}
+        />
+
+        <FieldSelect
+          label="Severidad *"
+          value={severidad}
+          onChange={setSeveridad}
+          options={SEVERIDADES.map((s) => ({ value: s.value, label: s.label }))}
+        />
+
+        <div>
+          <label style={{ fontSize: 12, fontWeight: 600, color: T.sub }}>Componente</label>
+          <input
+            value={componente}
+            onChange={(e) => setComponente(e.target.value)}
+            style={inputStyleFalla}
+          />
+        </div>
+
+        <div>
+          <label style={{ fontSize: 12, fontWeight: 600, color: T.sub }}>Título *</label>
+          <input
+            value={titulo}
+            onChange={(e) => setTitulo(e.target.value)}
+            style={inputStyleFalla}
+          />
+        </div>
+
+        <div>
+          <label style={{ fontSize: 12, fontWeight: 600, color: T.sub }}>Descripción *</label>
+          <textarea
+            value={descripcion}
+            onChange={(e) => setDescripcion(e.target.value)}
+            rows={4}
+            style={{ ...inputStyleFalla, resize: 'vertical' }}
+          />
+        </div>
+
+        <div style={{ fontSize: 11, color: T.sub }}>
+          Origen: <strong style={{ color: T.text }}>Mantenimiento</strong> · O/T {orden?.numeroOt}
+          {nFotos > 0 && <> · se copiarán <strong style={{ color: T.text }}>{nFotos}</strong> foto(s) del punto</>}
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <Btn label="Cancelar" variant="ghost" onClick={onClose} disabled={guardando} />
+          <Btn label={guardando ? 'Creando…' : 'Crear falla'} onClick={guardar} disabled={guardando} />
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+const inputStyleFalla = {
+  width: '100%', marginTop: 4,
+  background: T.s2, color: T.text,
+  border: `1px solid ${T.border}`, borderRadius: 8,
+  padding: '8px 10px', fontSize: 13,
 }
