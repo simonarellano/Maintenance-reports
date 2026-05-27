@@ -1320,7 +1320,7 @@ function FilaPunto({ index, resultado, soloLectura, onCambiar, onFirmar, onSubir
           {fallas.map((f) => (
             <span
               key={f.id}
-              onClick={() => window.open(`/fallas/${f.id}`, '_blank')}
+              onClick={() => window.open(`/fallas/${f.id}`, '_blank', 'noopener,noreferrer')}
               title={`Ver ${f.numeroFalla}`}
               style={{
                 cursor: 'pointer',
@@ -1401,6 +1401,7 @@ function FilaPunto({ index, resultado, soloLectura, onCambiar, onFirmar, onSubir
               color: T.amber, background: 'transparent',
               border: `1px solid ${T.amber}66`, borderRadius: 6,
               padding: '4px 8px', cursor: 'pointer',
+              fontFamily: T.font,
             }}
           >
             ⚠ Crear reporte de falla
