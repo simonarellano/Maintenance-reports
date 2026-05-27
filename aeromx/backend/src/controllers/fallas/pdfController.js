@@ -208,8 +208,17 @@ function renderResolucion(doc, falla, M, W, num) {
 function renderEvidencia(doc, falla, fotosBuffers, M, W, num) {
   const fotos = falla.fotos || []
   if (fotos.length === 0) return
-  ui.sectionHead(doc, num(), 'Evidencia fotográfica', M, W)
-  ui.evidenceGallery(doc, fotos, fotosBuffers, M, W, fmtFecha)
+  const reporte    = fotos.filter((f) => (f.etapa || 'reporte') === 'reporte')
+  const resolucion = fotos.filter((f) => f.etapa === 'resolucion')
+
+  if (reporte.length > 0) {
+    ui.sectionHead(doc, num(), 'Evidencia al reportar', M, W)
+    ui.evidenceGallery(doc, reporte, fotosBuffers, M, W, fmtFecha)
+  }
+  if (resolucion.length > 0) {
+    ui.sectionHead(doc, num(), 'Evidencia al resolver', M, W)
+    ui.evidenceGallery(doc, resolucion, fotosBuffers, M, W, fmtFecha)
+  }
 }
 
 function renderFirma(doc, falla, M, W, num) {
