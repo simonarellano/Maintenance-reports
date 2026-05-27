@@ -479,3 +479,121 @@ export function evidenceGallery(doc, fotos, buffers, M, W, fmtFechaFn) {
   doc.y = y0 + blockH
   doc.x = M
 }
+
+// ─── Gráficas (PDF resumen, Fase 3) ────────────────────────────────────────────
+
+// Paleta cíclica para series sin color propio.
+const CHART_PALETTE = [
+  COLOR.accent, COLOR.ok, COLOR.warn, COLOR.critical,
+  '#6B7DB3', '#8C6BB1', '#3E8E8E', '#B08A3E',
+]
+
+// Barras horizontales. data: [{ label, value, color? }]. Dibuja título + barras + valores.
+export function hbarChart(doc, titulo, data, M, W) {
+  const rowH = 22
+  const headH = 22
+  const items = data.slice(0, 10)
+  const blockH = headH + items.length * rowH + 10
+  ensureSpace(doc, blockH + 8)
+  const y0 = doc.y
+
+  font(doc, FONT.mono).fontSize(8).fillColor(COLOR.muted)
+    .text(titulo.toUpperCase(), M, y0, { characterSpacing: 0.6, lineBreak: false })
+
+  if (items.length === 0) {
+    font(doc, FONT.sans).fontSize(9).fillColor(COLOR.muted)
+      .text('Sin datos.', M, y0 + headH, { lineBreak: false })
+    doc.y = y0 + headH + 16
+    doc.x = M
+    return
+  }
+
+  const max = Math.max(...items.map((d) => d.value), 1)
+  const labelW = 130
+  const valW = 36
+  const trackX = M + labelW
+  const trackW = W - labelW - valW
+
+  items.forEach((d, i) => {
+    const y = y0 + headH + i * rowH
+    const barW = Math.max(2, (d.value / max) * trackW)
+    const color = d.color || CHART_PALETTE[i % CHART_PALETTE.length]
+    font(doc, FONT.sans).fontSize(8.5).fillColor(COLOR.ink2)
+      .text(d.label || '—', M, y + 3, { width: labelW - 8, lineBreak: false, ellipsis: true })
+    doc.save()
+    doc.roundedRect(trackX, y + 2, trackW, 12, 3).fill(COLOR.line2)
+    doc.roundedRect(trackX, y + 2, barW, 12, 3).fill(color)
+    doc.restore()
+    font(doc, FONT.monoMed).fontSize(8.5).fillColor(COLOR.ink)
+      .text(String(d.value), trackX + trackW + 6, y + 3, { width: valW - 6, lineBreak: false })
+  })
+  doc.fillColor(COLOR.ink)
+  doc.y = y0 + blockH
+  doc.x = M
+}
+
+// Dona/pie con leyenda a la derecha. data: [{ label, value, color? }]. cx,cy = centro; r = radio.
+// Aproxima los sectores con un abanico de polígonos (robusto, sin depender de arcos SVG).
+export function pieChart(doc, titulo, data, M, W, { r = 56, donut = true } = {}) {
+  const items = data.filter((d) => d.value > 0)
+  const blockH = Math.max(r * 2 + 34, 22 + items.length * 16 + 16)
+  ensureSpace(doc, blockH + 8)
+  const y0 = doc.y
+
+  font(doc, FONT.mono).fontSize(8).fillColor(COLOR.muted)
+    .text(titulo.toUpperCase(), M, y0, { characterSpacing: 0.6, lineBreak: false })
+
+  const cx = M + r + 6
+  const cy = y0 + 22 + r
+  const total = items.reduce((a, d) => a + d.value, 0)
+
+  if (total === 0) {
+    font(doc, FONT.sans).fontSize(9).fillColor(COLOR.muted)
+      .text('Sin datos.', M, y0 + 22, { lineBreak: false })
+    doc.y = y0 + 40
+    doc.x = M
+    return
+  }
+
+  // Sectores
+  let ang = -Math.PI / 2 // arranca arriba
+  items.forEach((d, i) => {
+    const frac = d.value / total
+    const end = ang + frac * Math.PI * 2
+    const color = d.color || CHART_PALETTE[i % CHART_PALETTE.length]
+    doc.save().fillColor(color)
+    doc.moveTo(cx, cy)
+    const steps = Math.max(2, Math.ceil(frac * 48))
+    for (let s = 0; s <= steps; s++) {
+      const a = ang + (end - ang) * (s / steps)
+      doc.lineTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r)
+    }
+    doc.closePath().fill()
+    doc.restore()
+    ang = end
+  })
+
+  // Agujero de la dona
+  if (donut) {
+    doc.save().fillColor(COLOR.paper).circle(cx, cy, r * 0.55).fill().restore()
+    font(doc, FONT.sansSemi).fontSize(15).fillColor(COLOR.ink)
+    const th = doc.currentLineHeight()
+    doc.text(String(total), cx - r, cy - th / 2, { width: r * 2, align: 'center', lineBreak: false })
+  }
+
+  // Leyenda a la derecha
+  const legX = cx + r + 24
+  const legW = M + W - legX
+  items.forEach((d, i) => {
+    const ly = y0 + 22 + i * 16
+    const color = d.color || CHART_PALETTE[i % CHART_PALETTE.length]
+    doc.save().roundedRect(legX, ly + 2, 9, 9, 2).fill(color).restore()
+    const pct = Math.round((d.value / total) * 100)
+    font(doc, FONT.sans).fontSize(8.5).fillColor(COLOR.ink2)
+      .text(`${d.label}  ·  ${d.value} (${pct}%)`, legX + 15, ly + 2, { width: legW - 15, lineBreak: false, ellipsis: true })
+  })
+
+  doc.fillColor(COLOR.ink)
+  doc.y = y0 + blockH
+  doc.x = M
+}
