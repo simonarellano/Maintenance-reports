@@ -16,9 +16,10 @@ export const fallasService = {
   resolver: (id, data) =>
     client.post(`/fallas/${id}/resolver`, data),
 
-  subirFoto: (id, file) => {
+  subirFoto: (id, file, etapa = 'reporte') => {
     const fd = new FormData()
     fd.append('foto', file)
+    fd.append('etapa', etapa)
     return client.post(`/fallas/${id}/fotos`, fd, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })

@@ -38,10 +38,6 @@ export default function FallaDetallePage() {
   const [ordenes, setOrdenes] = useState([])
   const [resolverLoading, setResolverLoading] = useState(false)
 
-  // Fotos
-  const fotoInputRef = useRef(null)
-  const [fotoLoading, setFotoLoading] = useState(false)
-
   useEffect(() => { cargarFalla() }, [id])
 
   const cargarFalla = async () => {
@@ -65,6 +61,8 @@ export default function FallaDetallePage() {
   const puedeAsignar = esGerente
   const puedeResolver = falla && falla.estado !== 'resuelta' && (esSuper || esSoporte || esResponsable)
   const estaResuelta = falla?.estado === 'resuelta'
+  // Evidencia de resolución: quien puede resolver, incluso después de resuelta
+  const puedeEvidenciaResolucion = esSuper || esSoporte || esResponsable
 
   // ── Abrir modal de asignación ─────────────────────────────────
   const abrirAsignar = async () => {
@@ -134,19 +132,12 @@ export default function FallaDetallePage() {
   }
 
   // ── Fotos ─────────────────────────────────────────────────────
-  const handleSubirFoto = async (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setFotoLoading(true)
+  const handleSubirFoto = async (file, etapa) => {
     try {
-      await fallasService.subirFoto(id, file)
+      await fallasService.subirFoto(id, file, etapa)
       await cargarFalla()
     } catch (e) {
       setError(e.response?.data?.error || 'Error subiendo la foto')
-    } finally {
-      setFotoLoading(false)
-      // Reset input para permitir subir el mismo archivo de nuevo
-      if (fotoInputRef.current) fotoInputRef.current.value = ''
     }
   }
 
@@ -477,64 +468,23 @@ export default function FallaDetallePage() {
           </Card>
         )}
 
-        {/* ── Evidencia fotográfica ── */}
-        <Card padding={16} style={{ marginBottom: 16 }}>
-          <div style={{
-            display: 'flex', justifyContent: 'space-between',
-            alignItems: 'center', marginBottom: 14,
-          }}>
-            <div style={{
-              fontSize: 11, color: T.sub, letterSpacing: '0.07em',
-              textTransform: 'uppercase', fontWeight: 600,
-            }}>
-              Evidencia fotográfica
-              {falla.fotos?.length > 0 && (
-                <span style={{ color: T.cyan, marginLeft: 6 }}>({falla.fotos.length})</span>
-              )}
-            </div>
-            {!estaResuelta && (
-              <>
-                <input
-                  ref={fotoInputRef}
-                  type="file"
-                  accept="image/*"
-                  style={{ display: 'none' }}
-                  onChange={handleSubirFoto}
-                />
-                <BtnSm
-                  variant="surface"
-                  label={fotoLoading ? 'Subiendo…' : '+ Foto'}
-                  disabled={fotoLoading}
-                  onClick={() => fotoInputRef.current?.click()}
-                />
-              </>
-            )}
-          </div>
-
-          {(!falla.fotos || falla.fotos.length === 0) ? (
-            <div style={{
-              textAlign: 'center', padding: '24px 0',
-              color: T.sub, fontSize: 13,
-            }}>
-              Sin fotografías. {!estaResuelta && 'Agrega evidencia con el botón "+ Foto".'}
-            </div>
-          ) : (
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
-              gap: 10,
-            }}>
-              {falla.fotos.map((foto) => (
-                <FotoCard
-                  key={foto.id}
-                  foto={foto}
-                  puedeEliminar={!estaResuelta}
-                  onEliminar={() => handleEliminarFoto(foto.id)}
-                />
-              ))}
-            </div>
-          )}
-        </Card>
+        {/* ── Evidencia fotográfica por etapa ── */}
+        <GaleriaEvidencia
+          titulo="Evidencia al reportar"
+          icon="📸"
+          fotos={(falla.fotos || []).filter((f) => (f.etapa || 'reporte') === 'reporte')}
+          puedeEditar={!estaResuelta}
+          onSubir={(file) => handleSubirFoto(file, 'reporte')}
+          onEliminar={handleEliminarFoto}
+        />
+        <GaleriaEvidencia
+          titulo="Evidencia al resolver"
+          icon="🔧"
+          fotos={(falla.fotos || []).filter((f) => f.etapa === 'resolucion')}
+          puedeEditar={puedeEvidenciaResolucion}
+          onSubir={(file) => handleSubirFoto(file, 'resolucion')}
+          onEliminar={handleEliminarFoto}
+        />
 
         {/* ── Botones de acción inferiores ── */}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -706,6 +656,84 @@ function OrdenLink({ label, orden, onClick }) {
         <path d="M1 1l5 5-5 5" stroke={T.sub} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
     </div>
+  )
+}
+
+// ── Componente: galería de evidencia de una etapa ─────────────
+function GaleriaEvidencia({ titulo, icon, fotos, puedeEditar, onSubir, onEliminar }) {
+  const inputRef = useRef(null)
+  const [loading, setLoading] = useState(false)
+
+  const handleChange = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setLoading(true)
+    try {
+      await onSubir(file)
+    } finally {
+      setLoading(false)
+      if (inputRef.current) inputRef.current.value = ''
+    }
+  }
+
+  return (
+    <Card padding={16} style={{ marginBottom: 16 }}>
+      <div style={{
+        display: 'flex', justifyContent: 'space-between',
+        alignItems: 'center', marginBottom: 14,
+      }}>
+        <div style={{
+          fontSize: 11, color: T.sub, letterSpacing: '0.07em',
+          textTransform: 'uppercase', fontWeight: 600,
+        }}>
+          {icon} {titulo}
+          {fotos.length > 0 && (
+            <span style={{ color: T.cyan, marginLeft: 6 }}>({fotos.length})</span>
+          )}
+        </div>
+        {puedeEditar && (
+          <>
+            <input
+              ref={inputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: 'none' }}
+              onChange={handleChange}
+            />
+            <BtnSm
+              variant="surface"
+              label={loading ? 'Subiendo…' : '+ Foto'}
+              disabled={loading}
+              onClick={() => inputRef.current?.click()}
+            />
+          </>
+        )}
+      </div>
+
+      {fotos.length === 0 ? (
+        <div style={{
+          textAlign: 'center', padding: '20px 0',
+          color: T.sub, fontSize: 13,
+        }}>
+          Sin fotografías.{puedeEditar && ' Agrega evidencia con el botón "+ Foto".'}
+        </div>
+      ) : (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+          gap: 10,
+        }}>
+          {fotos.map((foto) => (
+            <FotoCard
+              key={foto.id}
+              foto={foto}
+              puedeEliminar={puedeEditar}
+              onEliminar={() => onEliminar(foto.id)}
+            />
+          ))}
+        </div>
+      )}
+    </Card>
   )
 }
 
