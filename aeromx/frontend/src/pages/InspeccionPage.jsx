@@ -3,8 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { Header } from '../components/Header'
 import { ordenesService } from '../api/ordenesService'
 import { usuariosService } from '../api/usuariosService'
+import { fallasService } from '../api/fallasService'
+import { formatosService } from '../api/formatosService'
+import { categoriasFallaService } from '../api/categoriasFallaService'
 import { useAuthStore } from '../store/authStore'
-import { T, STATUS, PUNTO_STATUS, TIPO_PRODUCTO, ROL_LABELS } from '../tokens/design'
+import { T, STATUS, PUNTO_STATUS, TIPO_PRODUCTO, ROL_LABELS, SEVERIDAD, SEVERIDADES } from '../tokens/design'
 import {
   Btn, BtnSm, Card, ErrorBanner, FieldSelect, Hdr,
   KV, Modal, Pill, ProgressBar, Spinner,
@@ -46,6 +49,29 @@ export default function InspeccionPage() {
   const [comentarioRevision, setComentarioRevision] = useState('')
   const [revisionLoading, setRevisionLoading] = useState(false)
   const [soloMisTareas, setSoloMisTareas] = useState(false)
+  const [fallaPara, setFallaPara] = useState(null)      // resultado para el que se crea la falla
+  const [catalogoFalla, setCatalogoFalla] = useState({ formatos: [], categorias: [] })
+
+  const abrirCrearFalla = async (resultado) => {
+    setFallaPara(resultado)
+    try {
+      const tipo = orden?.producto?.tipoProducto
+      const [fmt, cats] = await Promise.all([
+        formatosService.listar({ tipoProducto: tipo, tipoFormato: 'falla' }),
+        categoriasFallaService.listar(),
+      ])
+      setCatalogoFalla({ formatos: fmt.data || [], categorias: cats.data || [] })
+    } catch (e) {
+      console.error(e)
+      setCatalogoFalla({ formatos: [], categorias: [] })
+    }
+  }
+
+  const crearFallaDesdePunto = async (payload) => {
+    await fallasService.crear(payload)
+    setFallaPara(null)
+    await cargarOrden()   // refresca para mostrar el badge en el punto
+  }
 
   useEffect(() => { cargarOrden() }, [id])
 
@@ -668,6 +694,8 @@ export default function InspeccionPage() {
                             currentUserId={uid}
                             onAsignar={asignarPunto}
                             onFirmarTarea={firmarTarea}
+                            onCrearFalla={abrirCrearFalla}
+                            puedeCrearFalla={!inspeccionBloqueada}
                           />
                         ))}
                       </tbody>
@@ -1182,7 +1210,7 @@ function TareaBloque({ resultado, puedeAsignar, involucrados, currentUserId, sol
 }
 
 // ── Fila de la tabla ─────────────────────────────────────────
-function FilaPunto({ index, resultado, soloLectura, onCambiar, onFirmar, onSubirFoto, onEliminarFoto, puedeRevisar, onPedirRevision, onResolverRevision, puedeAsignar, involucrados, currentUserId, onAsignar, onFirmarTarea }) {
+function FilaPunto({ index, resultado, soloLectura, onCambiar, onFirmar, onSubirFoto, onEliminarFoto, puedeRevisar, onPedirRevision, onResolverRevision, puedeAsignar, involucrados, currentUserId, onAsignar, onFirmarTarea, onCrearFalla, puedeCrearFalla }) {
   const punto = resultado.punto
   const [obs, setObs] = useState(resultado.observacion || '')
   const fileInputRef = useRef(null)
@@ -1258,6 +1286,8 @@ function FilaPunto({ index, resultado, soloLectura, onCambiar, onFirmar, onSubir
   }
 
   const estadoMeta = PUNTO_STATUS[resultado.estadoResultado] || null
+  const esDefecto = REQUIERE_OBSERVACION.includes(resultado.estadoResultado)
+  const fallas = resultado.reportesFalla || []
 
   return (
     <tr style={{
@@ -1287,6 +1317,23 @@ function FilaPunto({ index, resultado, soloLectura, onCambiar, onFirmar, onSubir
               textTransform: 'uppercase', letterSpacing: '0.05em',
             }}>Foto obligatoria</span>
           )}
+          {fallas.map((f) => (
+            <span
+              key={f.id}
+              onClick={() => window.open(`/fallas/${f.id}`, '_blank')}
+              title={`Ver ${f.numeroFalla}`}
+              style={{
+                cursor: 'pointer',
+                fontSize: 9, fontWeight: 700,
+                color: (SEVERIDAD[f.severidad]?.color) || T.amber,
+                background: `${(SEVERIDAD[f.severidad]?.color) || T.amber}1A`,
+                padding: '2px 7px', borderRadius: 4,
+                textTransform: 'uppercase', letterSpacing: '0.05em',
+              }}
+            >
+              ⚠ {f.numeroFalla}
+            </span>
+          ))}
         </div>
 
         {/* Revisiones abiertas */}
@@ -1340,6 +1387,23 @@ function FilaPunto({ index, resultado, soloLectura, onCambiar, onFirmar, onSubir
             }}
           >
             Pedir revisión
+          </button>
+        )}
+
+        {/* Botón para crear reporte de falla (solo si el punto es defectuoso) */}
+        {esDefecto && puedeCrearFalla && (
+          <button
+            type="button"
+            onClick={() => onCrearFalla(resultado)}
+            style={{
+              marginTop: 6,
+              fontSize: 10, fontWeight: 700,
+              color: T.amber, background: 'transparent',
+              border: `1px solid ${T.amber}66`, borderRadius: 6,
+              padding: '4px 8px', cursor: 'pointer',
+            }}
+          >
+            ⚠ Crear reporte de falla
           </button>
         )}
 
