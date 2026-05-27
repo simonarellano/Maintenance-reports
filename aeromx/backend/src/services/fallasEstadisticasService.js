@@ -6,10 +6,16 @@ import { INCLUDE_FALLA } from './fallasService.js'
 // Espeja exactamente los filtros de listarFallas + tipoProducto.
 function construirWhere(filtros = {}) {
   const { productoId, modeloId, tipoProducto, categoriaId, severidad, estado, origen, desde, hasta } = filtros
+  // modeloId y tipoProducto viven bajo la misma relación `producto`: fusionarlos
+  // en un solo sub-objeto (si se expandieran por separado, la 2.ª clave `producto`
+  // pisaría a la 1.ª y se perdería un filtro silenciosamente).
+  const productoFiltro = {
+    ...(modeloId     ? { modeloId }     : {}),
+    ...(tipoProducto ? { tipoProducto } : {}),
+  }
   return {
     ...(productoId    ? { productoId }                          : {}),
-    ...(modeloId      ? { producto: { modeloId } }              : {}),
-    ...(tipoProducto  ? { producto: { tipoProducto } }          : {}),
+    ...(Object.keys(productoFiltro).length ? { producto: productoFiltro } : {}),
     ...(categoriaId   ? { categoriaId }                         : {}),
     ...(severidad     ? { severidad }                           : {}),
     ...(estado        ? { estado }                              : {}),
