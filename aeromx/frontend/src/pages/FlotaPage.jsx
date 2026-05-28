@@ -182,6 +182,17 @@ export default function FlotaPage() {
                       </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => { e.stopPropagation(); navigate(`/fallas/dashboard?productoId=${p.id}`) }}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); navigate(`/fallas/dashboard?productoId=${p.id}`) } }}
+                        style={{
+                          padding: '6px 12px', borderRadius: 999,
+                          background: T.rD, color: T.red, border: `1px solid ${T.red}30`,
+                          fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+                        }}
+                      >⚠ Fallas</span>
                       <div style={{ textAlign: 'right' }}>
                         <div style={{ fontSize: 11, color: T.cyan, fontWeight: 600 }}>
                           {enProceso} activas
