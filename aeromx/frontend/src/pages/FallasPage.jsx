@@ -144,6 +144,11 @@ export default function FallasPage() {
               />
             )}
             <Btn
+              variant="ghost"
+              label="📊 Analítica"
+              onClick={() => navigate('/fallas/dashboard')}
+            />
+            <Btn
               label="+ Nueva falla"
               onClick={() => navigate('/fallas/nueva')}
             />
