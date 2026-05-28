@@ -108,6 +108,7 @@ Estas existen aparte del backlog priorizado del usuario:
 
 - **Fallas — evidencia por etapa** (reporte/resolución): spec + plan escritos
   (`docs/superpowers/specs|plans/2026-05-26-evidencia-falla-por-etapa*`). **Listo para implementar.**
-- **Fallas — Fase 3 (analítica):** dashboard recharts + export `.xlsx` (exceljs) + PDF resumen con
-  gráficas. Spec base en `docs/superpowers/specs/2026-05-25-registro-de-fallas-design.md` (§Fase 3);
-  falta su plan.
+- **Fallas — Fase 3 (analítica):** ✅ **Completada (Sesión 25).** Plan en
+  `docs/superpowers/plans/2026-05-27-registro-de-fallas-fase3.md`. Endpoints `/api/fallas/estadisticas`,
+  `/reporte.pdf`, `/export.xlsx`; `FallasDashboardPage` (recharts) + export Excel/PDF + histórico por
+  producto desde Flota. Verificado por API + `npm run build`.
