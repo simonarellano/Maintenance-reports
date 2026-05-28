@@ -116,6 +116,29 @@ export default function FallasDashboardPage() {
           </div>
         </div>
 
+        {/* Pestañas por tipo de producto */}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
+          {[{ key: '', label: 'Todas', icon: '▦', c: T.cyan, bg: T.cD }, ...Object.entries(TIPO_PRODUCTO).map(([key, v]) => ({ key, ...v }))].map((t) => {
+            const active = filtros.tipoProducto === t.key
+            return (
+              <button
+                key={t.key || 'todas'}
+                onClick={() => setFiltros((f) => ({ ...f, tipoProducto: t.key }))}
+                style={{
+                  padding: '8px 16px', borderRadius: 999,
+                  background: active ? t.bg : T.s2,
+                  color: active ? t.c : T.sub,
+                  border: active ? `1px solid ${t.c}55` : `1px solid ${T.border}`,
+                  fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  fontFamily: T.font, display: 'inline-flex', alignItems: 'center', gap: 7,
+                }}
+              >
+                <span>{t.icon}</span>{t.label}
+              </button>
+            )
+          })}
+        </div>
+
         {/* Filtros */}
         <Card padding={14} style={{ marginBottom: 18 }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
@@ -125,10 +148,6 @@ export default function FallasDashboardPage() {
             <label style={{ fontSize: 11, color: T.sub }}>Hasta
               <input type="date" value={filtros.hasta} onChange={set('hasta')} style={{ ...selectStyle, marginLeft: 6 }} />
             </label>
-            <select value={filtros.tipoProducto} onChange={set('tipoProducto')} style={selectStyle}>
-              <option value="">Tipo: todos</option>
-              {Object.entries(TIPO_PRODUCTO).map(([key, v]) => <option key={key} value={key}>{v.icon} {v.label}</option>)}
-            </select>
             <select value={filtros.categoriaId} onChange={set('categoriaId')} style={selectStyle}>
               <option value="">Categoría: todas</option>
               {categorias.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
