@@ -1,5 +1,7 @@
 # Registro de Fallas — Fase 2: Disparo automático desde mantenimiento — Implementation Plan
 
+> ✅ **FINALIZADO.** Implementado y verificado: Fase 2 (disparo automático desde mantenimiento — modal pre-llenado, copia de fotos, auto-llenado `refDocCorrectivo`, badge).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Desde un punto de mantenimiento con defecto (`requiere_atencion` / `correcto_con_danos`), crear un `ReporteFalla` pre-llenado en un modal, copiando las fotos del punto y dejando un badge de falla(s) asociada(s) en el punto.

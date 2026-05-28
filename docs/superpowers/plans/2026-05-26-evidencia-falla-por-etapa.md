@@ -1,5 +1,7 @@
 # Evidencia fotográfica de falla por etapa — Implementation Plan
 
+> ✅ **FINALIZADO (Sesión 24).** Implementado y verificado: evidencia por etapa (reporte/resolución) en modelo, backend, `FallaDetallePage` y PDF.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Separar la evidencia fotográfica de una falla en dos etapas — **al reportar** y **al resolver** — en el modelo, el backend, `FallaDetallePage` y el PDF.

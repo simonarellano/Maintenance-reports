@@ -1,5 +1,7 @@
 # Evidencia fotográfica de falla por etapa — Diseño (spec)
 
+> ✅ **FINALIZADO (Sesión 24).** Implementado, verificado y pusheado: enum `EtapaFotoFalla`, dos galerías (reporte/resolución), PDF separado por etapa.
+
 **Fecha:** 2026-05-26 · **Rama:** `development` · **Autor:** Simón Arellano + Claude
 
 > Mejora del registro de fallas (construido en Fases 1–2). Hoy `FotoFalla` es una lista plana sin
