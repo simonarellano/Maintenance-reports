@@ -38,6 +38,15 @@ export default function FallasGraficas({ stats }) {
   const dataOrigen = stats.porOrigen.map((o) => ({ name: ORIGEN_LABEL[o.origen] || o.origen, value: o.count }))
   const dataModelo = stats.porModelo.map((m) => ({ name: m.modelo, value: m.count }))
   const dataTendencia = stats.tendencia.map((t) => ({ name: t.periodo, value: t.count }))
+  const dataProducto = (stats.porProducto || []).map((p) => ({ name: p.identificador, value: p.count }))
+  const dataMttrSev = (stats.mttrPorSeveridad || []).map((m) => ({ name: SEV_LABEL[m.severidad] || m.severidad, value: m.mttrDias, color: SEVERIDAD[m.severidad]?.color }))
+  const dataMttrCat = (stats.mttrPorCategoria || []).map((m) => ({ name: m.nombre, value: m.mttrDias }))
+  const emb = stats.embudoEstados || {}
+  const dataEmbudo = [
+    { name: ESTADO_FALLA.detectada?.label || 'Detectada',  value: emb.detectada  || 0, color: ESTADO_FALLA.detectada?.color },
+    { name: ESTADO_FALLA.en_proceso?.label || 'En proceso', value: emb.en_proceso || 0, color: ESTADO_FALLA.en_proceso?.color },
+    { name: ESTADO_FALLA.resuelta?.label || 'Resuelta',    value: emb.resuelta   || 0, color: ESTADO_FALLA.resuelta?.color },
+  ]
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14 }}>
@@ -100,6 +109,50 @@ export default function FallasGraficas({ stats }) {
           <YAxis tick={{ fill: T.sub, fontSize: 11 }} allowDecimals={false} />
           <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
           <Bar dataKey="value" fill={T.purple} radius={[4, 4, 0, 0]} />
+        </BarChart>
+      </Panel>
+
+      <Panel titulo="Fallas por producto">
+        <BarChart data={dataProducto} layout="vertical" margin={{ left: 20 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={T.dim} />
+          <XAxis type="number" tick={{ fill: T.sub, fontSize: 11 }} allowDecimals={false} />
+          <YAxis type="category" dataKey="name" tick={{ fill: T.sub, fontSize: 10 }} width={120} />
+          <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+          <Bar dataKey="value" fill={T.green} radius={[0, 4, 4, 0]} />
+        </BarChart>
+      </Panel>
+
+      <Panel titulo="MTTR por severidad (días)">
+        <BarChart data={dataMttrSev}>
+          <CartesianGrid strokeDasharray="3 3" stroke={T.dim} />
+          <XAxis dataKey="name" tick={{ fill: T.sub, fontSize: 11 }} />
+          <YAxis tick={{ fill: T.sub, fontSize: 11 }} />
+          <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'rgba(255,255,255,0.04)' }} formatter={(v) => [`${v} días`, 'MTTR']} />
+          <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+            {dataMttrSev.map((d, i) => <Cell key={i} fill={d.color || PALETTE[i % PALETTE.length]} />)}
+          </Bar>
+        </BarChart>
+      </Panel>
+
+      <Panel titulo="MTTR por categoría (días)">
+        <BarChart data={dataMttrCat} layout="vertical" margin={{ left: 20 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={T.dim} />
+          <XAxis type="number" tick={{ fill: T.sub, fontSize: 11 }} />
+          <YAxis type="category" dataKey="name" tick={{ fill: T.sub, fontSize: 10 }} width={120} />
+          <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'rgba(255,255,255,0.04)' }} formatter={(v) => [`${v} días`, 'MTTR']} />
+          <Bar dataKey="value" fill={T.amber} radius={[0, 4, 4, 0]} />
+        </BarChart>
+      </Panel>
+
+      <Panel titulo="Embudo de estados">
+        <BarChart data={dataEmbudo} layout="vertical" margin={{ left: 20 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={T.dim} />
+          <XAxis type="number" tick={{ fill: T.sub, fontSize: 11 }} allowDecimals={false} />
+          <YAxis type="category" dataKey="name" tick={{ fill: T.sub, fontSize: 11 }} width={90} />
+          <Tooltip contentStyle={tooltipStyle} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
+          <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+            {dataEmbudo.map((d, i) => <Cell key={i} fill={d.color || PALETTE[i % PALETTE.length]} />)}
+          </Bar>
         </BarChart>
       </Panel>
     </div>
