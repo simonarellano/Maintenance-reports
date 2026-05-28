@@ -30,4 +30,13 @@ export const fallasService = {
 
   descargarPDF: (id) =>
     client.get(`/fallas/${id}/pdf`, { responseType: 'blob' }),
+
+  estadisticas: (params) =>
+    client.get('/fallas/estadisticas', { params }),
+
+  descargarExcel: (params) =>
+    client.get('/fallas/export.xlsx', { params, responseType: 'blob' }),
+
+  descargarResumenPDF: (params) =>
+    client.get('/fallas/reporte.pdf', { params, responseType: 'blob' }),
 }
