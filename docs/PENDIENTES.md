@@ -10,7 +10,7 @@
 
 ---
 
-## 1. Panel de control (hub de administración) + limpiar la interfaz
+## 1. Panel de control (hub de administración) + limpiar la interfaz ✅ COMPLETADO 2026-05-29
 
 **Qué:** Un botón/sección de "Panel de control" que agrupe la administración —**Formatos, Usuarios,
 Modelos** (y probablemente **Categorías de falla**)— en un solo lugar, sacándolos del Header para
@@ -30,6 +30,8 @@ descongestionar la navegación principal.
 - ¿Nombre/ícono del acceso en el Header?
 
 **Riesgo:** Bajo (mayormente reorganización de UI; sin schema).
+
+**Implementado:** ⚙ Panel agrupa Formatos, Usuarios, Modelos, Categorías de falla en `/panel`. Productos sigue en Header. Gate `gerente_soporte` o superusuario. Spec `docs/superpowers/specs/2026-05-29-panel-control-design.md`, plan `docs/superpowers/plans/2026-05-29-panel-control.md`.
 
 ---
 
