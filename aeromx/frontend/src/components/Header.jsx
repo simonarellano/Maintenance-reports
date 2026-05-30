@@ -27,8 +27,8 @@ export function Header() {
   const esSuper = user?.superusuario === true
   // Catálogos (productos, modelos, formatos): gerente o ingeniero de soporte.
   const puedeCatalogos = esSuper || user?.rol === 'gerente_soporte' || user?.rol === 'ingeniero_soporte'
-  // Usuarios: solo gerente de soporte.
-  const puedeUsuarios = esSuper || user?.rol === 'gerente_soporte'
+  // Panel de control (catálogos admin agrupados): solo gerente o super.
+  const puedePanel = esSuper || user?.rol === 'gerente_soporte'
   const isMobile = useIsMobile()
   const [drawerOpen, setDrawerOpen] = useState(false)
 
@@ -54,9 +54,7 @@ export function Header() {
     { to: '/flota',      label: 'Flota',      show: true },
     { to: '/fallas',     label: 'Fallas',     show: true },
     { to: '/productos',  label: 'Productos',  show: puedeCatalogos },
-    { to: '/modelos',    label: 'Modelos',    show: puedeCatalogos },
-    { to: '/formatos',   label: 'Formatos',   show: puedeCatalogos },
-    { to: '/usuarios',   label: 'Usuarios',   show: puedeUsuarios },
+    { to: '/panel',      label: '⚙ Panel',    show: puedePanel },
   ].filter((l) => l.show)
 
   const initials = (user?.nombre || user?.email || '?')
