@@ -556,3 +556,34 @@ export function Modal({ open, onClose, title, children, footer, maxWidth = 480 }
     </div>
   )
 }
+
+// ── Avatar — foto o iniciales del usuario, con callsign opcional ──
+export function Avatar({ usuario, size = 38, showCallsign = false }) {
+  const url = usuario?.fotoUrl
+  const initials = (usuario?.nombre || usuario?.email || '?')
+    .split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()
+  return (
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+      <div
+        title={usuario?.distintivo || undefined}
+        style={{
+          width: size, height: size, borderRadius: '50%',
+          background: T.cD, border: `1px solid ${T.cyan}35`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: T.cyan, fontSize: Math.round(size * 0.34), fontWeight: 700,
+          fontFamily: T.font, overflow: 'hidden', flexShrink: 0,
+        }}
+      >
+        {url
+          ? <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          : initials}
+      </div>
+      {showCallsign && usuario?.distintivo && (
+        <span style={{
+          fontFamily: T.mono, fontSize: 11, color: T.cyan,
+          letterSpacing: '0.05em',
+        }}>{usuario.distintivo}</span>
+      )}
+    </div>
+  )
+}
