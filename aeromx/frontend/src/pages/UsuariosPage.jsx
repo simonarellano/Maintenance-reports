@@ -5,7 +5,7 @@ import { usuariosService } from '../api/usuariosService'
 import { useAuthStore } from '../store/authStore'
 import { T, ROL_LABELS, ROL_COLOR, ROLES } from '../tokens/design'
 import {
-  Btn, BtnSm, Card, ErrorBanner, Field, FieldSelect, Hdr, Pill, Spinner,
+  Btn, BtnSm, Card, ErrorBanner, Field, FieldSelect, FieldTextarea, Hdr, Pill, Spinner,
 } from '../components/ui'
 
 export default function UsuariosPage() {
@@ -49,17 +49,25 @@ export default function UsuariosPage() {
 
   const guardar = async (datos) => {
     try {
+      let guardado
       if (editando) {
-        await usuariosService.actualizar(editando.id, datos)
+        const { data } = await usuariosService.actualizar(editando.id, datos)
+        guardado = data
       } else {
-        await usuariosService.crear(datos)
+        const { data } = await usuariosService.crear(datos)
+        guardado = data
       }
-      setModoAlta(false)
-      setEditando(null)
-      await cargar()
+      return guardado
     } catch (e) {
       setError(e.response?.data?.error || 'Error guardando el usuario')
+      throw e
     }
+  }
+
+  const cerrarForm = async () => {
+    setModoAlta(false)
+    setEditando(null)
+    await cargar()
   }
 
   const desactivar = async (u) => {
@@ -145,6 +153,7 @@ export default function UsuariosPage() {
             inicial={editando}
             onCancelar={() => { setModoAlta(false); setEditando(null) }}
             onGuardar={guardar}
+            onCerrar={cerrarForm}
           />
         )}
 
@@ -252,7 +261,7 @@ function Td({ children, align }) {
   )
 }
 
-function FormularioUsuario({ inicial, onCancelar, onGuardar }) {
+function FormularioUsuario({ inicial, onCancelar, onGuardar, onCerrar }) {
   const [nombre, setNombre] = useState(inicial?.nombre || '')
   const [email, setEmail] = useState(inicial?.email || '')
   const [rol, setRol] = useState(inicial?.rol || 'tecnico_soporte')
@@ -262,6 +271,9 @@ function FormularioUsuario({ inicial, onCancelar, onGuardar }) {
   const [passwordConfirm, setPasswordConfirm] = useState('')
   const [activo, setActivo] = useState(inicial?.activo ?? true)
   const [superusuario, setSuperusuario] = useState(inicial?.superusuario ?? false)
+  const [distintivo, setDistintivo] = useState(inicial?.distintivo || '')
+  const [descripcionPuesto, setDescripcionPuesto] = useState(inicial?.descripcionPuesto || '')
+  const [foto, setFoto] = useState(null) // File local pendiente de subir
   const [saving, setSaving] = useState(false)
   const [errorLocal, setErrorLocal] = useState('')
 
@@ -290,10 +302,23 @@ function FormularioUsuario({ inicial, onCancelar, onGuardar }) {
         superusuario,
         licenciaNum: licenciaNum.trim() || null,
         telefono: telefono.trim() || null,
+        distintivo: distintivo.trim() || null,
+        descripcionPuesto: descripcionPuesto.trim() || null,
       }
       if (password) datos.password = password
       if (inicial) datos.activo = activo
-      await onGuardar(datos)
+      const guardado = await onGuardar(datos)
+      if (guardado?.id && foto) {
+        try {
+          await usuariosService.subirFoto(guardado.id, foto)
+        } catch (e) {
+          setErrorLocal(e.response?.data?.error || 'Usuario guardado, pero falló la subida de la foto')
+          return
+        }
+      }
+      if (onCerrar) await onCerrar()
+    } catch (e) {
+      // El error ya fue mostrado por el padre vía setError.
     } finally {
       setSaving(false)
     }
@@ -353,6 +378,44 @@ function FormularioUsuario({ inicial, onCancelar, onGuardar }) {
             onChange={setPasswordConfirm}
             autoComplete="new-password"
           />
+        </div>
+
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12,
+        }}>
+          <Field
+            label="Distintivo (callsign, ≤ 16)"
+            value={distintivo}
+            onChange={(v) => setDistintivo(v.toUpperCase())}
+            placeholder="HALCON-01"
+            mono
+            inputProps={{ maxLength: 16 }}
+          />
+          <FieldTextarea
+            label="Descripción del puesto (≤ 200)"
+            value={descripcionPuesto}
+            onChange={setDescripcionPuesto}
+            rows={2}
+            minHeight={60}
+          />
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span style={{
+            fontSize: 11, fontWeight: 600, color: T.sub,
+            letterSpacing: '0.07em', textTransform: 'uppercase',
+          }}>Foto (opcional, JPG/PNG/WebP ≤ 2MB)</span>
+          <input
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={(e) => setFoto(e.target.files?.[0] || null)}
+            style={{ fontSize: 12, color: T.sub, fontFamily: T.font }}
+          />
+          {foto && (
+            <span style={{ fontSize: 11, color: T.sub }}>
+              Seleccionada: {foto.name} ({Math.round(foto.size / 1024)} KB)
+            </span>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
