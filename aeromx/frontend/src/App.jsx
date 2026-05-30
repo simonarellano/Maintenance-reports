@@ -19,6 +19,7 @@ import FallasPage from './pages/FallasPage'
 import FallaDetallePage from './pages/FallaDetallePage'
 import FallasDashboardPage from './pages/FallasDashboardPage'
 import PanelControlPage from './pages/PanelControlPage'
+import MiPerfilPage from './pages/MiPerfilPage'
 
 function App() {
   const hydrate = useAuthStore((state) => state.hydrate)
@@ -148,6 +149,14 @@ function App() {
           element={
             <ProtectedRoute>
               <PanelControlPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/mi-perfil"
+          element={
+            <ProtectedRoute>
+              <MiPerfilPage />
             </ProtectedRoute>
           }
         />
