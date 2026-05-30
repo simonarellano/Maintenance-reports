@@ -33,7 +33,7 @@ export function requireRole(roles) {
 export function requireDueñoOGerente(req, res, next) {
   const u = req.user
   if (!u) return res.status(401).json({ error: 'No autenticado' })
-  const esDueño   = u.id === req.params.id
+  const esDueño   = u.sub === req.params.id
   const esGerente = u.rol === 'gerente_soporte' || u.superusuario === true
   if (esDueño || esGerente) return next()
   return res.status(403).json({ error: 'Acceso no autorizado' })
