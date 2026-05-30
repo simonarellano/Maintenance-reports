@@ -47,6 +47,17 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true, ts: new Date().toISOString() })
 })
 
+// Errores de Multer (subida de archivos): mapear a 400 antes del genérico.
+app.use((err, _req, res, next) => {
+  if (err && err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(400).json({ error: 'Archivo excede el límite permitido' })
+  }
+  if (err && err.message === 'TIPO_FOTO_INVALIDO') {
+    return res.status(400).json({ error: 'Tipo de imagen no permitido (JPG/PNG/WebP)' })
+  }
+  next(err)
+})
+
 // Manejador global de errores — captura lo que no se manejó en controllers
 app.use((err, _req, res, _next) => {
   console.error(err)
