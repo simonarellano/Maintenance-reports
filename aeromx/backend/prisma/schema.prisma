@@ -88,6 +88,9 @@ model Usuario {
   superusuario Boolean   @default(false)
   licenciaNum  String?   @map("licencia_num")
   telefono     String?
+  fotoUrl            String?   @map("foto_url")
+  distintivo         String?   @unique
+  descripcionPuesto  String?   @map("descripcion_puesto")
   activo       Boolean   @default(true)
   ultimoAcceso DateTime? @map("ultimo_acceso")
   createdAt    DateTime  @default(now()) @map("created_at")
