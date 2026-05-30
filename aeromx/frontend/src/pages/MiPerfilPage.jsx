@@ -190,7 +190,7 @@ function RowReadonly({ label, value }) {
 function inputStyle() {
   return {
     width: '100%',
-    background: T.s0, border: `1px solid ${T.border}`,
+    background: T.s2, border: `1px solid ${T.border}`,
     borderRadius: 10, padding: '10px 12px',
     color: T.text, fontSize: 14, fontFamily: T.font,
     outline: 'none',
