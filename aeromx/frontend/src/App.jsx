@@ -18,6 +18,7 @@ import CrearFallaPage from './pages/CrearFallaPage'
 import FallasPage from './pages/FallasPage'
 import FallaDetallePage from './pages/FallaDetallePage'
 import FallasDashboardPage from './pages/FallasDashboardPage'
+import PanelControlPage from './pages/PanelControlPage'
 
 function App() {
   const hydrate = useAuthStore((state) => state.hydrate)
@@ -139,6 +140,14 @@ function App() {
           element={
             <ProtectedRoute>
               <FallaDetallePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/panel"
+          element={
+            <ProtectedRoute>
+              <PanelControlPage />
             </ProtectedRoute>
           }
         />
