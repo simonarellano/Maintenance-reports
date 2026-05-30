@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { T, ROL_LABELS } from '../tokens/design'
+import { Avatar } from './ui'
 
 // ── Hook: matchMedia para detectar mobile ─────────────────────
 function useIsMobile(breakpoint = 900) {
@@ -56,9 +57,6 @@ export function Header() {
     { to: '/productos',  label: 'Productos',  show: puedeCatalogos },
     { to: '/panel',      label: '⚙ Panel',    show: puedePanel },
   ].filter((l) => l.show)
-
-  const initials = (user?.nombre || user?.email || '?')
-    .split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase()
 
   const navButton = (l, { mobile } = {}) => {
     const active = location.pathname.startsWith(l.to)
@@ -171,13 +169,13 @@ export function Header() {
                 </div>
               </div>
             )}
-            <div style={{
-              width: 38, height: 38, borderRadius: 11,
-              background: T.cD, border: `1px solid ${T.cyan}35`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: T.cyan, fontSize: 13, fontWeight: 700,
-              fontFamily: T.font, flexShrink: 0,
-            }}>{initials}</div>
+            <div
+              onClick={() => navigate('/mi-perfil')}
+              style={{ cursor: 'pointer', flexShrink: 0 }}
+              title="Mi perfil"
+            >
+              <Avatar usuario={user} size={38} />
+            </div>
             {!isMobile && (
               <button
                 onClick={handleLogout}
@@ -245,13 +243,12 @@ export function Header() {
               background: T.s1, border: `1px solid ${T.border}`,
               borderRadius: 12, padding: '12px 14px', marginBottom: 14,
             }}>
-              <div style={{
-                width: 40, height: 40, borderRadius: 11,
-                background: T.cD, border: `1px solid ${T.cyan}35`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: T.cyan, fontSize: 13, fontWeight: 700,
-                flexShrink: 0,
-              }}>{initials}</div>
+              <div
+                onClick={() => navigate('/mi-perfil')}
+                style={{ cursor: 'pointer', flexShrink: 0 }}
+              >
+                <Avatar usuario={user} size={40} />
+              </div>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{
                   fontSize: 13, fontWeight: 600, color: T.text,
