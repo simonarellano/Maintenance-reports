@@ -2,6 +2,72 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+---
+
+## 🚦 Checkpoint Sesión 27 (2026-05-30)
+
+**Status:** Phase 1 + Phase 2 + Phase 3 (parcial) completos. Faltan T12, T13, T14, T15, T16.
+
+### Tasks completados (commits en `development`)
+
+| Task | Commit | Notas |
+|---|---|---|
+| T1 schema migración | `9c951d7` | SQL de migración a mano (drift FKs camion/sensor pre-existente excluido); backup en `aeromx/backend/backups/20260529-221638-pre-perfil.sql`. |
+| T2 service whitelist | `e3b36e9` | `SELECT_USUARIO` con 13 campos + `normDistintivo`/`normDescripcion`. |
+| T3 middleware | `3df4596` + `05077cd` (fix) | **`req.user.sub`** (no `id`) — el JWT firma con `sub`. Plan corregido en commit `1f62c11`. |
+| T4 routes | `5037b64` | Multer local 2MB JPG/PNG/WebP, `/me` antes de `/:id`. |
+| T5 controllers | `87d9909` | Storage real exporta `storage` (no `driver`) con API `put({buffer,contentType,originalName})`. Tocó `src/index.js` para mapear errores Multer a 400. |
+| T6 smoke API | (no commit) | 9/9 PASS. Foto del gerente subida y borrada en MinIO. |
+| T7 service frontend | `c172206` | 4 métodos nuevos (`obtenerMe`, `actualizarMe`, `subirFoto`, `eliminarFoto`). |
+| T8 `<Avatar />` | `7892801` | Componente en `ui.jsx:560+`. |
+| T9 MiPerfilPage | `e582337` + `fa2beb0` (fix `T.s0`) + **`4043312` (fix Field children)** | Ruta `/mi-perfil`, `setUser` agregado al `authStore`. **Ver "Caveats" abajo sobre el bug Field/children.** |
+| T10 Header avatar | `f9ffd24` | Avatar reemplaza iniciales en desktop + drawer mobile, click → `/mi-perfil`. |
+| T11 UsuariosPage modal | `a59193a` | 3 campos nuevos + upload foto post-guardar. `guardar` del padre ahora devuelve `data` para que el form capture `id`. |
+
+### Tasks pendientes
+
+- [ ] **T12 — Cards O/T con `<Avatar />`** (`CrearOTPage`, `CierreOTPage`, `InspeccionPage`, `FallaDetallePage`).
+- [ ] **T13 — Firmas UI Cierre** + extender selects backend para incluir `fotoUrl`/`distintivo` de firmantes.
+- [ ] **T14 — `signatureCard` PDF** acepta `fotoUrl`/`distintivo` + map de buffers.
+- [ ] **T15 — PDF controllers** cargan buffers de firmantes y pasan a `signatureCard`.
+- [ ] **T16 — Cierre docs** (`PENDIENTES.md` + `CLAUDE.md`) + smoke E2E.
+
+### Caveats lockeados durante implementación (LEER antes de retomar)
+
+1. **`Field` y `FieldTextarea` en `components/ui.jsx` NO aceptan `children`.** Solo trabajan via props (`value`, `onChange`, `placeholder`, `mono`, `inputProps`, `register`, etc.). El spec original usaba `<Field><input/></Field>` por costumbre, pero ese patrón descarta silenciosamente los children y renderiza un input vacío inservible. T9 (MiPerfilPage) ya quedó corregido en `4043312`. **Para los próximos tasks: usar el patrón de props.** Ejemplo correcto:
+
+   ```jsx
+   <Field
+     label="Distintivo (callsign, ≤ 16)"
+     value={distintivo}
+     onChange={(v) => setDistintivo(v.toUpperCase())}
+     mono
+     inputProps={{ maxLength: 16 }}
+   />
+   ```
+
+2. **JWT payload usa `sub`, NO `id`.** Cualquier código nuevo de backend que necesite el id del usuario en sesión: `req.user.sub`. Confirmado en `aeromx/backend/src/services/authService.js:27`.
+
+3. **Storage facade es `storage` (no `driver`).** Importar `import { storage, keyDesdeUrl } from '../lib/storage/index.js'`. La firma de `put` es `storage.put({ buffer, contentType, originalName }) → { key, size }` — el driver genera la key (con anti-traversal). Patrón vivo: `aeromx/backend/src/controllers/ordenes/fotosController.js`.
+
+4. **Backend bootstrap es `aeromx/backend/src/index.js`** (no hay `app.js`). El handler de errores de Multer se agregó ahí en T5, antes del handler global. Cualquier middleware nuevo va antes del `app.listen`.
+
+5. **`prisma/migrations/` está en `.gitignore`.** El SQL de la migración Usuario está SOLO en el filesystem de dev. Si despliegas en otra máquina, regenera con `prisma migrate diff` o copia la migración manual.
+
+6. **Backend a veces queda corriendo en :3001 entre sesiones.** Si `npm run dev` falla con EADDRINUSE: mata el proceso node con el puerto antes (`netstat -ano | findstr :3001` en Windows / `lsof -i :3001`).
+
+7. **`useAuthStore.setUser(usuario)`** ya disponible. Llamar después de modificar el perfil propio (`/me`) o el del avatar mostrado para refrescar el Header sin logout.
+
+### Cómo retomar en la próxima sesión
+
+1. Cargar este plan (`docs/superpowers/plans/2026-05-29-perfil-usuario.md`) y este checkpoint.
+2. Invocar `superpowers:subagent-driven-development` o `superpowers:executing-plans` y arrancar desde **T12**.
+3. Verificar antes que el backend arranca limpio (`cd aeromx/backend && npm run dev` → "AeroMX API corriendo en http://localhost:3001") y que el frontend buildea (`cd aeromx/frontend && npm run build`).
+4. T12 debe leer cada una de las 4 páginas (CrearOT, Cierre, Inspeccion, FallaDetalle) para identificar los renglones de personal. Algunos pueden requerir ajustar el `include`/`select` del backend de la orden si `fotoUrl`/`distintivo` de los asignados aún no vienen en el payload — esto se prepara explícitamente en T13 Step 3, pero T12 puede topar con cards sin esos campos y mostrar fallback iniciales (que es el comportamiento por defecto de `<Avatar />` cuando `usuario.fotoUrl` es undefined).
+5. **T11 dejó al padre `guardar` devolviendo el `data` del backend.** Si T12 toca el flujo de creación/edición de O/T y necesita el mismo patrón (devolver el data para capturar id), revisar `UsuariosPage.jsx` líneas ~135-160 para el patrón.
+
+---
+
 **Goal:** Agregar `fotoUrl`, `distintivo` (callsign único) y `descripcionPuesto` al usuario, exponer `/mi-perfil` para auto-edición, y propagar foto + callsign a Header, cards de personal en O/T, firmas UI de cierre y bloque de firmas del PDF HYDRA.
 
 **Architecture:** Migración aditiva manual (sin `migrate dev`), 4 endpoints nuevos en `routes/usuarios.js` (`GET/PATCH /me`, `POST/DELETE /:id/foto`), un middleware `requireDueñoOGerente`, multer local con límite 2MB y filtro JPG/PNG/WebP que reusa la capa `lib/storage/`. Frontend introduce un único componente `<Avatar />` en `components/ui.jsx` que reemplaza todos los círculos de iniciales actuales (Header, cards, firmas), más una página dedicada `MiPerfilPage.jsx`. El PDF extiende `signatureCard` para aceptar foto y callsign y embeber la imagen con `doc.save()/.clip()/.restore()` siguiendo el patrón de `evidenceGallery` (`pdf/ui.js:459`).
