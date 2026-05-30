@@ -4,7 +4,7 @@ import { Header } from '../components/Header'
 import { useAuthStore } from '../store/authStore'
 import { usuariosService } from '../api/usuariosService'
 import { T, ROL_LABELS } from '../tokens/design'
-import { Avatar, Btn, BtnSm, Card, ErrorBanner, Field, Hdr, Spinner } from '../components/ui'
+import { Avatar, Btn, BtnSm, Card, ErrorBanner, Field, FieldTextarea, Hdr, Spinner } from '../components/ui'
 
 const MAX_FOTO_BYTES = 2 * 1024 * 1024
 const TIPOS_OK = ['image/jpeg', 'image/png', 'image/webp']
@@ -137,25 +137,20 @@ export default function MiPerfilPage() {
         {/* Datos públicos */}
         <Card padding={20} style={{ marginBottom: 16 }}>
           <form onSubmit={guardar} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <Field label={`Distintivo (callsign, ≤ ${MAX_DISTINTIVO})`}>
-              <input
-                value={distintivo}
-                onChange={(e) => setDistintivo(e.target.value)}
-                maxLength={MAX_DISTINTIVO}
-                placeholder="HALCON-01"
-                style={inputStyle()}
-                onInput={(e) => { e.currentTarget.value = e.currentTarget.value.toUpperCase() }}
-              />
-            </Field>
-            <Field label={`Descripción del puesto (≤ ${MAX_DESCRIPCION})`}>
-              <textarea
-                value={descripcionPuesto}
-                onChange={(e) => setDescripcion(e.target.value)}
-                maxLength={MAX_DESCRIPCION}
-                rows={3}
-                style={{ ...inputStyle(), resize: 'vertical', fontFamily: T.font }}
-              />
-            </Field>
+            <Field
+              label={`Distintivo (callsign, ≤ ${MAX_DISTINTIVO})`}
+              value={distintivo}
+              onChange={(v) => setDistintivo(v.toUpperCase())}
+              placeholder="HALCON-01"
+              mono
+              inputProps={{ maxLength: MAX_DISTINTIVO }}
+            />
+            <FieldTextarea
+              label={`Descripción del puesto (≤ ${MAX_DESCRIPCION})`}
+              value={descripcionPuesto}
+              onChange={(v) => setDescripcion(v.slice(0, MAX_DESCRIPCION))}
+              rows={3}
+            />
             <Btn label={saving ? 'Guardando…' : 'Guardar'} type="submit" disabled={saving} />
           </form>
         </Card>
@@ -187,12 +182,3 @@ function RowReadonly({ label, value }) {
   )
 }
 
-function inputStyle() {
-  return {
-    width: '100%',
-    background: T.s2, border: `1px solid ${T.border}`,
-    borderRadius: 10, padding: '10px 12px',
-    color: T.text, fontSize: 14, fontFamily: T.font,
-    outline: 'none',
-  }
-}
