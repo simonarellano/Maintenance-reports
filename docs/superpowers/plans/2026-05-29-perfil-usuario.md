@@ -341,7 +341,7 @@ Justo antes de `export async function desactivar` (línea 49 aprox), insertar al
 // ── Auto-servicio (dueño) ─────────────────────────────────────
 export async function obtenerMe(req, res, next) {
   try {
-    const usuario = await svc.obtenerUsuario(req.user.id)
+    const usuario = await svc.obtenerUsuario(req.user.sub)
     if (!usuario) return res.status(404).json({ error: 'Usuario no encontrado' })
     res.json(usuario)
   } catch (e) { next(e) }
@@ -351,7 +351,7 @@ export async function actualizarMe(req, res, next) {
   try {
     // Whitelist explícita: SOLO distintivo y descripcionPuesto.
     const { distintivo, descripcionPuesto } = req.body
-    const usuario = await svc.actualizarUsuario(req.user.id, { distintivo, descripcionPuesto })
+    const usuario = await svc.actualizarUsuario(req.user.sub, { distintivo, descripcionPuesto })
     res.json(usuario)
   } catch (e) {
     if (e.code === 'VALIDATION') return res.status(400).json({ error: e.message })
