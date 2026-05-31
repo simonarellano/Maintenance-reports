@@ -396,8 +396,9 @@ export function signatureCard(doc, x, y, w, h, caja, fmtFechaHoraFn, buffers) {
   doc.save()
   doc.lineWidth(0.8).strokeColor(COLOR.line).circle(fotoCx, fotoCy, fotoR).stroke()
   if (buf) {
+    doc.save()                         // save interior — antes del try garantiza par exacto con finally
     try {
-      doc.save().circle(fotoCx, fotoCy, fotoR - 0.5).clip()
+      doc.circle(fotoCx, fotoCy, fotoR - 0.5).clip()
       doc.image(buf, fotoCx - fotoR, fotoCy - fotoR, { fit: [fotoR * 2, fotoR * 2], align: 'center', valign: 'center' })
     } catch {
       /* imagen ilegible — sin foto, el círculo vacío queda */
@@ -437,7 +438,7 @@ export function signatureCard(doc, x, y, w, h, caja, fmtFechaHoraFn, buffers) {
 
   // callsign / distintivo (debajo del rol, fuente mono, color acento)
   if (caja.distintivo) {
-    font(doc, FONT.mono).fontSize(8).fillColor(COLOR.ok)
+    font(doc, FONT.mono).fontSize(8).fillColor(COLOR.accent)
       .text(caja.distintivo, x + 14, lineY + 30, { width: w - 28, lineBreak: false, ellipsis: true })
   }
 
