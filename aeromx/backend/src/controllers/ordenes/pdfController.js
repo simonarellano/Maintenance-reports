@@ -494,7 +494,10 @@ function drawFooter(doc, orden, pageNum, totalPages, M, W) {
 
 // ─── Evidencia fotográfica ──────────────────────────────────────────────────
 
-// pdfkit solo embebe PNG y JPEG.
+// pdfkit solo embebe PNG y JPEG (no WebP — lanza "Unknown image format").
+// NO agregar '.webp' aquí: el upload de foto de perfil acepta WebP para el
+// Avatar web, pero en el PDF una foto WebP cae intencionalmente al fallback de
+// iniciales (agregarla solo desperdiciaría I/O descargando un buffer que pdfkit rechaza).
 const EXT_IMG_VALIDAS = new Set(['.png', '.jpg', '.jpeg'])
 
 function esImagenEmbebible(urlArchivo) {
