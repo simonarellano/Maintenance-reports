@@ -75,7 +75,7 @@ export async function generar(req, res, next) {
     renderPersonas(doc, falla, M, W, num)
     renderResolucion(doc, falla, M, W, num)
     renderEvidencia(doc, falla, fotosBuffers, M, W, num)
-    renderFirma(doc, falla, M, W, num)
+    await renderFirma(doc, falla, M, W, num)
 
     const pages = doc.bufferedPageRange()
     for (let i = 0; i < pages.count; i++) {
@@ -221,22 +221,34 @@ function renderEvidencia(doc, falla, fotosBuffers, M, W, num) {
   }
 }
 
-function renderFirma(doc, falla, M, W, num) {
+async function renderFirma(doc, falla, M, W, num) {
   if (falla.estado !== 'resuelta' || !falla.resueltoPor) return
   ui.sectionHead(doc, num(), 'Firma de resolución', M, W)
 
   const persona = falla.resueltoPor
+
+  // Cargar buffer de foto del resolutor (tolera fallos: null → fallback iniciales)
+  const buffersFirma = new Map()
+  if (persona?.fotoUrl) {
+    try {
+      const key = keyDesdeUrl(persona.fotoUrl)
+      buffersFirma.set(persona.fotoUrl, key ? await storage.getBuffer(key) : null)
+    } catch { buffersFirma.set(persona.fotoUrl, null) }
+  }
+
   const boxW = Math.min(W, (W - 14) / 2 < 200 ? W : (W - 14) / 2)
   const boxH = 104
   ui.ensureSpace(doc, boxH + 10)
   const y = doc.y + 4
   ui.signatureCard(doc, M, y, boxW, boxH, {
-    categoria: 'Resolución',
-    nombre: persona?.nombre,
-    rol: (persona?.rol || '').replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase()),
-    licencia: persona?.licenciaNum,
-    fecha: falla.fechaResolucion,
-  }, fmtFechaHora)
+    categoria:  'Resolución',
+    nombre:     persona?.nombre,
+    rol:        (persona?.rol || '').replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase()),
+    licencia:   persona?.licenciaNum,
+    fecha:      falla.fechaResolucion,
+    fotoUrl:    persona?.fotoUrl    || null,
+    distintivo: persona?.distintivo || null,
+  }, fmtFechaHora, buffersFirma)
   doc.y = y + boxH + 10
   doc.x = M
 }

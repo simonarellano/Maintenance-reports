@@ -130,7 +130,7 @@ export async function generar(req, res, next) {
         continue
       }
       const renderer = BUILTIN_RENDERERS[item.tipo]
-      if (renderer) renderer(doc, orden, ctx)
+      if (renderer) await renderer(doc, orden, ctx)
     }
 
     // El footer se dibuja bajo el margen inferior (page.height - 30). pdfkit auto-agrega
@@ -321,20 +321,23 @@ function renderDictamen(doc, orden, ctx) {
   doc.x = ctx.M
 }
 
-function renderFirmas(doc, orden, ctx) {
+async function renderFirmas(doc, orden, ctx) {
   ui.sectionHead(doc, ctx.nextSectionNum(), 'Firmas de conformidad', ctx.M, ctx.W)
   const c = orden.cierre
   const tipo = orden.producto?.tipoProducto
 
   const cajas = [
-    { categoria: 'Soporte', persona: c?.soporte || orden.soporte, fecha: c?.fechaFirmaSoporte },
-    { categoria: 'Aprobación', persona: c?.gerente || orden.gerente, fecha: c?.fechaFirmaGerente },
+    { categoria: 'Soporte',    persona: c?.soporte  || orden.soporte,  fecha: c?.fechaFirmaSoporte },
+    { categoria: 'Aprobación', persona: c?.gerente  || orden.gerente,  fecha: c?.fechaFirmaGerente },
   ]
   if (tipo === 'aeronave') {
-    cajas.push({ categoria: 'Operación', persona: c?.piloto || orden.piloto, fecha: c?.fechaFirmaPiloto })
+    cajas.push({ categoria: 'Operación', persona: c?.piloto   || orden.piloto,   fecha: c?.fechaFirmaPiloto })
   } else if (tipo === 'gcs') {
     cajas.push({ categoria: 'Operación', persona: c?.operador || orden.operador, fecha: c?.fechaFirmaOperador })
   }
+
+  // Cargar buffers de fotos de los firmantes (tolera fallos: null → fallback iniciales)
+  const buffersFirmas = await cargarBuffersFirmas(cajas.map((cj) => cj.persona?.fotoUrl))
 
   const gap = 14
   const boxW = (ctx.W - gap * (cajas.length - 1)) / cajas.length
@@ -343,15 +346,32 @@ function renderFirmas(doc, orden, ctx) {
   const y = doc.y + 4
   cajas.forEach((cj, i) => {
     ui.signatureCard(doc, ctx.M + i * (boxW + gap), y, boxW, boxH, {
-      categoria: cj.categoria,
-      nombre: cj.persona?.nombre,
-      rol: (cj.persona?.rol || '').replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase()),
-      licencia: cj.persona?.licenciaNum,
-      fecha: cj.fecha,
-    }, fmtFechaHora)
+      categoria:   cj.categoria,
+      nombre:      cj.persona?.nombre,
+      rol:         (cj.persona?.rol || '').replace(/_/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase()),
+      licencia:    cj.persona?.licenciaNum,
+      fecha:       cj.fecha,
+      fotoUrl:     cj.persona?.fotoUrl     || null,
+      distintivo:  cj.persona?.distintivo  || null,
+    }, fmtFechaHora, buffersFirmas)
   })
   doc.y = y + boxH + 10
   doc.x = ctx.M
+}
+
+// Carga buffers de fotos de firmantes desde storage.
+// Recibe array de urlArchivo (algunos pueden ser null/undefined).
+// Devuelve Map<urlArchivo, Buffer|null>; tolera fallos individuales.
+async function cargarBuffersFirmas(urls) {
+  const out = new Map()
+  for (const u of urls) {
+    if (!u || out.has(u)) continue
+    try {
+      const key = keyDesdeUrl(u)
+      out.set(u, key ? await storage.getBuffer(key) : null)
+    } catch { out.set(u, null) }
+  }
+  return out
 }
 
 const BUILTIN_RENDERERS = {
