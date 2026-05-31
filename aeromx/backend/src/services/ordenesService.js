@@ -634,10 +634,10 @@ export function crearOActualizarCierre(ordenId, data) {
     create: { ordenId, seEncontroDefecto, refDocCorrectivo, observacionesGenerales },
     update: { seEncontroDefecto, refDocCorrectivo, observacionesGenerales },
     include: {
-      soporte:  { select: { id: true, nombre: true, rol: true, fotoUrl: true, distintivo: true } },
-      gerente:  { select: { id: true, nombre: true, rol: true, fotoUrl: true, distintivo: true } },
-      piloto:   { select: { id: true, nombre: true, rol: true, fotoUrl: true, distintivo: true } },
-      operador: { select: { id: true, nombre: true, rol: true, fotoUrl: true, distintivo: true } },
+      soporte:  INCLUDE_USUARIO_BASICO,
+      gerente:  INCLUDE_USUARIO_BASICO,
+      piloto:   INCLUDE_USUARIO_BASICO,
+      operador: INCLUDE_USUARIO_BASICO,
     },
   })
 }
@@ -784,10 +784,10 @@ export async function firmarCierre(ordenId, usuarioId) {
       where: { ordenId },
       data,
       include: {
-        soporte:  { select: { id: true, nombre: true, rol: true, fotoUrl: true, distintivo: true } },
-        gerente:  { select: { id: true, nombre: true, rol: true, fotoUrl: true, distintivo: true } },
-        piloto:   { select: { id: true, nombre: true, rol: true, fotoUrl: true, distintivo: true } },
-        operador: { select: { id: true, nombre: true, rol: true, fotoUrl: true, distintivo: true } },
+        soporte:  INCLUDE_USUARIO_BASICO,
+        gerente:  INCLUDE_USUARIO_BASICO,
+        piloto:   INCLUDE_USUARIO_BASICO,
+        operador: INCLUDE_USUARIO_BASICO,
       },
     })
 
