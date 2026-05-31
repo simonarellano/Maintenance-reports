@@ -230,10 +230,17 @@ async function renderFirma(doc, falla, M, W, num) {
   // Cargar buffer de foto del resolutor (tolera fallos: null → fallback iniciales)
   const buffersFirma = new Map()
   if (persona?.fotoUrl) {
-    try {
-      const key = keyDesdeUrl(persona.fotoUrl)
-      buffersFirma.set(persona.fotoUrl, key ? await storage.getBuffer(key) : null)
-    } catch { buffersFirma.set(persona.fotoUrl, null) }
+    if (!esImagenEmbebible(persona.fotoUrl)) {
+      buffersFirma.set(persona.fotoUrl, null)
+    } else {
+      try {
+        const key = keyDesdeUrl(persona.fotoUrl)
+        buffersFirma.set(persona.fotoUrl, key ? await storage.getBuffer(key) : null)
+      } catch (e) {
+        console.warn(`[pdf] no se pudo cargar foto de firmante ${persona.fotoUrl}: ${e.message}`)
+        buffersFirma.set(persona.fotoUrl, null)
+      }
+    }
   }
 
   const boxW = Math.min(W, (W - 14) / 2 < 200 ? W : (W - 14) / 2)

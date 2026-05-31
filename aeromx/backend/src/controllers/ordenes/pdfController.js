@@ -366,10 +366,14 @@ async function cargarBuffersFirmas(urls) {
   const out = new Map()
   for (const u of urls) {
     if (!u || out.has(u)) continue
+    if (!esImagenEmbebible(u)) { out.set(u, null); continue }
     try {
       const key = keyDesdeUrl(u)
       out.set(u, key ? await storage.getBuffer(key) : null)
-    } catch { out.set(u, null) }
+    } catch (e) {
+      console.warn(`[pdf] no se pudo cargar foto de firmante ${u}: ${e.message}`)
+      out.set(u, null)
+    }
   }
   return out
 }
