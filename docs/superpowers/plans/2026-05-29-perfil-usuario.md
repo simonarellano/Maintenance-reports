@@ -68,6 +68,35 @@
 
 ---
 
+## 🚦 Checkpoint Sesión 28 (2026-05-30)
+
+**Status:** Plan 100% implementado (T1–T16). Pusheado a `origin/development` (`dbf38f9..cb7f0a9`). Pendiente #2 del backlog cerrado.
+
+### Tasks completados esta sesión (commits en `development`)
+
+| Task | Commit(s) | Notas |
+|---|---|---|
+| T12 cards O/T con `<Avatar />` | `7c4dc86` + `b86c326` (fix dead code) | Aplicado en `CierreOTPage`, `InspeccionPage`, `FallaDetallePage`. **`CrearOTPage` = N/A**: usa `<select>` HTML nativo (options de strings), sin slot para JSX/Avatar. Se eliminó `soporteLabel` huérfana. |
+| T13 firmas UI + selects backend | `24f6a54` + `3691984` (DRY) | `FirmaRow` con `<Avatar showCallsign size={48}>`; fuente del firmante `cierre?.soporte \|\| orden?.soporte`. Backend: `INCLUDE_USUARIO_BASICO` y los 4 firmantes del cierre traen `fotoUrl`/`distintivo`/`licenciaNum` en los 3 sitios (`obtenerOrden`, `crearOActualizarCierre`, `firmarCierre`). |
+| T14 `signatureCard` PDF | `30273be` + `f90ff7b` (fix) | Foto circular (clip) + callsign mono `COLOR.accent`. 7º param `buffers` opcional. Fix: `save()` fuera del `try` (balance gráfico), callsign en acento (no verde de estado). |
+| T15 PDF controllers + buffers | `d22a5cf` + `6984013` (fix) | O/T y falla cargan buffers con `storage.getBuffer` + `keyDesdeUrl`. `renderFirmas`/`renderFirma` → async, loop de renderers awaiteado (secuencial, preserva layout). Cerró gap en `INCLUDE_FALLA` (fotoUrl/distintivo en reportadoPor/responsable/resueltoPor). Fix: filtro `esImagenEmbebible` + `console.warn` en fallos de storage. |
+| T16 cierre docs | `541fbfe` + `cb7f0a9` | PENDIENTES #2 ✅, CLAUDE.md Sesión 27–28, aclaración limitación WebP. |
+
+### Verificación
+- Frontend `npm run build` PASS · módulos backend cargan ok · smoke API: `/me` con campos nuevos, PDF de O/T cerrada → `%PDF` ~18MB sin 500.
+- **Pendiente (no automatable):** smoke UI visual manual por rol (subir foto en `/mi-perfil`, ver avatar/callsign en cards y firmas, inspeccionar el PDF abierto).
+
+### ⚠️ NOTA / decisión pendiente — QUITAR la foto del firmante en el PDF
+Se decidió **revertir la función de embeber la foto del firmante en el PDF**. El callsign/distintivo y el resto del flujo (Avatar en web, foto en `/mi-perfil`, cards y firmas UI) se quedan; **solo se elimina la foto circular del bloque de firmas del PDF**. Alcance del trabajo a revertir:
+
+- **`backend/src/pdf/ui.js` → `signatureCard`** (commits `30273be`/`f90ff7b`): quitar el bloque de foto circular (save/clip/image/iniciales) y, si se desea, conservar el callsign. El 7º param `buffers` queda sin uso → eliminarlo o dejarlo ignorado.
+- **`backend/src/controllers/ordenes/pdfController.js`** y **`controllers/fallas/pdfController.js`** (commits `d22a5cf`/`6984013`): quitar `cargarBuffersFirmas`/carga inline de buffers de firmantes y el 7º arg en las llamadas a `signatureCard`. Revisar si `renderFirmas`/`renderFirma` pueden volver a ser sync (si ya no hay `await` de storage en ellas) y revertir el loop awaiteado; o dejarlas async sin costo. `caja.fotoUrl` deja de ser necesario (mantener `distintivo` si el callsign se conserva).
+- **No tocar** los selects de backend (`fotoUrl` en `INCLUDE_USUARIO_BASICO`/`INCLUDE_FALLA`) salvo que se confirme que ningún surface web los usa — el Avatar web SÍ los necesita, así que **dejarlos**.
+- Limitación WebP (`EXT_IMG_VALIDAS`/comentarios) deja de aplicar al PDF una vez quitada la foto → limpiar esos comentarios al revertir.
+- Verificar: PDF de O/T cerrada y de falla resuelta siguen generando `%PDF` sin 500; `npm run build`.
+
+---
+
 **Goal:** Agregar `fotoUrl`, `distintivo` (callsign único) y `descripcionPuesto` al usuario, exponer `/mi-perfil` para auto-edición, y propagar foto + callsign a Header, cards de personal en O/T, firmas UI de cierre y bloque de firmas del PDF HYDRA.
 
 **Architecture:** Migración aditiva manual (sin `migrate dev`), 4 endpoints nuevos en `routes/usuarios.js` (`GET/PATCH /me`, `POST/DELETE /:id/foto`), un middleware `requireDueñoOGerente`, multer local con límite 2MB y filtro JPG/PNG/WebP que reusa la capa `lib/storage/`. Frontend introduce un único componente `<Avatar />` en `components/ui.jsx` que reemplaza todos los círculos de iniciales actuales (Header, cards, firmas), más una página dedicada `MiPerfilPage.jsx`. El PDF extiende `signatureCard` para aceptar foto y callsign y embeber la imagen con `doc.save()/.clip()/.restore()` siguiendo el patrón de `evidenceGallery` (`pdf/ui.js:459`).
