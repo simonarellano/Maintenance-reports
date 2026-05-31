@@ -35,7 +35,7 @@ descongestionar la navegación principal.
 
 ---
 
-## 2. Configuraciones de usuario (perfil)
+## 2. Configuraciones de usuario (perfil) ✅ COMPLETADO 2026-05-30
 
 **Qué:** Que cada usuario pueda editar su perfil: **cambiar foto**, **agregar distintivo** y
 **agregar descripción de puesto**.
@@ -56,6 +56,8 @@ descongestionar la navegación principal.
 - ¿Dónde se muestran foto/distintivo además del perfil?
 
 **Riesgo:** Medio (migración + subida de archivos + varios puntos de UI donde se muestra).
+
+**Implementado:** 3 campos en `Usuario` (`fotoUrl`, `distintivo` único ≤ 16 chars upper, `descripcionPuesto`), página `/mi-perfil` para auto-edición, 4 endpoints (`GET/PATCH /api/usuarios/me`, `POST/DELETE /api/usuarios/:id/foto`) con multer 2MB JPG/PNG/WebP + middleware `requireDueñoOGerente`. Componente `<Avatar />` en uso en Header, cards O/T (CrearOT vía selects nativos N/A; Cierre/Inspeccion/FallaDetalle), firmas UI del cierre y bloque de firmas del PDF de O/T + falla (foto circular + callsign mono acento). Spec `docs/superpowers/specs/2026-05-29-perfil-usuario-design.md`, plan `docs/superpowers/plans/2026-05-29-perfil-usuario.md`.
 
 ---
 
