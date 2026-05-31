@@ -366,8 +366,10 @@ function ajustarFontSize(doc, texto, maxW, max, min) {
   return min
 }
 
-// Card de firma. caja: { categoria, nombre, rol, licencia, fecha }  (fecha truthy = firmada)
-export function signatureCard(doc, x, y, w, h, caja, fmtFechaHoraFn) {
+// Card de firma. caja: { categoria, nombre, rol, licencia, fecha, fotoUrl?, distintivo? }  (fecha truthy = firmada)
+// buffers: Map<urlArchivo, Buffer|null> opcional — si se pasa y caja.fotoUrl existe, renderiza foto circular.
+// Los call-sites que no pasen buffers siguen funcionando (fallback a iniciales).
+export function signatureCard(doc, x, y, w, h, caja, fmtFechaHoraFn, buffers) {
   const firmada = !!caja.fecha
   roundedPanel(doc, x, y, w, h, { fill: firmada ? '#FBFCFA' : COLOR.paper, stroke: COLOR.line })
 
@@ -384,24 +386,60 @@ export function signatureCard(doc, x, y, w, h, caja, fmtFechaHoraFn) {
       .lineTo(x + w - 14 - lw - 3, y + 13).stroke().restore()
   }
 
+  // ── Foto circular del firmante (≈36px de diámetro) en la esquina superior derecha ──
+  // Se posiciona debajo del badge "FIRMADO" (y+12) para no encimar: centro en y+44.
+  // La foto queda entre y+26 y y+62, bien por encima de lineY (y+h-48 ≥ y+72 con h≥120).
+  const fotoR = 18
+  const fotoCx = x + w - 14 - fotoR
+  const fotoCy = y + 26 + fotoR   // centro en y+44; borde superior en y+26, inferior en y+62
+  const buf = (caja.fotoUrl && buffers) ? (buffers.get(caja.fotoUrl) || null) : null
+  doc.save()
+  doc.lineWidth(0.8).strokeColor(COLOR.line).circle(fotoCx, fotoCy, fotoR).stroke()
+  if (buf) {
+    try {
+      doc.save().circle(fotoCx, fotoCy, fotoR - 0.5).clip()
+      doc.image(buf, fotoCx - fotoR, fotoCy - fotoR, { fit: [fotoR * 2, fotoR * 2], align: 'center', valign: 'center' })
+    } catch {
+      /* imagen ilegible — sin foto, el círculo vacío queda */
+    } finally {
+      doc.restore()
+    }
+  } else if (caja.nombre) {
+    const ini = caja.nombre.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()
+    font(doc, FONT.sansSemi).fontSize(12).fillColor(COLOR.muted)
+      .text(ini, fotoCx - fotoR, fotoCy - 7, { width: fotoR * 2, align: 'center', lineBreak: false })
+  }
+  doc.restore()
+
   // línea de firma con rúbrica (nombre en mono italic)
+  // El ancho de la rúbrica se reduce para no encimar la foto (columna derecha reservada)
   const lineY = y + h - 48
+  const rubrAnchoMax = w - 28 - fotoR * 2 - 10  // margen derecho reservado para foto
   if (firmada && caja.nombre) {
     doc.save()
     doc.font('Courier-Oblique')
-    const size = ajustarFontSize(doc, caja.nombre, w - 28, 18, 9)
+    const size = ajustarFontSize(doc, caja.nombre, rubrAnchoMax, 18, 9)
     doc.fontSize(size).fillColor(COLOR.ink)
-      .text(caja.nombre, x + 14, lineY - size - 6, { width: w - 28, lineBreak: false, ellipsis: true })
+      .text(caja.nombre, x + 14, lineY - size - 6, { width: rubrAnchoMax, lineBreak: false, ellipsis: true })
     doc.restore()
   }
   doc.lineWidth(1.2).strokeColor(COLOR.ink).moveTo(x + 14, lineY).lineTo(x + w - 14, lineY).stroke()
 
   // nombre + rol + licencia
+  // El ancho del nombre se reduce en la esquina derecha solo hasta donde está la foto;
+  // la foto queda entre y+26 e y+62, por encima de lineY, por lo que nombre/rol/callsign
+  // usan el ancho completo sin riesgo de encimar la imagen.
   font(doc, FONT.sansSemi).fontSize(11).fillColor(COLOR.ink)
     .text(caja.nombre || '—', x + 14, lineY + 5, { width: w - 28, lineBreak: false, ellipsis: true })
   font(doc, FONT.sans).fontSize(8.5).fillColor(COLOR.muted)
     .text(`${caja.rol || ''}${caja.licencia ? ` · Lic. ${caja.licencia}` : ''}`,
       x + 14, lineY + 19, { width: w - 28, lineBreak: false, ellipsis: true })
+
+  // callsign / distintivo (debajo del rol, fuente mono, color acento)
+  if (caja.distintivo) {
+    font(doc, FONT.mono).fontSize(8).fillColor(COLOR.ok)
+      .text(caja.distintivo, x + 14, lineY + 30, { width: w - 28, lineBreak: false, ellipsis: true })
+  }
 
   // pie punteado con timestamp
   const footY = y + h - 4
