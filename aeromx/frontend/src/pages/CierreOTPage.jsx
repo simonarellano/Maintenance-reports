@@ -6,7 +6,7 @@ import { ordenesService } from '../api/ordenesService'
 import { useAuthStore } from '../store/authStore'
 import { T, ROL_LABELS } from '../tokens/design'
 import {
-  Btn, Card, ErrorBanner, FieldTextarea, Hdr, KV, Modal, Pill, Spinner,
+  Avatar, Btn, Card, ErrorBanner, FieldTextarea, Hdr, KV, Modal, Pill, Spinner,
 } from '../components/ui'
 
 export default function CierreOTPage() {
@@ -412,10 +412,62 @@ export default function CierreOTPage() {
               }}>
                 <KV k="Orden"    v={orden?.numeroOt} mono vColor={T.cyan} />
                 <KV k="Producto" v={identificador} mono />
-                <KV k="Soporte"  v={orden?.soporte?.nombre} />
-                <KV k="Gerente"  v={orden?.gerente?.nombre} />
-                {esAeronave && <KV k="Piloto" v={orden?.piloto?.nombre} />}
-                {esGcs && <KV k="Operador" v={orden?.operador?.nombre} />}
+                <KV k="Soporte"  v={
+                  orden?.soporte ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <Avatar usuario={orden.soporte} size={32} />
+                      <div>
+                        <div style={{ fontSize: 13, color: T.text, fontWeight: 600 }}>{orden.soporte.nombre}</div>
+                        {orden.soporte.distintivo && (
+                          <div style={{ fontFamily: T.mono, fontSize: 10, color: T.cyan }}>{orden.soporte.distintivo}</div>
+                        )}
+                      </div>
+                    </div>
+                  ) : '—'
+                } />
+                <KV k="Gerente"  v={
+                  orden?.gerente ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <Avatar usuario={orden.gerente} size={32} />
+                      <div>
+                        <div style={{ fontSize: 13, color: T.text, fontWeight: 600 }}>{orden.gerente.nombre}</div>
+                        {orden.gerente.distintivo && (
+                          <div style={{ fontFamily: T.mono, fontSize: 10, color: T.cyan }}>{orden.gerente.distintivo}</div>
+                        )}
+                      </div>
+                    </div>
+                  ) : '—'
+                } />
+                {esAeronave && (
+                  <KV k="Piloto" v={
+                    orden?.piloto ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <Avatar usuario={orden.piloto} size={32} />
+                        <div>
+                          <div style={{ fontSize: 13, color: T.text, fontWeight: 600 }}>{orden.piloto.nombre}</div>
+                          {orden.piloto.distintivo && (
+                            <div style={{ fontFamily: T.mono, fontSize: 10, color: T.cyan }}>{orden.piloto.distintivo}</div>
+                          )}
+                        </div>
+                      </div>
+                    ) : '—'
+                  } />
+                )}
+                {esGcs && (
+                  <KV k="Operador" v={
+                    orden?.operador ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <Avatar usuario={orden.operador} size={32} />
+                        <div>
+                          <div style={{ fontSize: 13, color: T.text, fontWeight: 600 }}>{orden.operador.nombre}</div>
+                          {orden.operador.distintivo && (
+                            <div style={{ fontFamily: T.mono, fontSize: 10, color: T.cyan }}>{orden.operador.distintivo}</div>
+                          )}
+                        </div>
+                      </div>
+                    ) : '—'
+                  } />
+                )}
               </div>
             </Card>
 

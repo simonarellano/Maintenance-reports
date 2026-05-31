@@ -9,7 +9,7 @@ import {
   T, ESTADO_FALLA, SEVERIDAD, TIPO_PRODUCTO, ROL_LABELS,
 } from '../tokens/design'
 import {
-  Btn, BtnSm, Card, ErrorBanner, FieldSelect, FieldTextarea, Hdr,
+  Avatar, Btn, BtnSm, Card, ErrorBanner, FieldSelect, FieldTextarea, Hdr,
   KV, Modal, Pill, Spinner,
 } from '../components/ui'
 
@@ -377,19 +377,49 @@ export default function FallaDetallePage() {
             gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
             gap: 14,
           }}>
-            <KV k="Reportado por" v={falla.reportadoPor?.nombre || '—'} />
+            <KV k="Reportado por" v={
+              falla.reportadoPor ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Avatar usuario={falla.reportadoPor} size={32} />
+                  <div>
+                    <div style={{ fontSize: 13, color: T.text, fontWeight: 600 }}>{falla.reportadoPor.nombre}</div>
+                    {falla.reportadoPor.distintivo && (
+                      <div style={{ fontFamily: T.mono, fontSize: 10, color: T.cyan }}>{falla.reportadoPor.distintivo}</div>
+                    )}
+                  </div>
+                </div>
+              ) : '—'
+            } />
             <KV
               k="Responsable"
               v={
-                falla.responsable
-                  ? falla.responsable.nombre
-                  : (
-                    <span style={{ color: T.amber, fontStyle: 'italic' }}>Sin asignar</span>
-                  )
+                falla.responsable ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <Avatar usuario={falla.responsable} size={32} />
+                    <div>
+                      <div style={{ fontSize: 13, color: T.text, fontWeight: 600 }}>{falla.responsable.nombre}</div>
+                      {falla.responsable.distintivo && (
+                        <div style={{ fontFamily: T.mono, fontSize: 10, color: T.cyan }}>{falla.responsable.distintivo}</div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <span style={{ color: T.amber, fontStyle: 'italic' }}>Sin asignar</span>
+                )
               }
             />
             {falla.resueltoPor && (
-              <KV k="Resuelto por" v={falla.resueltoPor.nombre} />
+              <KV k="Resuelto por" v={
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Avatar usuario={falla.resueltoPor} size={32} />
+                  <div>
+                    <div style={{ fontSize: 13, color: T.text, fontWeight: 600 }}>{falla.resueltoPor.nombre}</div>
+                    {falla.resueltoPor.distintivo && (
+                      <div style={{ fontFamily: T.mono, fontSize: 10, color: T.cyan }}>{falla.resueltoPor.distintivo}</div>
+                    )}
+                  </div>
+                </div>
+              } />
             )}
           </div>
         </Card>

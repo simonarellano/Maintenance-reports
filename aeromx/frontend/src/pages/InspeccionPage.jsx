@@ -9,7 +9,7 @@ import { categoriasFallaService } from '../api/categoriasFallaService'
 import { useAuthStore } from '../store/authStore'
 import { T, STATUS, PUNTO_STATUS, TIPO_PRODUCTO, ROL_LABELS, SEVERIDAD, SEVERIDADES } from '../tokens/design'
 import {
-  Btn, BtnSm, Card, ErrorBanner, FieldSelect, Hdr,
+  Avatar, Btn, BtnSm, Card, ErrorBanner, FieldSelect, Hdr,
   KV, Modal, Pill, ProgressBar, Spinner,
 } from '../components/ui'
 
@@ -375,11 +375,79 @@ export default function InspeccionPage() {
             display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
             gap: 12, paddingTop: 12, borderTop: `1px solid ${T.border}`,
           }}>
-            <KV k="Soporte"  v={soporteLabel(orden.soporte, orden.ingenieroAuxiliar)} />
-            {orden.mecanico && <KV k="Mecánico" v={orden.mecanico.nombre} />}
-            {tipo === 'gcs' && <KV k="Operador" v={orden.operador?.nombre || 'Sin asignar'} />}
-            <KV k="Gerente"  v={orden.gerente?.nombre || 'Sin asignar'} />
-            {tipo === 'aeronave' && <KV k="Piloto" v={orden.piloto?.nombre || 'Sin asignar'} />}
+            <KV k="Soporte" v={
+              orden.soporte ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Avatar usuario={orden.soporte} size={32} />
+                  <div>
+                    <div style={{ fontSize: 13, color: T.text, fontWeight: 600 }}>
+                      {orden.ingenieroAuxiliar
+                        ? `${orden.soporte.nombre} (+ ${orden.ingenieroAuxiliar.nombre})`
+                        : orden.soporte.nombre}
+                    </div>
+                    {orden.soporte.distintivo && (
+                      <div style={{ fontFamily: T.mono, fontSize: 10, color: T.cyan }}>{orden.soporte.distintivo}</div>
+                    )}
+                  </div>
+                </div>
+              ) : 'Sin asignar'
+            } />
+            {orden.mecanico && (
+              <KV k="Mecánico" v={
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Avatar usuario={orden.mecanico} size={32} />
+                  <div>
+                    <div style={{ fontSize: 13, color: T.text, fontWeight: 600 }}>{orden.mecanico.nombre}</div>
+                    {orden.mecanico.distintivo && (
+                      <div style={{ fontFamily: T.mono, fontSize: 10, color: T.cyan }}>{orden.mecanico.distintivo}</div>
+                    )}
+                  </div>
+                </div>
+              } />
+            )}
+            {tipo === 'gcs' && (
+              <KV k="Operador" v={
+                orden.operador ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <Avatar usuario={orden.operador} size={32} />
+                    <div>
+                      <div style={{ fontSize: 13, color: T.text, fontWeight: 600 }}>{orden.operador.nombre}</div>
+                      {orden.operador.distintivo && (
+                        <div style={{ fontFamily: T.mono, fontSize: 10, color: T.cyan }}>{orden.operador.distintivo}</div>
+                      )}
+                    </div>
+                  </div>
+                ) : 'Sin asignar'
+              } />
+            )}
+            <KV k="Gerente" v={
+              orden.gerente ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Avatar usuario={orden.gerente} size={32} />
+                  <div>
+                    <div style={{ fontSize: 13, color: T.text, fontWeight: 600 }}>{orden.gerente.nombre}</div>
+                    {orden.gerente.distintivo && (
+                      <div style={{ fontFamily: T.mono, fontSize: 10, color: T.cyan }}>{orden.gerente.distintivo}</div>
+                    )}
+                  </div>
+                </div>
+              ) : 'Sin asignar'
+            } />
+            {tipo === 'aeronave' && (
+              <KV k="Piloto" v={
+                orden.piloto ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <Avatar usuario={orden.piloto} size={32} />
+                    <div>
+                      <div style={{ fontSize: 13, color: T.text, fontWeight: 600 }}>{orden.piloto.nombre}</div>
+                      {orden.piloto.distintivo && (
+                        <div style={{ fontFamily: T.mono, fontSize: 10, color: T.cyan }}>{orden.piloto.distintivo}</div>
+                      )}
+                    </div>
+                  </div>
+                ) : 'Sin asignar'
+              } />
+            )}
             {orden.cliente && <KV k="Cliente" v={orden.cliente} />}
             {orden.ordenServicio && <KV k="O/S" v={orden.ordenServicio} mono />}
             {orden.lugarMantenimiento && <KV k="Lugar" v={`📍 ${orden.lugarMantenimiento}`} />}
