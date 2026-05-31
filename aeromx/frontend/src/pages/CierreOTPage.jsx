@@ -481,20 +481,20 @@ export default function CierreOTPage() {
                 <FirmaRow
                   rol="Soporte"
                   firmado={soporteFirmado}
-                  nombre={cierre?.soporte?.nombre || orden?.soporte?.nombre}
+                  usuario={cierre?.soporte || orden?.soporte}
                   fecha={cierre?.fechaFirmaSoporte}
                 />
                 <FirmaRow
                   rol="Gerente"
                   firmado={gerenteFirmado}
-                  nombre={cierre?.gerente?.nombre || orden?.gerente?.nombre}
+                  usuario={cierre?.gerente || orden?.gerente}
                   fecha={cierre?.fechaFirmaGerente}
                 />
                 {esAeronave && (
                   <FirmaRow
                     rol="Piloto"
                     firmado={pilotoFirmado}
-                    nombre={cierre?.piloto?.nombre || orden?.piloto?.nombre}
+                    usuario={cierre?.piloto || orden?.piloto}
                     fecha={cierre?.fechaFirmaPiloto}
                   />
                 )}
@@ -502,7 +502,7 @@ export default function CierreOTPage() {
                   <FirmaRow
                     rol="Operador"
                     firmado={operadorFirmado}
-                    nombre={cierre?.operador?.nombre || orden?.operador?.nombre}
+                    usuario={cierre?.operador || orden?.operador}
                     fecha={cierre?.fechaFirmaOperador}
                   />
                 )}
@@ -756,7 +756,8 @@ function slotLabel(slot) {
 }
 
 // ── Fila por firma ────────────────────────────────────────────
-function FirmaRow({ rol, firmado, nombre, fecha }) {
+function FirmaRow({ rol, firmado, usuario, fecha }) {
+  const nombre = usuario?.nombre || null
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 12,
@@ -764,6 +765,7 @@ function FirmaRow({ rol, firmado, nombre, fecha }) {
       border: `1px solid ${firmado ? T.green + '35' : T.border}`,
       borderRadius: 10, padding: '10px 14px',
     }}>
+      {/* Indicador de estado (check / punto) */}
       <div style={{
         width: 30, height: 30, borderRadius: '50%',
         background: firmado ? T.green : T.s1,
@@ -779,6 +781,13 @@ function FirmaRow({ rol, firmado, nombre, fecha }) {
           <span style={{ color: T.sub, fontSize: 13, fontWeight: 700 }}>·</span>
         )}
       </div>
+
+      {/* Avatar del firmante */}
+      {usuario && (
+        <Avatar usuario={usuario} size={48} showCallsign />
+      )}
+
+      {/* Nombre y rol */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{
           fontSize: 10, color: T.sub, letterSpacing: '0.07em',
@@ -789,6 +798,8 @@ function FirmaRow({ rol, firmado, nombre, fecha }) {
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         }}>{nombre || 'Por asignar'}</div>
       </div>
+
+      {/* Timestamp / estado */}
       <div style={{ textAlign: 'right', flexShrink: 0 }}>
         {firmado ? (
           <>

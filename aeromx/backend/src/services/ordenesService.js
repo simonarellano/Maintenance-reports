@@ -50,7 +50,7 @@ const INCLUDE_PRODUCTO_COMPLETO = {
 }
 
 const INCLUDE_USUARIO_BASICO = {
-  select: { id: true, nombre: true, rol: true, licenciaNum: true },
+  select: { id: true, nombre: true, rol: true, licenciaNum: true, fotoUrl: true, distintivo: true },
 }
 
 // ─── Validación de asignaciones ─────────────────────────────────────────────
@@ -215,10 +215,10 @@ export function obtenerOrden(id) {
       },
       cierre: {
         include: {
-          soporte:  { select: { id: true, nombre: true, rol: true, licenciaNum: true } },
-          gerente:  { select: { id: true, nombre: true, rol: true, licenciaNum: true } },
-          piloto:   { select: { id: true, nombre: true, rol: true, licenciaNum: true } },
-          operador: { select: { id: true, nombre: true, rol: true, licenciaNum: true } },
+          soporte:  { select: { id: true, nombre: true, rol: true, licenciaNum: true, fotoUrl: true, distintivo: true } },
+          gerente:  { select: { id: true, nombre: true, rol: true, licenciaNum: true, fotoUrl: true, distintivo: true } },
+          piloto:   { select: { id: true, nombre: true, rol: true, licenciaNum: true, fotoUrl: true, distintivo: true } },
+          operador: { select: { id: true, nombre: true, rol: true, licenciaNum: true, fotoUrl: true, distintivo: true } },
         },
       },
       historial: {
@@ -634,10 +634,10 @@ export function crearOActualizarCierre(ordenId, data) {
     create: { ordenId, seEncontroDefecto, refDocCorrectivo, observacionesGenerales },
     update: { seEncontroDefecto, refDocCorrectivo, observacionesGenerales },
     include: {
-      soporte:  { select: { id: true, nombre: true, rol: true } },
-      gerente:  { select: { id: true, nombre: true, rol: true } },
-      piloto:   { select: { id: true, nombre: true, rol: true } },
-      operador: { select: { id: true, nombre: true, rol: true } },
+      soporte:  { select: { id: true, nombre: true, rol: true, fotoUrl: true, distintivo: true } },
+      gerente:  { select: { id: true, nombre: true, rol: true, fotoUrl: true, distintivo: true } },
+      piloto:   { select: { id: true, nombre: true, rol: true, fotoUrl: true, distintivo: true } },
+      operador: { select: { id: true, nombre: true, rol: true, fotoUrl: true, distintivo: true } },
     },
   })
 }
@@ -784,10 +784,10 @@ export async function firmarCierre(ordenId, usuarioId) {
       where: { ordenId },
       data,
       include: {
-        soporte:  { select: { id: true, nombre: true, rol: true } },
-        gerente:  { select: { id: true, nombre: true, rol: true } },
-        piloto:   { select: { id: true, nombre: true, rol: true } },
-        operador: { select: { id: true, nombre: true, rol: true } },
+        soporte:  { select: { id: true, nombre: true, rol: true, fotoUrl: true, distintivo: true } },
+        gerente:  { select: { id: true, nombre: true, rol: true, fotoUrl: true, distintivo: true } },
+        piloto:   { select: { id: true, nombre: true, rol: true, fotoUrl: true, distintivo: true } },
+        operador: { select: { id: true, nombre: true, rol: true, fotoUrl: true, distintivo: true } },
       },
     })
 
