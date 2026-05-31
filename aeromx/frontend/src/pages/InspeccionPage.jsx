@@ -856,12 +856,6 @@ export default function InspeccionPage() {
   )
 }
 
-// Etiqueta combinada de soporte (+ auxiliar si existe).
-function soporteLabel(soporte, auxiliar) {
-  if (!soporte) return 'Sin asignar'
-  return auxiliar ? `${soporte.nombre} (+ ${auxiliar.nombre})` : soporte.nombre
-}
-
 // ── Lecturas del medidor según el tipo ───────────────────────
 function LecturasMedidor({ tipo, orden }) {
   let chips = []
